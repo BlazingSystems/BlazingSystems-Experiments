@@ -11,6 +11,7 @@ Compatibility studies, exploratory software, and proof-of-concept embedded syste
 | TokenLauncher | Android + ESP32 | Security/device-control prototype | [Open project](android/token-launcher/) | [Preview](android/token-launcher/preview.html) |
 | ESP8266 AP LED Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-ap-led-controller/) | [Preview](embedded/esp8266-ap-led-controller/preview.html) |
 | ESP8266 Relay Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-relay-controller/) | [Preview](embedded/esp8266-relay-controller/preview.html) |
+| ESP8266 Arcade — Public-Safe Shell | Captive portal / NAPT | Recovered-design derivative | [Open project](embedded/esp8266-arcade-public/) | [Preview](embedded/esp8266-arcade-public/preview.html) |
 
 ## Research Standard
 
