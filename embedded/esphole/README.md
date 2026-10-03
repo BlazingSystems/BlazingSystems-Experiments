@@ -6,7 +6,7 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 ## Current status
 
-**Latest experimental release:** v1.2.0  
+**Latest experimental release:** v1.3.0  
 **Target board:** NodeMCU 1.0 / ESP-12E-class ESP8266  
 **Reference build environment:** ESP8266 Arduino Core 3.1.2, GCC 10.3, 160 MHz CPU build  
 **Promotion rule:** ESPHole stays in `BlazingSystems-Experiments` until the user confirms successful real-board testing. A validated version may then be copied to `BlazingSystems-Projects`.
@@ -15,7 +15,8 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 | Version | File | Status |
 | --- | --- | --- |
-| v1.2.0 | `ESPHole_v1.2.0.ino` | Experimental / Wi-Fi fix; hardware validation pending |
+| v1.3.0 | `ESPHole_v1.3.0.ino` | Experimental / Wi-Fi scan fix; hardware validation pending |
+| v1.2.0 | `ESPHole_v1.2.0.ino` | Experimental / Wi-Fi connection fix; preserved |
 | v1.1.0 | `ESPHole_v1.1.0.ino` | Experimental / preserved |
 | v1.0.0 | `ESPHole_v1.0.0.ino` | Experimental stabilization baseline |
 | Rolling copy | `ESPHole.ino` | Legacy convenience copy; not the permanent release record |
@@ -40,7 +41,7 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 ### External libraries
 
-**ESPHole v1.2.0 requires no third-party/external Arduino libraries.**
+**ESPHole v1.3.0 requires no third-party/external Arduino libraries.**
 
 Everything currently included by the sketch comes with the ESP8266 Arduino core:
 
@@ -74,6 +75,75 @@ In Arduino IDE:
 8. Use an IPv4 lwIP2 configuration with features/NAPT enabled.
 
 If a later release requires an external library, installation instructions will be added here, including the exact version if compatibility requires pinning.
+
+## v1.3.0 — Experimental Wi-Fi scan stabilization
+
+File: `ESPHole_v1.3.0.ino`
+
+### Bug observed in v1.2.0
+
+The Wi-Fi scan could visibly run but return `0 networks` even when nearby access points were available.
+
+The v1.2 implementation started `WiFi.scanNetworks(...)` directly inside the `/api/scan` HTTP request handler. ESP8266 scan behavior is more reliable when the radio scan is started from the main Arduino loop rather than from the web-server callback path.
+
+### Fixed / changed
+
+- The HTTP endpoint no longer starts the ESP8266 radio scan.
+- `/api/scan?start=1` only queues a scan request.
+- A new loop-driven scan service starts and polls the async scan from `loop()`.
+- Scanning explicitly requests:
+  - async mode
+  - hidden SSID discovery
+  - channel `0` = all 2.4 GHz channels
+- STA reconnect attempts and internet probes are paused while scanning so they do not fight the same ESP8266 radio.
+- A first scan that genuinely returns zero results automatically retries once before reporting zero networks.
+- Scan results are cached before `WiFi.scanDelete()` frees the ESP8266 scan buffer.
+- Duplicate SSIDs from multiple BSSIDs are collapsed in the web list, keeping the strongest result first.
+- The scan UI now has a separate **start** and **poll** flow instead of repeatedly re-triggering the scan endpoint.
+- Added serial diagnostics:
+  - scan queued
+  - scan started from loop
+  - Wi-Fi mode / STA state / current channel
+  - raw network count
+  - scan duration
+  - zero-result retry
+  - scan error codes
+
+### Root-cause evidence
+
+The ESP8266 Arduino project's own async-scan example starts `WiFi.scanNetworks(true)` from `loop()` and polls `WiFi.scanComplete()` later. Historical ESP8266 reports also document zero-result scans when scanning is initiated from a web-server handler in AP+STA use.
+
+v1.3 follows the loop-driven pattern instead.
+
+### Libraries / dependencies
+
+No new library was added.
+
+v1.3.0 still uses only libraries bundled with ESP8266 Arduino Core 3.1.2 and therefore requires **no separate Library Manager installation**.
+
+### Validation performed
+
+- A regression check was first run against v1.2.0 and confirmed:
+  - `handleWifiScan()` directly started `WiFi.scanNetworks()`
+  - no loop-driven scan service existed
+  - no HTTP-to-radio request flag existed
+- v1.3.0 source gates then verified:
+  - the HTTP scan handler contains no `WiFi.scanNetworks()` call
+  - the loop-driven scan service exists
+  - `loop()` invokes the scan service
+  - scans explicitly use channel `0` for all channels
+  - a zero-result scan retries once
+  - STA maintenance is paused while scanning
+  - the browser uses a start/poll scan protocol
+
+Real NodeMCU scan results remain the authoritative hardware test.
+
+### Known limitations
+
+- ESP8266 is a single-radio AP+STA device, so client traffic may briefly pause while the radio scans other channels.
+- A hidden network with no broadcast SSID can still require manual SSID entry even when its BSSID is detected.
+- 5 GHz Wi-Fi is not supported by ESP8266; only 2.4 GHz networks can be discovered.
+- Hardware validation is still pending for v1.3.0.
 
 ## v1.2.0 — Experimental Wi-Fi stabilization
 
