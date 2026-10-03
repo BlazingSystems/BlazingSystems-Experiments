@@ -85,12 +85,18 @@ String post(const String &a, const String &p = "0", const String &t = "", const 
 }
 
 bool flag(const String &r, const char *k) {
-  return r.indexOf(String(""") + k + "":1") >= 0 || r.indexOf(String(""") + k + "":true") >= 0;
+  String q = String((char)34) + k + (char)34;
+  return r.indexOf(q + ":1") >= 0 || r.indexOf(q + ":true") >= 0;
 }
 
 String field(const String &r, const char *k) {
-  String n = String(""") + k + "":""; int a = r.indexOf(n); if (a < 0) return "";
-  a += n.length(); int b = r.indexOf('"', a); return b < 0 ? "" : r.substring(a, b);
+  String n = String((char)34) + k + (char)34 + ":";
+  int a = r.indexOf(n); if (a < 0) return "";
+  a += n.length();
+  if (a >= (int)r.length() || r.charAt(a) != 34) return "";
+  a++;
+  int b = r.indexOf((char)34, a);
+  return b < 0 ? "" : r.substring(a, b);
 }
 
 void outputs() {
@@ -165,7 +171,7 @@ void loop() {
   if (insertMode && ready && (uint32_t)(micros() - lastUs) > 350000UL) {
     uint16_t nextSeq = coinSeq + 1;
     String r = post("coin", String(ready), targetNonce, String(nextSeq));
-    if (r.indexOf(""ok":true") >= 0) {
+    if (flag(r, "ok")) {
       noInterrupts(); pulseCount = pulseCount >= ready ? pulseCount - ready : 0; interrupts();
       coinSeq = nextSeq;
     } else delay(250);

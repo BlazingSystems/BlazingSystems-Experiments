@@ -34,15 +34,21 @@ find bin/targets -type f \( -name '*sysupgrade*' -o -name '*initramfs*' -o -name
 case "$TARGET" in
   ruijie)
     find "$ROOT/dist/$TARGET" -maxdepth 1 -type f -name '*sysupgrade*.bin' | grep -q . || { echo "ERROR: fresh Ruijie sysupgrade image missing" >&2; exit 1; }
-    find "$ROOT/dist/$TARGET" -maxdepth 1 -type f -name '*initramfs*.bin' | grep -q . || { echo "ERROR: fresh Ruijie initramfs image missing" >&2; exit 1; }
+    if find "$ROOT/dist/$TARGET" -maxdepth 1 -type f -name '*initramfs*.bin' | grep -q .; then
+      RECOVERY_STATUS='included'
+    else
+      RECOVERY_STATUS='not-produced-by-imagebuilder'
+      echo "NOTE: this ImageBuilder profile produced sysupgrade only; initramfs recovery requires an official prebuilt image or a full ImmortalWrt buildroot." >&2
+    fi
     ;;
   x86_64)
     find "$ROOT/dist/$TARGET" -maxdepth 1 -type f -name '*combined-efi*.img.gz' | grep -q . || { echo "ERROR: fresh x86 EFI image missing" >&2; exit 1; }
+    RECOVERY_STATUS='not-applicable'
     ;;
 esac
 (
   cd "$ROOT/dist/$TARGET"
   rm -f SHA256SUMS BUILDINFO.txt
   for f in *; do [ -f "$f" ] && sha256sum "$f"; done > SHA256SUMS
-  printf 'BlazePwifi=%s\nBase=ImmortalWrt %s\nTarget=%s\nProfile=%s\nBuiltUTC=%s\n' "$(cat "$ROOT/VERSION")" "$VER" "$TARGET" "$PROFILE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILDINFO.txt
+  printf 'BlazePwifi=%s\nBase=ImmortalWrt %s\nTarget=%s\nProfile=%s\nRecoveryImage=%s\nBuiltUTC=%s\n' "$(cat "$ROOT/VERSION")" "$VER" "$TARGET" "$PROFILE" "${RECOVERY_STATUS:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILDINFO.txt
 )

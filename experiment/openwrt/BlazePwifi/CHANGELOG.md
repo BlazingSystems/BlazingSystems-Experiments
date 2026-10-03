@@ -4,7 +4,7 @@
 
 - Reconciled supplied WiFi5 Ruijie/x86 firmware and public resource references.
 - Confirmed WiFi5 uses ImmortalWrt; production ImageBuilder moved to current stable ImmortalWrt 25.12.2.
-- Added Ruijie initramfs output and x86 1 GiB writable root image build.
+- Added mandatory Ruijie sysupgrade validation, optional initramfs capture when ImageBuilder provides it, and x86 1 GiB writable root image build.
 - Added per-build SHA256SUMS and BUILDINFO metadata.
 - Removed five-second persistent session rewrites that would cause unnecessary flash wear.
 - Moved Vendo heartbeat/poll state to tmpfs.

@@ -28,6 +28,10 @@ The build downloads the official ImmortalWrt 25.12.2 ImageBuilder, verifies its 
 
 Ruijie output must contain both an initramfs recovery/install image and a sysupgrade image. x86 output must contain a combined EFI disk image. The build fails rather than reusing stale output when any required image is missing.
 
+## ImageBuilder limitation
+
+The Ruijie target supports initramfs recovery kernels in official/full-build outputs, but ImageBuilder may emit only the customized sysupgrade image. BlazePwifi does not relabel a sysupgrade file as a recovery image. For TFTP/bootloader recovery, keep a verified official initramfs/vendor recovery image or build one with the full ImmortalWrt buildroot.
+
 ## Ruijie recovery rule
 
 Before flashing, verify that U-Boot TFTP recovery works for the exact **RG-EW1200G Pro v1.1**. Keep an original recovery image and Ethernet/TFTP host available. Do not flash v1.1 images onto another hardware revision.

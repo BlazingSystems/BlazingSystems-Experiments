@@ -67,7 +67,7 @@ jobs:
         target: [ruijie, x86_64]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y zstd
+      - run: sudo apt-get update && sudo apt-get install -y zstd qemu-utils
       - name: Build ImmortalWrt 25.12.2 image
         run: sh experiment/openwrt/BlazePwifi/build/build-openwrt-image.sh ${{ matrix.target }}
       - name: Show fresh output and checksums
