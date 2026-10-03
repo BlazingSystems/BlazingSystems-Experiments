@@ -6,13 +6,13 @@
 
 struct Config {
   uint32_t magic;
-  char ssid[33], pass[65], server[64], key[65], id[33];
+  char ssid[33], pass[65], server[64], key[65], id[33], setupPass[13];
   uint8_t coinPin, insertLedPin, relayPin, coinActiveLow;
 };
 
 Config cfg;
 ESP8266WebServer web(80);
-const uint32_t MAGIC = 0x42505733;
+const uint32_t MAGIC = 0x42505734;
 
 bool insertMode = false, setupAp = false;
 uint32_t lastPoll = 0, lastWifiTry = 0;
@@ -56,12 +56,14 @@ String esc(const String &s) {
 void defaults() {
   memset(&cfg, 0, sizeof(cfg)); cfg.magic = MAGIC;
   strcpy(cfg.server, "10.0.0.1"); strcpy(cfg.id, "vendo-01");
+  uint32_t a = ESP.random(), b = ESP.random();
+  snprintf(cfg.setupPass, sizeof(cfg.setupPass), "%08lx%04lx", (unsigned long)a, (unsigned long)(b & 0xffff));
   cfg.coinPin = 4; cfg.insertLedPin = 14; cfg.relayPin = 5; cfg.coinActiveLow = 1;
 }
 
 void loadCfg() {
   EEPROM.begin(sizeof(Config)); EEPROM.get(0, cfg);
-  if (cfg.magic != MAGIC) defaults();
+  if (cfg.magic != MAGIC) { defaults(); EEPROM.put(0, cfg); EEPROM.commit(); }
 }
 
 void saveCfg() { EEPROM.put(0, cfg); EEPROM.commit(); }
@@ -108,13 +110,13 @@ void startSetupAp() {
   if (setupAp) return;
   setupAp = true;
   String ap = "BlazePwifi-Vendo-" + String(ESP.getChipId(), HEX);
-  String pw = "blaze" + String(ESP.getChipId(), HEX);
-  WiFi.mode(WIFI_AP_STA); WiFi.softAP(ap.c_str(), pw.c_str());
+  WiFi.mode(WIFI_AP_STA); WiFi.softAP(ap.c_str(), cfg.setupPass);
+  Serial.printf("BlazePwifi setup AP: %s  password: %s\n", ap.c_str(), cfg.setupPass);
 }
 
 void setupWeb() {
   web.on("/", []() {
-    String h = "<meta name=viewport content='width=device-width'><h2>BlazePwifi Vendo</h2><p>Setup AP password: blaze&lt;chipid&gt;</p><form method=POST action=/save>SSID <input name=s value='" + String(cfg.ssid) + "'><br>Password <input name=p type=password><br>Server <input name=server value='" + String(cfg.server) + "'><br>Vendo key <input name=k type=password><br>ID <input name=id value='" + String(cfg.id) + "'><br>Coin GPIO <input name=coin value='" + String(cfg.coinPin) + "'><br>LED GPIO <input name=led value='" + String(cfg.insertLedPin) + "'><br>Relay GPIO <input name=relay value='" + String(cfg.relayPin) + "'><br><button>Save & reboot</button></form><p>STA: " + WiFi.localIP().toString() + "</p>";
+    String h = "<meta name=viewport content='width=device-width'><h2>BlazePwifi Vendo</h2><p>Setup AP password is generated per device and printed on the USB/serial console.</p><form method=POST action=/save>SSID <input name=s value='" + String(cfg.ssid) + "'><br>Password <input name=p type=password><br>Server <input name=server value='" + String(cfg.server) + "'><br>Vendo key <input name=k type=password><br>ID <input name=id value='" + String(cfg.id) + "'><br>Coin GPIO <input name=coin value='" + String(cfg.coinPin) + "'><br>LED GPIO <input name=led value='" + String(cfg.insertLedPin) + "'><br>Relay GPIO <input name=relay value='" + String(cfg.relayPin) + "'><br><button>Save & reboot</button></form><p>STA: " + WiFi.localIP().toString() + "</p>";
     web.send(200, "text/html", h);
   });
   web.on("/save", HTTP_POST, []() {
