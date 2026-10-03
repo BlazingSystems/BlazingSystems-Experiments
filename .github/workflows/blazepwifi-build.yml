@@ -1,0 +1,58 @@
+name: BlazePwifi build
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'experiment/openwrt/BlazePwifi/**'
+      - '.github/workflows/blazepwifi-build.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static validation
+        run: sh experiment/openwrt/BlazePwifi/tests/static.sh
+      - name: Accounting integration test
+        run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
+      - name: Build release bundle
+        run: |
+          VERSION=$(cat experiment/openwrt/BlazePwifi/VERSION)
+          tar -czf "BlazePwifi-${VERSION}.tar.gz" experiment/openwrt/BlazePwifi
+          sha256sum "BlazePwifi-${VERSION}.tar.gz" > "BlazePwifi-${VERSION}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-bundle
+          path: |
+            BlazePwifi-*.tar.gz
+            BlazePwifi-*.sha256
+
+  esp8266:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP8266 core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp8266:esp8266
+      - name: Compile BlazePwifi Vendo
+        run: arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo
+
+  firmware:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ruijie, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Build OpenWrt image
+        run: sh experiment/openwrt/BlazePwifi/build/build-openwrt-image.sh ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-${{ matrix.target }}-firmware
+          path: experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}/
