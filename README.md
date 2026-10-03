@@ -1,29 +1,48 @@
+<div align="center">
+
 # BlazingSystems — Experiments
 
-Compatibility studies, exploratory software, and proof-of-concept embedded systems.
+**Compatibility research, alpha systems, clean-room reconstructions and proof-of-concept engineering**
+
+[Profile](https://github.com/BlazingSystems) ·
+[Projects](https://github.com/BlazingSystems/BlazingSystems-Projects) ·
+[Labs](https://github.com/BlazingSystems/BlazingSystems-Labs) ·
+[Archives](https://github.com/BlazingSystems/BlazingSystems-Archives)
+
+</div>
+
+---
 
 ## Experiment Portfolio
 
-| Project | Area | Stage | Project | Working / preview entry |
-|---|---|---|---|---|
-| BlazeAPK | Browser runtime research | Beta 0.6 experiment | [Open project](web/blazeapk/) | [Landing](web/blazeapk/index.html) · [Research build](web/blazeapk/app.html) |
-| BlazeJ2ME | Browser runtime research | v1.6 experiment | [Open project](web/blazej2me/) | [Landing](web/blazej2me/index.html) · [Research build](web/blazej2me/app.html) |
-| BlazePwifi | OpenWrt + ESP8266 captive portal | 0.1.0-alpha.1 reconstruction | [Open project](experiment/openwrt/BlazePwifi/) | [Install guide](experiment/openwrt/BlazePwifi/docs/INSTALL.md) · [Architecture](experiment/openwrt/BlazePwifi/docs/ARCHITECTURE.md) |
-| TokenLauncher | Android + ESP32 | Security/device-control prototype | [Open project](android/token-launcher/) | [Preview](android/token-launcher/preview.html) |
-| ESP8266 AP LED Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-ap-led-controller/) | [Preview](embedded/esp8266-ap-led-controller/preview.html) |
-| ESP8266 Relay Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-relay-controller/) | [Preview](embedded/esp8266-relay-controller/preview.html) |
-| ESP8266 Arcade — Public-Safe Shell | Captive portal / NAPT | Recovered-design derivative | [Open project](embedded/esp8266-arcade-public/) | [Preview](embedded/esp8266-arcade-public/preview.html) |
+| Area | Project | Stage | Entry |
+|---|---|---|---|
+| [OpenWrt](experiment/openwrt/) | BlazePwifi | 0.1.0-alpha.1 reconstruction | [Project](experiment/openwrt/BlazePwifi/) |
+| [OpenWrt](experiment/openwrt/) | EasyMode for OpenWrt | 5.0.0-alpha.1 | [Project](experiment/openwrt/easymode-project/) |
+| [Web runtime](web/) | BlazeAPK | Beta 0.6 | [Project](web/blazeapk/) |
+| [Web runtime](web/) | BlazeJ2ME | v1.6 | [Project](web/blazej2me/) |
+| [Android](android/) | TokenLauncher | Security/device-control prototype | [Project](android/token-launcher/) |
+| [Embedded](embedded/) | ESPHole version history | v1.3.0 latest numbered experiment | [Project](embedded/esphole/) |
+| [Embedded](embedded/) | ESP8266 Arcade public shell | Recovered-design derivative | [Project](embedded/esp8266-arcade-public/) |
+| [Embedded](embedded/) | AP LED Controller | Prototype | [Project](embedded/esp8266-ap-led-controller/) |
+| [Embedded](embedded/) | Relay Controller | Prototype | [Project](embedded/esp8266-relay-controller/) |
+
+## Repository Layout
+
+- **[experiment/](experiment/)** — larger system experiments, currently focused on OpenWrt
+- **[embedded/](embedded/)** — ESP8266 firmware prototypes and versioned experiments
+- **[android/](android/)** — Android + embedded integration prototypes
+- **[web/](web/)** — browser runtime and compatibility research
+- **[.github/workflows/](.github/workflows/)** — automated build/static-check workflows
 
 ## Research Standard
 
-Each experiment documents its technical objective, tested behavior, known limitations, security/platform assumptions, and next validation step.
+Experimental means the limitation is part of the documentation. A project should state what was tested, what remains uncertain, what hardware/platform it targets, and what evidence is required before promotion.
 
-Compatibility is reported only where it has actually been observed. Experimental projects are not represented as finished consumer products.
+Versioned release snapshots are preserved rather than silently overwritten. Clean-room projects do not redistribute proprietary source, credentials, certificates or commercial payloads from systems they study.
 
 ## Publication Policy
 
-Public previews and research builds exclude credentials, private keys, employer/client records, proprietary operational datasets, commercial ROMs, BIOS files, and bundled third-party applications.
+Public experiments exclude employer/client records, private keys, production credentials, raw private backups, commercial ROM/APK/JAR payloads and proprietary operational datasets.
 
-BlazeJ2ME contains no bundled commercial JAR/JAD content. BlazeAPK contains no bundled commercial APKs. User-supplied test software remains the user's responsibility.
-
-See [NOTICE.md](NOTICE.md) for additional publication notes.
+See [NOTICE.md](NOTICE.md) for repository-wide publication notes.
