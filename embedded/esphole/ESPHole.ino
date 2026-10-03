@@ -4,7 +4,7 @@
   Pi-hole-style DNS sinkhole + captive setup portal + ESP8266 Wi-Fi repeater/NAPT.
 
   Target:
-    ESP8266 Arduino Core 3.x (NodeMCU / Wemos D1 mini / ESP-12E class boards)
+    ESP8266 Arduino Core 3.1.2 (NodeMCU / Wemos D1 mini / ESP-12E class boards)
 
   Uses ONLY libraries bundled with the ESP8266 Arduino core:
     - ESP8266WiFi
@@ -57,6 +57,10 @@ struct DnsQuestion;  // Arduino .ino prototype-generator guard
 #include <WiFiUdp.h>
 #include <LittleFS.h>
 
+#ifndef ESP8266
+  #error "ESPHole requires an ESP8266 target."
+#endif
+
 #if LWIP_FEATURES && !LWIP_IPV6
   #include <lwip/napt.h>
   #define ESPHOLE_HAS_NAPT 1
@@ -66,7 +70,7 @@ struct DnsQuestion;  // Arduino .ino prototype-generator guard
 
 // ----------------------------- Version --------------------------------------
 
-static const char* ESPHOLE_VERSION = "0.2.0";
+static const char* ESPHOLE_VERSION = "1.0.0";
 
 // ----------------------------- Network --------------------------------------
 
@@ -83,7 +87,7 @@ static const uint32_t PENDING_TIMEOUT_MS = 3000;
 
 // Network activity sound. NodeMCU D5 = GPIO14.
 // tone() is built into the ESP8266 Arduino core and runs asynchronously.
-static const uint8_t ACTIVITY_BUZZER_PIN = D5;
+static const uint8_t ACTIVITY_BUZZER_PIN = 14; // D5 / GPIO14 on NodeMCU and Wemos D1 mini
 static const uint16_t DEFAULT_BUZZER_FREQ = 2600;
 static const uint16_t DEFAULT_BUZZER_PULSE_MS = 7;
 static const uint16_t DEFAULT_BUZZER_GAP_MS = 45;
@@ -280,7 +284,7 @@ static uint16_t clampU16Arg(const String& raw, uint16_t fallback, uint16_t lo, u
   return uint16_t(v);
 }
 
-static void activityBeep(bool force = false) {
+static void activityBeep(bool force) {
   if (!cfg.activityBuzzerEnabled) return;
 
   uint32_t now = millis();
@@ -806,7 +810,7 @@ static void processUpstreamReplies() {
       int slot = findPendingByInternalId(internalId);
 
       if (slot >= 0) {
-        activityBeep();
+        activityBeep(false);
         wr16(dnsOut, pending[slot].originalId);
         sendDnsRaw(pending[slot].clientIP,
                    pending[slot].clientPort,
@@ -845,7 +849,7 @@ static void processDnsQueries() {
     while (dnsUdp.available()) dnsUdp.read();
 
     ++statQueries;
-    activityBeep();
+    activityBeep(false);
 
     DnsQuestion q;
     if (got < 12 || !parseDnsQuestion(dnsIn, uint16_t(got), q)) {
@@ -1067,7 +1071,11 @@ static void handleRoot() {
 
   String s = pageTop(F("ESPHole"));
   s += F("<div class='eyebrow'>Network utility</div><div class='pagehead'><div><h1>ESPHole</h1><p>DNS sinkhole, captive setup and tiny Wi-Fi repeater.</p></div><span class='pill'><span class='dot ");
-  s += (WiFi.status() == WL_CONNECTED) ? F("ok"></span>ONLINE") : F("bad"></span>SETUP / OFFLINE");
+  if (WiFi.status() == WL_CONNECTED) {
+    s += F("ok'></span>ONLINE");
+  } else {
+    s += F("bad'></span>SETUP / OFFLINE");
+  }
   s += F("</span></div>");
 
   s += F("<div class='grid'>");
