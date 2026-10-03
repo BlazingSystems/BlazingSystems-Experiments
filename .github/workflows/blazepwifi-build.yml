@@ -5,6 +5,10 @@ on:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
       - '.github/workflows/blazepwifi-build.yml'
+  pull_request:
+    paths:
+      - 'experiment/openwrt/BlazePwifi/**'
+      - '.github/workflows/blazepwifi-build.yml'
 
 jobs:
   validate:
