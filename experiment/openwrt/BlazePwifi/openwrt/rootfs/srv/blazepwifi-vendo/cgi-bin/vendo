@@ -20,10 +20,12 @@ case "$action" in
     ;;
   poll)
     insert=0; tn=""; expires=0; lastseq=0
+    bp_lock || bp_fail "vendo service busy"
     if [ -f "$BP_TARGET" ]; then
       IFS='|' read -r mac tn expires wanted lastseq < "$BP_TARGET"
-      if [ "$expires" -gt "$now" ] 2>/dev/null && { [ -z "$wanted" ] || [ "$wanted" = "$id" ]; }; then insert=1; fi
+      if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then insert=1; fi
     fi
+    bp_unlock
     bp_json "{\"ok\":true,\"insert\":$insert,\"target_nonce\":\"$tn\",\"expires\":${expires:-0}}"
     ;;
   coin)

@@ -11,6 +11,17 @@ case "$action" in
   rates)
     bp_json "{\"ok\":true,\"rates\":$(bp_rates_json)}"
     ;;
+  vendos)
+    now="$(bp_now)"; first=1; out='['
+    while IFS="$(printf '\t')" read -r id seen vip; do
+      [ -n "$id" ] || continue
+      case "$seen" in ''|*[!0-9]*) continue;; esac
+      [ "$seen" -gt $((now-90)) ] || continue
+      [ "$first" = 1 ] || out="$out,"; first=0
+      out="$out{\"id\":\"$(bp_json_escape "$id")\"}"
+    done < "$BP_VENDOS"
+    out="$out]"; bp_json "{\"ok\":true,\"vendos\":$out}"
+    ;;
   me)
     [ -n "$mac" ] || bp_fail "client MAC not resolved"
     credit="$(bp_get_credit "$mac")"; expiry="$(bp_get_session_expiry "$mac")"; now="$(bp_now)"
@@ -20,6 +31,63 @@ case "$action" in
   coin_start)
     [ -n "$mac" ] || bp_fail "client MAC not resolved"
     now="$(bp_now)"; window="$(bp_cfg coin_window)"; [ -n "$window" ] || window=120
+    vendo="$(bp_param vendo)"
+    if [ -n "$vendo" ]; then
+      printf '%s' "$vendo" | grep -Eq '^[A-Za-z0-9._-]{1,48}    if [ -f "$BP_TARGET" ]; then
+      IFS='|' read -r active_mac active_nonce active_exp active_vendo active_seq < "$BP_TARGET"
+      if [ "${active_exp:-0}" -gt "$now" ] 2>/dev/null && [ "$active_mac" != "$mac" ]; then bp_unlock; bp_fail "coin slot busy"; fi
+    fi
+    expires=$((now+window)); nonce="$(od -An -N6 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
+    [ -n "$nonce" ] || { bp_unlock; bp_fail "random source unavailable"; }
+    printf '%s|%s|%s|%s|0\n' "$mac" "$nonce" "$expires" "$vendo" > "$BP_TARGET"; chmod 600 "$BP_TARGET"; bp_unlock
+    bp_json "{\"ok\":true,\"nonce\":\"$nonce\",\"expires\":$expires}"
+    ;;
+  coin_stop)
+    [ -n "$mac" ] || bp_fail "client MAC not resolved"
+    bp_lock || bp_fail "coin service busy"
+    if [ -f "$BP_TARGET" ] && [ "$(cut -d'|' -f1 "$BP_TARGET")" = "$mac" ]; then rm -f "$BP_TARGET"; fi
+    bp_unlock; bp_json '{"ok":true}'
+    ;;
+  connect)
+    [ -n "$mac" ] || bp_fail "client MAC not resolved"
+    cents="$(bp_param cents)"; case "$cents" in ''|*[!0-9]*) bp_fail "invalid rate";; esac
+    sec="$(bp_rate_seconds "$cents" 2>/dev/null || true)"; [ -n "$sec" ] || bp_fail "rate not configured"
+    credit="$(bp_get_credit "$mac")"; [ "$credit" -ge "$cents" ] || bp_fail "insufficient credit"
+    bp_lock || bp_fail "accounting busy"
+    credit="$(bp_get_credit "$mac")"; [ "$credit" -ge "$cents" ] || { bp_unlock; bp_fail "insufficient credit"; }
+    bp_set_credit "$mac" $((credit-cents))
+    now="$(bp_now)"; expiry="$(bp_get_session_expiry "$mac")"; [ "$expiry" -lt "$now" ] 2>/dev/null && expiry="$now"
+    expiry=$((expiry+sec)); bp_set_session "$mac" "$expiry" "$ipaddr"; bp_unlock
+    bp_authorize_mac "$mac"
+    bp_json "{\"ok\":true,\"credit_cents\":$((credit-cents)),\"expiry\":$expiry}"
+    ;;
+  disconnect)
+    [ -n "$mac" ] || bp_fail "client MAC not resolved"
+    bp_set_session "$mac" "$(bp_now)" "$ipaddr"; bp_deauthorize_mac "$mac"
+    bp_json '{"ok":true}'
+    ;;
+  redeem)
+    [ -n "$mac" ] || bp_fail "client MAC not resolved"
+    code="$(bp_param code)"; printf '%s' "$code" | grep -Eq '^[A-Za-z0-9-]{4,32}$' || bp_fail "invalid voucher"
+    bp_lock || bp_fail "accounting busy"
+    line="$(awk -F '\t' -v c="$code" '$1==c && $3=="" {print; exit}' "$BP_VOUCHERS")"
+    [ -n "$line" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
+    cents="$(printf '%s' "$line" | cut -f2)"; now="$(bp_now)"; tmp="$BP_RUN/vouchers.$$"
+    awk -F '\t' -v OFS='\t' -v c="$code" -v m="$mac" -v n="$now" '$1==c && $3=="" {$3=m;$4=n} {print}' "$BP_VOUCHERS" > "$tmp" && mv "$tmp" "$BP_VOUCHERS"
+    old="$(bp_get_credit "$mac")"; bp_set_credit "$mac" $((old+cents)); bp_unlock
+    bp_json "{\"ok\":true,\"credit_cents\":$((old+cents))}"
+    ;;
+  *) bp_fail "unknown action" ;;
+esac
+ || bp_fail "invalid vendo"
+      awk -F '\t' -v id="$vendo" -v n="$now" '$1==id && $2>(n-90){ok=1} END{exit !ok}' "$BP_VENDOS" || bp_fail "selected vendo offline"
+    else
+      online="$(awk -F '\t' -v n="$now" '$2>(n-90){print $1}' "$BP_VENDOS")"
+      count="$(printf '%s\n' "$online" | awk 'NF{c++} END{print c+0}')"
+      [ "$count" -gt 0 ] || bp_fail "no vendo online"
+      [ "$count" -eq 1 ] || bp_fail "select a vendo"
+      vendo="$(printf '%s\n' "$online" | awk 'NF{print;exit}')"
+    fi
     bp_lock || bp_fail "coin service busy"
     if [ -f "$BP_TARGET" ]; then
       IFS='|' read -r active_mac active_nonce active_exp active_vendo active_seq < "$BP_TARGET"
