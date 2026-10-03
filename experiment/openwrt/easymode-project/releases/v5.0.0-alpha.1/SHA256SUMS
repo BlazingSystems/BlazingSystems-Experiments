@@ -1,7 +1,3 @@
-43a82e5a144da6d4ad752e4637de4ee936c6c66780163425f26f102d4582330b  ./offline-html/EasyMode-Installer.html
-71714f3e0bada7c6421d7de52633fe9555ef0bc30bb5f8a76a92516787e9278a  ./MANIFEST.json
-9c4a688c59e8599058201954c1260f6ebe26efe78e3b7dedd566276ef80bebe8  ./RELEASE-NOTES.md
-c63da52099e3520d7c842dc9d2d5a0a643f3dd79316d2007c8243ba738146c37  ./windows/Install-EasyMode.ps1
-c88515fef4b14e9992715b21407e7e9794da1859584e92a77fd219225c828bb5  ./TEST-REPORT.md
+# Bundle checksums for EasyMode 5.0.0-alpha.1
 fa049a7aff3b1b183d979e38d64f5abfa39a0849ebf66645665ce1ca52644d12  ./openwrt/EasyMode-5.0.0-alpha.1-all-editions.tar.gz
 fa049a7aff3b1b183d979e38d64f5abfa39a0849ebf66645665ce1ca52644d12  ./windows/easymode-upload.tar.gz
