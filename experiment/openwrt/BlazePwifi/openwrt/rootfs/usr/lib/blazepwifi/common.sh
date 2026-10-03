@@ -5,7 +5,25 @@ BP_POST_BODY=""; [ "${REQUEST_METHOD:-GET}" = POST ] && IFS= read -r BP_POST_BOD
 bp_cfg(){ uci -q get "blazepwifi.main.$1"; }; bp_now(){ date +%s; }
 bp_json_escape(){ printf '%s' "$1"|sed 's/\\/\\\\/g;s/"/\\"/g'; }; bp_json(){ printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }; bp_fail(){ bp_json "{\"ok\":false,\"error\":\"$(bp_json_escape "$1")\"}"; exit 0; }
 bp_init_dirs(){ mkdir -p "$BP_STATE" "$BP_RUN"; chmod 700 "$BP_STATE" "$BP_RUN"; touch "$BP_CREDITS" "$BP_SESSIONS" "$BP_VOUCHERS" "$BP_VENDOS"; chmod 600 "$BP_CREDITS" "$BP_SESSIONS" "$BP_VOUCHERS" "$BP_VENDOS"; }
-bp_lock(){ i=0; while ! mkdir "$BP_RUN/lock" 2>/dev/null; do i=$((i+1)); [ "$i" -gt 40 ]&&return 1; sleep 0.05 2>/dev/null||sleep 1; done; }; bp_unlock(){ rmdir "$BP_RUN/lock" 2>/dev/null||true; }
+bp_lock(){
+  i=0
+  while ! mkdir "$BP_RUN/lock" 2>/dev/null; do
+    if [ -r "$BP_RUN/lock/owner" ]; then
+      read -r owner_pid owner_ts < "$BP_RUN/lock/owner" || true
+      now="$(bp_now)"
+      case "$owner_pid:$owner_ts" in *[!0-9:]*|:|*:) owner_pid=0; owner_ts=0;; esac
+      if ! kill -0 "$owner_pid" 2>/dev/null || [ $((now-owner_ts)) -gt 30 ]; then
+        rm -rf "$BP_RUN/lock" 2>/dev/null || true
+        continue
+      fi
+    else
+      rmdir "$BP_RUN/lock" 2>/dev/null || true
+    fi
+    i=$((i+1)); [ "$i" -gt 40 ] && return 1
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  printf '%s %s\n' "$" "$(bp_now)" > "$BP_RUN/lock/owner"
+}; bp_unlock(){ rm -rf "$BP_RUN/lock" 2>/dev/null||true; }
 bp_mac_norm(){ printf '%s' "$1"|tr 'A-F' 'a-f'|grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$'||return 1; printf '%s' "$1"|tr 'A-F' 'a-f'; }
 bp_mac_for_ip(){ ipaddr="$1"; lan_if="$(bp_cfg lan_if)"; [ -n "$lan_if" ]||lan_if=br-lan; m="$(ip neigh show "$ipaddr" dev "$lan_if" 2>/dev/null|awk '/lladdr/{print $5;exit}')"; [ -n "$m" ]||m="$(awk -v ip="$ipaddr" '$3==ip{print $2;exit}' /tmp/dhcp.leases 2>/dev/null)"; bp_mac_norm "$m" 2>/dev/null; }
 bp_param(){ key="$1"; data="${QUERY_STRING:-}"; [ "${REQUEST_METHOD:-GET}" = POST ]&&data="$BP_POST_BODY"; printf '%s' "$data"|tr '&' '\n'|awk -F= -v k="$key" '$1==k{sub(/^[^=]*=/,"");gsub(/\+/," ");print;exit}'; }

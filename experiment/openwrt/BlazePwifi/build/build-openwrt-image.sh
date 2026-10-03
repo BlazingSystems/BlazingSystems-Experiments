@@ -49,6 +49,10 @@ esac
 (
   cd "$ROOT/dist/$TARGET"
   rm -f SHA256SUMS BUILDINFO.txt
-  for f in *; do [ -f "$f" ] && sha256sum "$f"; done > SHA256SUMS
   printf 'BlazePwifi=%s\nBase=ImmortalWrt %s\nTarget=%s\nProfile=%s\nRecoveryImage=%s\nBuiltUTC=%s\n' "$(cat "$ROOT/VERSION")" "$VER" "$TARGET" "$PROFILE" "${RECOVERY_STATUS:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILDINFO.txt
+  for f in *; do
+    [ -f "$f" ] || continue
+    [ "$f" = SHA256SUMS ] && continue
+    sha256sum "$f"
+  done > SHA256SUMS
 )
