@@ -11,19 +11,20 @@
     - ESP8266WebServer
     - WiFiUdp
     - LittleFS
+    - NetDump (bundled ESP8266 core packet activity hook)
     - lwIP NAPT support when available in the selected core/lwIP build
 
   Default first-boot access:
     Wi-Fi AP : ESPHole-XXXXXX
     AP key   : esphole123
-    Admin    : admin
-    Password : esphole
+    Admin    : root
+    Password : mnbvcxZ123
 
-    Open: http://192.168.4.1/
+    Open: http://10.6.20.1/ or http://blaze.iot/
 
   What it does:
     * AP+STA Wi-Fi range extender using IPv4 NAPT when supported.
-    * Advertises ESPHole itself (192.168.4.1) as DNS to AP clients.
+    * Advertises ESPHole itself (10.6.20.1) as DNS to AP clients.
     * Parses DNS questions locally.
     * Blocks domains and all their subdomains from /blocklist.txt.
     * Forwards allowed DNS packets to an upstream resolver.
@@ -32,7 +33,9 @@
     * Stores settings and the blocklist in LittleFS.
     * Accepts plain-domain lists and common hosts-file syntax.
     * EasyMode-inspired dark/cyan web UI.
-    * Optional D5/GPIO14 short activity chirp for DNS/admin traffic.
+    * D5/GPIO14 activity chirp plus onboard LED packet activity indicator.
+    * Async Wi-Fi scanner for first-run and settings pages.
+    * Live dashboard metrics for heap, radio, traffic, DNS and NAPT.
 
   Important limitations:
     * This is intentionally a small ESP8266 DNS sinkhole, NOT Linux Pi-hole.
@@ -56,6 +59,7 @@ struct DnsQuestion;  // Arduino .ino prototype-generator guard
 #include <ESP8266WebServer.h>
 #include <WiFiUdp.h>
 #include <LittleFS.h>
+#include <NetDump.h>
 
 #ifndef ESP8266
   #error "ESPHole requires an ESP8266 target."
@@ -70,12 +74,12 @@ struct DnsQuestion;  // Arduino .ino prototype-generator guard
 
 // ----------------------------- Version --------------------------------------
 
-static const char* ESPHOLE_VERSION = "1.0.0";
+static const char* ESPHOLE_VERSION = "1.1.0";
 
 // ----------------------------- Network --------------------------------------
 
-static const IPAddress AP_IP(192, 168, 4, 1);
-static const IPAddress AP_GW(192, 168, 4, 1);
+static const IPAddress AP_IP(10, 6, 20, 1);
+static const IPAddress AP_GW(10, 6, 20, 1);
 static const IPAddress AP_MASK(255, 255, 255, 0);
 
 static const uint16_t DNS_PORT = 53;
@@ -91,6 +95,8 @@ static const uint8_t ACTIVITY_BUZZER_PIN = 14; // D5 / GPIO14 on NodeMCU and Wem
 static const uint16_t DEFAULT_BUZZER_FREQ = 2600;
 static const uint16_t DEFAULT_BUZZER_PULSE_MS = 7;
 static const uint16_t DEFAULT_BUZZER_GAP_MS = 45;
+static const uint8_t ACTIVITY_LED_PIN = LED_BUILTIN;
+static const uint16_t ACTIVITY_LED_PULSE_MS = 18;
 
 #if ESPHOLE_HAS_NAPT
 static const uint16_t NAPT_ENTRIES = 256;
@@ -132,6 +138,7 @@ struct Settings {
   String apSSID;
   String apPass;
 
+  String adminUser;
   String adminPass;
 
   bool dnsAuto;
@@ -142,6 +149,7 @@ struct Settings {
   bool nullBlocking;     // false = NXDOMAIN, true = 0.0.0.0 for A queries
 
   bool activityBuzzerEnabled;
+  bool activityLedEnabled;
   uint16_t activityBuzzerFreq;
   uint16_t activityBuzzerPulseMs;
   uint16_t activityBuzzerMinGapMs;
@@ -189,6 +197,16 @@ uint16_t nextInternalId = 1;
 
 uint32_t lastActivityBeepMs = 0;
 uint32_t statActivityBeeps = 0;
+uint32_t statActivityLedPulses = 0;
+
+volatile uint32_t phyRxPackets = 0;
+volatile uint32_t phyTxPackets = 0;
+volatile uint32_t phyRxBytes = 0;
+volatile uint32_t phyTxBytes = 0;
+volatile bool phyActivityPending = false;
+
+bool activityLedOn = false;
+uint32_t activityLedOffAt = 0;
 
 // DNS question type is intentionally declared before any function definitions.
 // Arduino IDE 1.x auto-generates prototypes and otherwise sees this type too late.
@@ -295,6 +313,103 @@ static void activityBeep(bool force) {
   tone(ACTIVITY_BUZZER_PIN, cfg.activityBuzzerFreq, cfg.activityBuzzerPulseMs);
 }
 
+static int signalQualityFromRssi(int32_t rssi) {
+  if (rssi <= -100) return 0;
+  if (rssi >= -50) return 100;
+  return int(2 * (rssi + 100));
+}
+
+static String humanUptime(uint32_t ms) {
+  uint32_t totalSeconds = ms / 1000UL;
+  uint32_t days = totalSeconds / 86400UL;
+  uint8_t hours = (totalSeconds / 3600UL) % 24;
+  uint8_t minutes = (totalSeconds / 60UL) % 60;
+  uint8_t seconds = totalSeconds % 60;
+
+  String out;
+  if (days) {
+    out += String(days);
+    out += F("d ");
+  }
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%02u:%02u:%02u", hours, minutes, seconds);
+  out += buf;
+  return out;
+}
+
+static uint8_t heapFragmentationPercent() {
+#if defined(UMM_INFO)
+  return ESP.getHeapFragmentation();
+#else
+  return 0;
+#endif
+}
+
+static uint32_t heapMaxBlock() {
+#if defined(UMM_INFO)
+  return ESP.getMaxFreeBlockSize();
+#else
+  return 0;
+#endif
+}
+
+static void networkCapture(int netif_idx, const char* data, size_t len, int out, int success) {
+  (void)netif_idx;
+  (void)data;
+  if (!success || len == 0) return;
+
+  if (out) {
+    ++phyTxPackets;
+    phyTxBytes += uint32_t(len);
+  } else {
+    ++phyRxPackets;
+    phyRxBytes += uint32_t(len);
+  }
+  phyActivityPending = true;
+}
+
+static void pulseActivityIndicators(bool forceBuzzer) {
+  uint32_t now = millis();
+
+  if (cfg.activityLedEnabled) {
+    digitalWrite(ACTIVITY_LED_PIN, LOW); // ESP8266 onboard LED is active-low.
+    activityLedOn = true;
+    activityLedOffAt = now + ACTIVITY_LED_PULSE_MS;
+    ++statActivityLedPulses;
+  }
+
+  activityBeep(forceBuzzer);
+}
+
+static void serviceActivityIndicators() {
+  bool hadActivity = false;
+  noInterrupts();
+  if (phyActivityPending) {
+    phyActivityPending = false;
+    hadActivity = true;
+  }
+  interrupts();
+
+  if (hadActivity) pulseActivityIndicators(false);
+
+  if (activityLedOn && int32_t(millis() - activityLedOffAt) >= 0) {
+    digitalWrite(ACTIVITY_LED_PIN, HIGH);
+    activityLedOn = false;
+  }
+}
+
+static void bootChime() {
+  if (!cfg.activityBuzzerEnabled) return;
+
+  const uint16_t notes[] = {1500, 2200, 3000};
+  const uint16_t lengths[] = {55, 55, 85};
+  for (uint8_t i = 0; i < 3; ++i) {
+    tone(ACTIVITY_BUZZER_PIN, notes[i], lengths[i]);
+    delay(lengths[i] + 22);
+  }
+  noTone(ACTIVITY_BUZZER_PIN);
+}
+
 // ----------------------------- Config ---------------------------------------
 
 static void setDefaults() {
@@ -306,7 +421,8 @@ static void setDefaults() {
   cfg.apSSID = apName;
   cfg.apPass = "esphole123";
 
-  cfg.adminPass = "esphole";
+  cfg.adminUser = "root";
+  cfg.adminPass = "mnbvcxZ123";
 
   cfg.dnsAuto = true;
   cfg.customDNS = IPAddress(1, 1, 1, 1);
@@ -315,7 +431,8 @@ static void setDefaults() {
   cfg.natEnabled = true;
   cfg.nullBlocking = false;
 
-  cfg.activityBuzzerEnabled = false;
+  cfg.activityBuzzerEnabled = true;
+  cfg.activityLedEnabled = true;
   cfg.activityBuzzerFreq = DEFAULT_BUZZER_FREQ;
   cfg.activityBuzzerPulseMs = DEFAULT_BUZZER_PULSE_MS;
   cfg.activityBuzzerMinGapMs = DEFAULT_BUZZER_GAP_MS;
@@ -345,6 +462,7 @@ static void loadConfig() {
     else if (k == F("sta_pass")) cfg.staPass = v;
     else if (k == F("ap_ssid")) cfg.apSSID = v;
     else if (k == F("ap_pass")) cfg.apPass = v;
+    else if (k == F("admin_user")) cfg.adminUser = v;
     else if (k == F("admin_pass")) cfg.adminPass = v;
     else if (k == F("dns")) {
       if (v == F("auto")) {
@@ -361,6 +479,7 @@ static void loadConfig() {
     else if (k == F("nat")) cfg.natEnabled = (v != F("0"));
     else if (k == F("null_blocking")) cfg.nullBlocking = (v == F("1"));
     else if (k == F("activity_buzzer")) cfg.activityBuzzerEnabled = (v == F("1"));
+    else if (k == F("activity_led")) cfg.activityLedEnabled = (v == F("1"));
     else if (k == F("buzzer_freq")) cfg.activityBuzzerFreq = clampU16Arg(v, DEFAULT_BUZZER_FREQ, 200, 12000);
     else if (k == F("buzzer_pulse_ms")) cfg.activityBuzzerPulseMs = clampU16Arg(v, DEFAULT_BUZZER_PULSE_MS, 1, 100);
     else if (k == F("buzzer_gap_ms")) cfg.activityBuzzerMinGapMs = clampU16Arg(v, DEFAULT_BUZZER_GAP_MS, 15, 1000);
@@ -376,8 +495,11 @@ static void loadConfig() {
   if (cfg.apPass.length() && cfg.apPass.length() < 8) {
     cfg.apPass = "esphole123";
   }
+  if (cfg.adminUser.length() < 1 || cfg.adminUser.length() > 31) {
+    cfg.adminUser = "root";
+  }
   if (cfg.adminPass.length() < 4) {
-    cfg.adminPass = "esphole";
+    cfg.adminPass = "mnbvcxZ123";
   }
 }
 
@@ -388,6 +510,7 @@ static bool saveConfig() {
   cfg.staPass = stripCRLF(cfg.staPass);
   cfg.apSSID = stripCRLF(cfg.apSSID);
   cfg.apPass = stripCRLF(cfg.apPass);
+  cfg.adminUser = stripCRLF(cfg.adminUser);
   cfg.adminPass = stripCRLF(cfg.adminPass);
 
   File f = LittleFS.open(CONFIG_FILE, "w");
@@ -398,6 +521,7 @@ static bool saveConfig() {
   f.print(F("sta_pass=")); f.println(cfg.staPass);
   f.print(F("ap_ssid=")); f.println(cfg.apSSID);
   f.print(F("ap_pass=")); f.println(cfg.apPass);
+  f.print(F("admin_user=")); f.println(cfg.adminUser);
   f.print(F("admin_pass=")); f.println(cfg.adminPass);
   f.print(F("dns="));
   f.println(cfg.dnsAuto ? F("auto") : cfg.customDNS.toString());
@@ -405,6 +529,7 @@ static bool saveConfig() {
   f.print(F("nat=")); f.println(cfg.natEnabled ? 1 : 0);
   f.print(F("null_blocking=")); f.println(cfg.nullBlocking ? 1 : 0);
   f.print(F("activity_buzzer=")); f.println(cfg.activityBuzzerEnabled ? 1 : 0);
+  f.print(F("activity_led=")); f.println(cfg.activityLedEnabled ? 1 : 0);
   f.print(F("buzzer_freq=")); f.println(cfg.activityBuzzerFreq);
   f.print(F("buzzer_pulse_ms=")); f.println(cfg.activityBuzzerPulseMs);
   f.print(F("buzzer_gap_ms=")); f.println(cfg.activityBuzzerMinGapMs);
@@ -748,7 +873,8 @@ static bool isLocalAdminName(const String& d) {
   return d == F("esphole") ||
          d == F("esphole.lan") ||
          d == F("esphole.home") ||
-         d == F("setup.esphole");
+         d == F("setup.esphole") ||
+         d == F("blaze.iot");
 }
 
 static bool setupCaptiveMode() {
@@ -957,7 +1083,7 @@ static void setupWiFi() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.hostname("ESPHole");
+  WiFi.hostname("blaze-iot");
 
   // Tell AP DHCP clients that the ESP itself is their DNS resolver.
   auto& dhcp = WiFi.softAPDhcpServer();
@@ -1007,11 +1133,11 @@ static void maintainWiFi() {
 
 static bool requireAdmin() {
   if (cfg.staSSID.length() == 0) {
-    // First boot remains easy to configure from the protected AP.
+    // First boot stays frictionless while the AP itself is password-protected.
     return true;
   }
 
-  if (!web.authenticate("admin", cfg.adminPass.c_str())) {
+  if (!web.authenticate(cfg.adminUser.c_str(), cfg.adminPass.c_str())) {
     web.requestAuthentication(BASIC_AUTH, "ESPHole");
     return false;
   }
@@ -1020,7 +1146,7 @@ static bool requireAdmin() {
 
 static String pageTop(const String& title) {
   String s;
-  s.reserve(3300);
+  s.reserve(3900);
   s += F("<!doctype html><html data-theme='dark'><head><meta charset='utf-8'>"
          "<meta name='viewport' content='width=device-width,initial-scale=1'>"
          "<meta name='theme-color' content='#09131c'><title>");
@@ -1028,14 +1154,15 @@ static String pageTop(const String& title) {
   s += F("</title><style>"
          ":root{--bg:#09131c;--panel:#101f2a;--panel2:#142733;--text:#e9f4fa;--muted:#91a7b6;--line:#243a48;--accent:#24b8dc;--ok:#54d4ae;--warn:#ffca79;--danger:#ff6b78;--shadow:0 18px 48px rgba(0,0,0,.24)}"
          "*{box-sizing:border-box}html{color-scheme:dark}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:radial-gradient(circle at 80% -10%,rgba(36,184,220,.14),transparent 36%),var(--bg);color:var(--text)}"
-         "header{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:24px;padding:16px max(18px,calc((100vw - 980px)/2));background:rgba(9,19,28,.91);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}"
+         "header{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:24px;padding:16px max(18px,calc((100vw - 1080px)/2));background:rgba(9,19,28,.91);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}"
          ".brand{font-weight:800;letter-spacing:.02em;white-space:nowrap}.brand span{color:var(--accent)}nav{display:flex;gap:6px;overflow:auto}nav a{color:var(--muted);text-decoration:none;padding:8px 11px;border-radius:9px;font-size:13px;white-space:nowrap}nav a:hover{color:var(--text);background:var(--panel2)}"
-         "main{max-width:980px;margin:auto;padding:30px 18px 46px}.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:800}.pagehead{display:flex;align-items:end;justify-content:space-between;gap:18px;margin:8px 0 22px}.pagehead h1{font-size:34px;margin:0;line-height:1.05}.pagehead p{margin:7px 0 0;color:var(--muted)}"
-         ".grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,var(--panel),rgba(16,31,42,.92));border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow);margin:12px 0;min-width:0}.card.wide{grid-column:1/-1}.stat{margin:0}.stat b{display:block;font-size:25px;margin-top:7px;overflow:hidden;text-overflow:ellipsis}.stat small,.muted{color:var(--muted)}"
+         "main{max-width:1080px;margin:auto;padding:30px 18px 46px}.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:800}.pagehead{display:flex;align-items:end;justify-content:space-between;gap:18px;margin:8px 0 22px}.pagehead h1{font-size:34px;margin:0;line-height:1.05}.pagehead p{margin:7px 0 0;color:var(--muted)}"
+         ".grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,var(--panel),rgba(16,31,42,.92));border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow);margin:12px 0;min-width:0}.card.wide{grid-column:1/-1}.stat{margin:0}.stat b{display:block;font-size:24px;margin-top:7px;overflow:hidden;text-overflow:ellipsis}.stat small,.muted{color:var(--muted)}"
          ".pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:750}.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}.dot.ok{background:var(--ok);box-shadow:0 0 12px rgba(84,212,174,.6)}.dot.bad{background:var(--danger)}"
          "h2{font-size:17px;margin:0 0 12px}label{display:block;color:var(--muted);font-size:12px;margin-top:12px}input,textarea,select,button{font:inherit;width:100%;padding:11px 12px;margin:5px 0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);outline:none}input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(36,184,220,.1)}textarea{resize:vertical;min-height:280px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}button{background:var(--accent);border-color:transparent;color:#032630;font-weight:800;cursor:pointer}button:hover{filter:brightness(1.08)}button.ghost{background:var(--panel2);color:var(--text);border-color:var(--line)}button.danger{background:#8e2c37;color:#fff}"
-         "table{width:100%;border-collapse:collapse}td{padding:9px 3px;border-bottom:1px solid rgba(36,58,72,.8);vertical-align:top}td:first-child{color:var(--muted);width:42%}tr:last-child td{border-bottom:0}.ok{color:var(--ok)}.bad{color:var(--danger)}code{background:var(--bg);border:1px solid var(--line);padding:2px 6px;border-radius:7px;color:#bfeffc}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.check{display:flex;align-items:flex-start;gap:9px;color:var(--text);font-size:13px}.check input{width:auto;margin-top:2px}.notice{border-left:3px solid var(--accent);padding-left:12px;color:var(--muted)}footer{max-width:980px;margin:auto;padding:0 18px 28px;color:var(--muted);font-size:11px}"
-         "@media(max-width:760px){header{flex-wrap:wrap;gap:8px;padding:14px 16px}.brand{flex:1}nav{order:3;width:100%}main{padding:24px 14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pagehead{align-items:start}.pagehead h1{font-size:29px}.two{grid-template-columns:1fr}}"
+         "table{width:100%;border-collapse:collapse}td{padding:9px 3px;border-bottom:1px solid rgba(36,58,72,.8);vertical-align:top}td:first-child{color:var(--muted);width:42%}tr:last-child td{border-bottom:0}.ok{color:var(--ok)}.bad{color:var(--danger)}code{background:var(--bg);border:1px solid var(--line);padding:2px 6px;border-radius:7px;color:#bfeffc}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.check{display:flex;align-items:flex-start;gap:9px;color:var(--text);font-size:13px}.check input{width:auto;margin-top:2px}.notice{border-left:3px solid var(--accent);padding-left:12px;color:var(--muted)}"
+         ".scanrow{display:grid;grid-template-columns:minmax(0,1fr) 145px;gap:8px;align-items:end}.scanrow button{margin-top:5px}.quality{height:7px;background:var(--bg);border:1px solid var(--line);border-radius:999px;overflow:hidden;margin-top:7px}.quality>i{display:block;height:100%;background:var(--accent);width:0}.compact{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:rgba(20,39,51,.55)}summary{cursor:pointer;color:var(--text);font-weight:750}.kicker{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}footer{max-width:1080px;margin:auto;padding:0 18px 28px;color:var(--muted);font-size:11px}"
+         "@media(max-width:760px){header{flex-wrap:wrap;gap:8px;padding:14px 16px}.brand{flex:1}nav{order:3;width:100%}main{padding:24px 14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pagehead{align-items:start}.pagehead h1{font-size:29px}.two{grid-template-columns:1fr}.scanrow{grid-template-columns:1fr}}"
          "@media(max-width:430px){.grid{grid-template-columns:1fr}.card{border-radius:15px;padding:15px}}"
          "</style></head><body><header><div class='brand'>ESP<span>Hole</span></div><nav>"
          "<a href='/'>Dashboard</a><a href='/blocklist'>Blocklist</a><a href='/settings'>Settings</a>"
@@ -1044,7 +1171,34 @@ static String pageTop(const String& title) {
 }
 
 static String pageBottom() {
-  return F("</main><footer>ESPHole &middot; tiny DNS sinkhole + repeater &middot; EasyMode-inspired UI</footer></body></html>");
+  return F("</main><footer>ESPHole &middot; blaze.iot &middot; tiny DNS sinkhole + NAPT repeater &middot; EasyMode-inspired UI</footer></body></html>");
+}
+
+static String wifiPicker(const String& currentSSID, bool autoScan) {
+  String s;
+  s.reserve(2800);
+  s += F("<label>Upstream Wi-Fi</label><div class='scanrow'><select id='wifiList'><option value=''>");
+  if (currentSSID.length()) {
+    s += htmlEscape(currentSSID);
+  } else {
+    s += F("Scanning nearby networks...");
+  }
+  s += F("</option></select><button type='button' class='ghost' id='scanBtn' onclick='scanWifi()'>Scan Wi-Fi</button></div>"
+         "<input type='hidden' id='ssid' name='ssid' value='");
+  s += htmlEscape(currentSSID);
+  s += F("'><div id='scanState' class='muted'>Nearby networks are sorted strongest first.</div>"
+         "<details class='compact'><summary>Hidden / manual network</summary><label>SSID</label><input id='manualSsid' maxlength='32' placeholder='Type hidden SSID' oninput=\"document.getElementById('ssid').value=this.value\"></details>"
+         "<script>"
+         "const wifiCurrent=document.getElementById('ssid').value;let scanTimer=null;"
+         "function qText(r){if(r>=-50)return 100;if(r<=-100)return 0;return 2*(r+100)}"
+         "async function scanWifi(){const b=document.getElementById('scanBtn'),st=document.getElementById('scanState'),sel=document.getElementById('wifiList');b.disabled=true;st.textContent='Scanning...';"
+         "try{const r=await fetch('/api/scan',{cache:'no-store'});const j=await r.json();if(j.state==='started'||j.state==='running'){scanTimer=setTimeout(scanWifi,650);return;}"
+         "if(j.state==='ready'){sel.innerHTML='';if(!j.networks.length){const o=document.createElement('option');o.textContent='No networks found';o.value='';sel.appendChild(o);st.textContent='No visible networks found.';}else{let selected=0;j.networks.forEach((n,i)=>{const o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+'  '+n.rssi+' dBm · '+n.quality+'% · CH '+n.channel+(n.open?' · OPEN':' · secured');if(n.ssid===wifiCurrent)selected=i;sel.appendChild(o);});sel.selectedIndex=selected;document.getElementById('ssid').value=sel.value;st.textContent=j.networks.length+' visible network(s).';}b.disabled=false;return;}"
+         "st.textContent='Scan unavailable';b.disabled=false;}catch(e){st.textContent='Scan request failed';b.disabled=false;}}"
+         "document.getElementById('wifiList').addEventListener('change',e=>document.getElementById('ssid').value=e.target.value);"
+         "</script>");
+  if (autoScan) s += F("<script>setTimeout(scanWifi,250);</script>");
+  return s;
 }
 
 static String readBlocklistForTextarea() {
@@ -1069,75 +1223,94 @@ static String readBlocklistForTextarea() {
 static void handleRoot() {
   if (!requireAdmin()) return;
 
+  int32_t rssi = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -100;
+  int quality = (WiFi.status() == WL_CONNECTED) ? signalQualityFromRssi(rssi) : 0;
+
   String s = pageTop(F("ESPHole"));
-  s += F("<div class='eyebrow'>Network utility</div><div class='pagehead'><div><h1>ESPHole</h1><p>DNS sinkhole, captive setup and tiny Wi-Fi repeater.</p></div><span class='pill'><span class='dot ");
-  if (WiFi.status() == WL_CONNECTED) {
-    s += F("ok'></span>ONLINE");
-  } else {
-    s += F("bad'></span>SETUP / OFFLINE");
-  }
-  s += F("</span></div>");
+  s.reserve(10500);
+  s += F("<div class='eyebrow'>At a glance</div><div class='pagehead'><div><h1>ESPHole</h1><p>DNS sinkhole, packet activity monitor and tiny Wi-Fi repeater.</p></div><span id='statusPill' class='pill'><span id='statusDot' class='dot ");
+  if (WiFi.status() == WL_CONNECTED) s += F("ok'></span><span id='statusText'>ONLINE</span>");
+  else s += F("bad'></span><span id='statusText'>SETUP / OFFLINE</span>");
+  s += F("</span></div><div class='grid'>");
 
-  s += F("<div class='grid'>");
-  s += F("<div class='card stat'><small>DNS queries</small><b>"); s += String(statQueries); s += F("</b></div>");
-  s += F("<div class='card stat'><small>Blocked</small><b>"); s += String(statBlocked); s += F("</b></div>");
-  s += F("<div class='card stat'><small>Block entries</small><b>"); s += String(blockCount); s += F("</b></div>");
-  s += F("<div class='card stat'><small>Free heap</small><b>"); s += humanBytes(ESP.getFreeHeap()); s += F("</b></div>");
-  s += F("</div>");
+  s += F("<div class='card stat'><small>Free heap</small><b id='mHeap'>"); s += humanBytes(ESP.getFreeHeap()); s += F("</b><span class='muted' id='mHeapSub'>frag "); s += String(heapFragmentationPercent()); s += F("%</span></div>");
+  s += F("<div class='card stat'><small>STA connectivity</small><b id='mSta'>"); s += (WiFi.status() == WL_CONNECTED) ? F("Online") : F("Offline"); s += F("</b><span class='muted' id='mStaIp'>"); s += WiFi.localIP().toString(); s += F("</span></div>");
+  s += F("<div class='card stat'><small>Upstream signal</small><b id='mSignal'>"); s += String(quality); s += F("%</b><span class='muted' id='mRssi'>"); s += String(rssi); s += F(" dBm</span><div class='quality'><i id='signalBar' style='width:"); s += String(quality); s += F("%'></i></div></div>");
+  s += F("<div class='card stat'><small>AP clients</small><b id='mClients'>"); s += String(WiFi.softAPgetStationNum()); s += F("</b><span class='muted'>core default max 4</span></div>");
+  s += F("<div class='card stat'><small>RX traffic</small><b id='mRx'>"); s += humanBytes(phyRxBytes); s += F("</b><span class='muted'><span id='mRxPkts'>"); s += String(phyRxPackets); s += F("</span> packets</span></div>");
+  s += F("<div class='card stat'><small>TX traffic</small><b id='mTx'>"); s += humanBytes(phyTxBytes); s += F("</b><span class='muted'><span id='mTxPkts'>"); s += String(phyTxPackets); s += F("</span> packets</span></div>");
+  s += F("<div class='card stat'><small>DNS blocked</small><b id='mBlocked'>"); s += String(statBlocked); s += F("</b><span class='muted'><span id='mQueries'>"); s += String(statQueries); s += F("</span> queries</span></div>");
+  s += F("<div class='card stat'><small>Uptime</small><b id='mUptime'>"); s += humanUptime(millis()); s += F("</b><span class='muted'>v"); s += ESPHOLE_VERSION; s += F("</span></div></div>");
 
-  s += F("<div class='two'><div class='card'><h2>Connection</h2><table>");
-  s += F("<tr><td>Upstream</td><td>");
-  if (WiFi.status() == WL_CONNECTED) {
-    s += F("<span class='ok'>Connected</span><br><span class='muted'>");
-    s += htmlEscape(WiFi.SSID()); s += F(" &middot; "); s += WiFi.localIP().toString(); s += F("</span>");
-  } else {
-    s += F("<span class='bad'>Offline / setup mode</span>");
-  }
-  s += F("</td></tr><tr><td>DNS upstream</td><td>"); s += selectedUpstreamDNS().toString();
-  s += cfg.dnsAuto ? F(" <span class='muted'>(auto)</span>") : F(" <span class='muted'>(manual)</span>");
-  s += F("</td></tr><tr><td>AP clients</td><td>"); s += String(WiFi.softAPgetStationNum());
-  s += F("</td></tr><tr><td>Repeater NAT</td><td>");
+  s += F("<div class='two'><div class='card'><div class='kicker'>Upstream</div><h2>Internet / STA</h2><table>"
+         "<tr><td>SSID</td><td id='dSsid'>"); s += htmlEscape(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String(F("Not connected")));
+  s += F("</td></tr><tr><td>IP</td><td id='dStaIp'>"); s += WiFi.localIP().toString();
+  s += F("</td></tr><tr><td>Gateway</td><td id='dGateway'>"); s += WiFi.gatewayIP().toString();
+  s += F("</td></tr><tr><td>DNS</td><td id='dDns'>"); s += selectedUpstreamDNS().toString();
+  s += F("</td></tr><tr><td>Channel</td><td id='dChannel'>"); s += String(WiFi.channel());
+  s += F("</td></tr><tr><td>Signal</td><td id='dSignal'>"); s += String(rssi); s += F(" dBm / "); s += String(quality); s += F("%</td></tr></table></div>");
+
+  s += F("<div class='card'><div class='kicker'>Local service</div><h2>ESPHole AP</h2><table>"
+         "<tr><td>Friendly URL</td><td><code>blaze.iot</code></td></tr><tr><td>AP IP</td><td id='dApIp'>"); s += WiFi.softAPIP().toString();
+  s += F("</td></tr><tr><td>AP SSID</td><td id='dApSsid'>"); s += htmlEscape(cfg.apSSID);
+  s += F("</td></tr><tr><td>Clients</td><td id='dClients'>"); s += String(WiFi.softAPgetStationNum());
+  s += F("</td></tr><tr><td>NAPT</td><td id='dNapt'>");
 #if ESPHOLE_HAS_NAPT
-  s += cfg.natEnabled ? (naptActive ? F("<span class='ok'>Active</span>") : F("<span class='bad'>Requested / inactive</span>")) : F("Disabled");
+  s += naptActive ? F("<span class='ok'>Active</span>") : F("<span class='bad'>Inactive</span>");
 #else
-  s += F("<span class='bad'>Unavailable in lwIP build</span>");
+  s += F("<span class='bad'>Unavailable</span>");
 #endif
-  s += F("</td></tr></table></div>");
+  s += F("</td></tr><tr><td>Indicators</td><td id='dIndicators'>LED "); s += cfg.activityLedEnabled ? F("ON") : F("OFF"); s += F(" · Buzzer "); s += cfg.activityBuzzerEnabled ? F("ON") : F("OFF"); s += F("</td></tr></table></div></div>");
 
-  s += F("<div class='card'><h2>Protection</h2><table><tr><td>DNS blocking</td><td>"); s += boolWord(cfg.blockingEnabled);
-  s += F("</td></tr><tr><td>Last blocked</td><td>"); s += htmlEscape(lastBlockedDomain.length() ? lastBlockedDomain : String(F("None yet")));
-  s += F("</td></tr><tr><td>Forwarded</td><td>"); s += String(statForwarded);
-  s += F("</td></tr><tr><td>Errors / timeouts</td><td>"); s += String(statErrors);
-  s += F("</td></tr><tr><td>Activity sound</td><td>"); s += cfg.activityBuzzerEnabled ? F("D5 / ON") : F("OFF");
-  s += F("</td></tr></table><form method='post' action='/toggle'><button class='ghost'>");
-  s += cfg.blockingEnabled ? F("Pause DNS blocking") : F("Enable DNS blocking");
-  s += F("</button></form></div></div>");
+  s += F("<div class='two'><div class='card'><h2>DNS protection</h2><table><tr><td>Blocking</td><td>"); s += boolWord(cfg.blockingEnabled);
+  s += F("</td></tr><tr><td>Block entries</td><td>"); s += String(blockCount);
+  s += F("</td></tr><tr><td>Forwarded</td><td id='dForwarded'>"); s += String(statForwarded);
+  s += F("</td></tr><tr><td>Replies</td><td id='dReplies'>"); s += String(statReplies);
+  s += F("</td></tr><tr><td>Errors/timeouts</td><td id='dErrors'>"); s += String(statErrors);
+  s += F("</td></tr><tr><td>Last blocked</td><td id='dLastBlocked'>"); s += htmlEscape(lastBlockedDomain.length() ? lastBlockedDomain : String(F("None yet")));
+  s += F("</td></tr></table><form method='post' action='/toggle'><button class='ghost'>"); s += cfg.blockingEnabled ? F("Pause DNS blocking") : F("Enable DNS blocking"); s += F("</button></form></div>");
+
+  s += F("<div class='card'><h2>Device health</h2><table><tr><td>Heap max block</td><td id='dMaxBlock'>"); s += humanBytes(heapMaxBlock());
+  s += F("</td></tr><tr><td>Heap fragmentation</td><td id='dFrag'>"); s += String(heapFragmentationPercent()); s += F("%</td></tr><tr><td>Core</td><td>"); s += ESP.getCoreVersion();
+  s += F("</td></tr><tr><td>Reset reason</td><td>"); s += htmlEscape(ESP.getResetReason());
+  s += F("</td></tr><tr><td>Activity LED pulses</td><td id='dLedPulses'>"); s += String(statActivityLedPulses);
+  s += F("</td></tr><tr><td>Buzzer chirps</td><td id='dBeeps'>"); s += String(statActivityBeeps); s += F("</td></tr></table></div></div>");
 
   if (cfg.staSSID.length() == 0) {
-    s += F("<div class='card'><div class='eyebrow'>First run</div><h2>Connect ESPHole upstream</h2>"
-           "<p class='notice'>Your ESPHole access point stays available while the station interface connects to your internet Wi-Fi.</p>"
-           "<form method='post' action='/quicksetup'><label>Upstream Wi-Fi SSID</label><input name='ssid' maxlength='32' required>"
-           "<label>Wi-Fi password</label><input type='password' name='pass' maxlength='64'><button>Save &amp; reboot</button></form></div>");
+    s += F("<div class='card'><div class='eyebrow'>First run</div><h2>Connect ESPHole to the internet</h2>"
+           "<p class='notice'>Nearby Wi-Fi is scanned automatically. Select a network, enter only its password, and ESPHole fills the rest with safe defaults.</p><form method='post' action='/quicksetup'>");
+    s += wifiPicker("", true);
+    s += F("<label>Wi-Fi password</label><input type='password' name='pass' maxlength='64' autocomplete='new-password' placeholder='Leave blank for open Wi-Fi'>"
+           "<button>Save &amp; connect</button></form><p class='muted'>After setup: <code>http://blaze.iot/</code> · admin <code>root</code> / <code>mnbvcxZ123</code>.</p></div>");
   }
 
-  s += F("<div class='card'><h2>Client access</h2><p>Join <code>"); s += htmlEscape(cfg.apSSID);
-  s += F("</code>. DHCP advertises <code>192.168.4.1</code> as DNS. Open <code>http://192.168.4.1/</code> or <code>esphole.lan</code> for administration.</p>"
-         "<p class='muted'>The D5 activity sound represents traffic ESPHole can directly observe (DNS and its own web service). Raw NAPT packets are intentionally not sniffed because that would make the repeater less stable.</p></div>");
+  s += F("<script>"
+         "function fbytes(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(2)+' MB'}"
+         "function uptime(ms){let x=Math.floor(ms/1000),d=Math.floor(x/86400);x%=86400;let h=Math.floor(x/3600),m=Math.floor((x%3600)/60),q=x%60;return (d?d+'d ':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(q).padStart(2,'0')}"
+         "function put(id,v){const e=document.getElementById(id);if(e)e.textContent=v}"
+         "async function refreshStatus(){try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)return;const j=await r.json();put('mHeap',fbytes(j.heap));put('mHeapSub','frag '+j.heap_frag+'%');put('mSta',j.wifi_connected?'Online':'Offline');put('mStaIp',j.sta_ip);put('mSignal',j.signal_quality+'%');put('mRssi',j.rssi+' dBm');const sb=document.getElementById('signalBar');if(sb)sb.style.width=j.signal_quality+'%';put('mClients',j.ap_clients);put('mRx',fbytes(j.rx_bytes));put('mRxPkts',j.rx_packets);put('mTx',fbytes(j.tx_bytes));put('mTxPkts',j.tx_packets);put('mBlocked',j.blocked);put('mQueries',j.queries);put('mUptime',uptime(j.uptime_ms));put('dSsid',j.sta_ssid||'Not connected');put('dStaIp',j.sta_ip);put('dGateway',j.gateway);put('dDns',j.upstream_dns);put('dChannel',j.channel);put('dSignal',j.rssi+' dBm / '+j.signal_quality+'%');put('dApIp',j.ap_ip);put('dApSsid',j.ap_ssid);put('dClients',j.ap_clients);put('dNapt',j.napt?'Active':'Inactive');put('dIndicators','LED '+(j.activity_led?'ON':'OFF')+' · Buzzer '+(j.activity_buzzer?'ON':'OFF'));put('dForwarded',j.forwarded);put('dReplies',j.replies);put('dErrors',j.errors);put('dLastBlocked',j.last_blocked||'None yet');put('dMaxBlock',fbytes(j.heap_max_block));put('dFrag',j.heap_frag+'%');put('dLedPulses',j.activity_led_pulses);put('dBeeps',j.activity_beeps);const dot=document.getElementById('statusDot'),txt=document.getElementById('statusText');if(dot){dot.className='dot '+(j.wifi_connected?'ok':'bad')}if(txt)txt.textContent=j.wifi_connected?'ONLINE':'SETUP / OFFLINE';}catch(e){}}"
+         "setTimeout(refreshStatus,600);setInterval(refreshStatus,2000);</script>");
 
   s += pageBottom();
   web.send(200, "text/html", s);
 }
 
 static void handleQuickSetup() {
-  activityBeep(true);
+  pulseActivityIndicators(true);
   cfg.staSSID = stripCRLF(web.arg("ssid"));
   cfg.staPass = stripCRLF(web.arg("pass"));
-  saveConfig();
 
-  web.send(200, "text/html",
+  if (!cfg.staSSID.length()) {
+    web.send(400, "text/html", pageTop(F("Wi-Fi required")) + F("<div class='card'><h2>Select a Wi-Fi network</h2><p>Run the scan and choose a network first.</p><a href='/'>Back</a></div>") + pageBottom());
+    return;
+  }
+
+  bool ok = saveConfig();
+  web.send(ok ? 200 : 500, "text/html",
            pageTop(F("Saved")) +
-           F("<div class='card'><h2>Saved</h2><p>ESPHole is rebooting.</p></div>") +
+           (ok ? String(F("<div class='card'><h2>Saved</h2><p>ESPHole is rebooting and will connect upstream.</p></div>")) : String(F("<div class='card'><h2>Save failed</h2></div>"))) +
            pageBottom());
+  if (!ok) return;
   delay(350);
   ESP.restart();
 }
@@ -1146,27 +1319,21 @@ static void handleBlocklist() {
   if (!requireAdmin()) return;
 
   String list = readBlocklistForTextarea();
-
   String s = pageTop(F("ESPHole Blocklist"));
-  s += F("<h1>Blocklist</h1><div class='card'>"
-         "<p>One domain per line. Blocking <code>example.com</code> also blocks its subdomains. "
-         "Hosts-file lines such as <code>0.0.0.0 example.com</code> are accepted.</p>"
-         "<p>RAM capacity: ");
+  s += F("<h1>Blocklist</h1><div class='card'><p>One domain per line. Blocking <code>example.com</code> also blocks its subdomains. Hosts-file lines such as <code>0.0.0.0 example.com</code> are accepted.</p><p>RAM capacity: ");
   s += String(MAX_BLOCK_HASHES);
   s += F(" unique domain hashes. Loaded now: ");
   s += String(blockCount);
-  s += F(".</p><form method='post' action='/saveblocklist'>"
-         "<textarea name='list' rows='22' spellcheck='false'>");
+  s += F(".</p><form method='post' action='/saveblocklist'><textarea name='list' rows='22' spellcheck='false'>");
   s += htmlEscape(list);
   s += F("</textarea><button>Save blocklist</button></form></div>");
   s += pageBottom();
-
   web.send(200, "text/html", s);
 }
 
 static void handleSaveBlocklist() {
   if (!requireAdmin()) return;
-  activityBeep(true);
+  pulseActivityIndicators(true);
 
   uint16_t accepted = 0;
   bool ok = saveBlocklistText(web.arg("list"), accepted);
@@ -1185,64 +1352,43 @@ static void handleSettings() {
   if (!requireAdmin()) return;
 
   String s = pageTop(F("ESPHole Settings"));
-  s += F("<h1>Settings</h1><div class='card'><form method='post' action='/savesettings'>");
-
-  s += F("<label>Upstream Wi-Fi SSID</label><input name='ssid' maxlength='32' value='");
-  s += htmlEscape(cfg.staSSID);
-  s += F("'>");
-
-  s += F("<label>Upstream Wi-Fi password</label>"
-         "<input type='password' name='stapass' maxlength='64' placeholder='Leave unchanged if blank'>");
-
-  s += F("<hr><label>ESPHole AP name</label><input name='apssid' maxlength='31' value='");
+  s.reserve(8500);
+  s += F("<div class='eyebrow'>Simple first</div><h1>Settings</h1><div class='card'><form method='post' action='/savesettings'><h2>Internet Wi-Fi</h2>");
+  s += wifiPicker(cfg.staSSID, false);
+  s += F("<label>Wi-Fi password</label><input type='password' name='stapass' maxlength='64' placeholder='Leave blank to keep current password'>"
+         "<hr><h2>Admin login</h2><div class='two'><div><label>Username</label><input name='adminuser' maxlength='31' value='");
+  s += htmlEscape(cfg.adminUser);
+  s += F("'></div><div><label>Password</label><input type='password' name='adminpass' maxlength='63' placeholder='Leave blank to keep current password'></div></div>"
+         "<hr><h2>Activity indicators</h2><label class='check'><input type='checkbox' name='activityled' value='1'");
+  if (cfg.activityLedEnabled) s += F(" checked");
+  s += F("><span>Blink onboard LED on real RX/TX packet activity</span></label><label class='check'><input type='checkbox' name='activitybuzzer' value='1'");
+  if (cfg.activityBuzzerEnabled) s += F(" checked");
+  s += F("><span>Beep D5 / GPIO14 on packet activity and play the startup chime</span></label>"
+         "<details class='compact'><summary>Advanced settings</summary><p class='muted'>Most users can leave these values alone.</p>"
+         "<label>ESPHole AP name</label><input name='apssid' maxlength='31' value='");
   s += htmlEscape(cfg.apSSID);
-  s += F("'>");
-
-  s += F("<label>ESPHole AP password (8+ chars)</label>"
-         "<input type='password' name='appass' maxlength='63' placeholder='Leave unchanged if blank'>");
-
-  s += F("<hr><label>Admin password (user is admin)</label>"
-         "<input type='password' name='adminpass' maxlength='63' placeholder='Leave unchanged if blank'>");
-
-  s += F("<hr><label>Upstream DNS</label><select name='dnsmode'>"
-         "<option value='auto'");
+  s += F("'><label>ESPHole AP password</label><input type='password' name='appass' maxlength='63' placeholder='Leave blank to keep current password'>"
+         "<label>Upstream DNS</label><select name='dnsmode'><option value='auto'");
   if (cfg.dnsAuto) s += F(" selected");
   s += F(">Automatic from upstream router</option><option value='manual'");
   if (!cfg.dnsAuto) s += F(" selected");
-  s += F(">Manual IPv4 DNS</option></select>");
-
-  s += F("<input name='dnsip' value='");
+  s += F(">Manual IPv4 DNS</option></select><input name='dnsip' value='");
   s += cfg.customDNS.toString();
-  s += F("' placeholder='1.1.1.1'>");
-
-  s += F("<hr><label class='check'><input type='checkbox' name='blocking' value='1'");
+  s += F("' placeholder='1.1.1.1'><label class='check'><input type='checkbox' name='blocking' value='1'");
   if (cfg.blockingEnabled) s += F(" checked");
-  s += F("><span>Enable DNS blocking</span></label>");
-
-  s += F("<label class='check'><input type='checkbox' name='nat' value='1'");
+  s += F("><span>Enable DNS blocking</span></label><label class='check'><input type='checkbox' name='nat' value='1'");
   if (cfg.natEnabled) s += F(" checked");
-  s += F("><span>Enable Wi-Fi repeater/NAPT</span></label>");
-
-  s += F("<label class='check'><input type='checkbox' name='nullblock' value='1'");
+  s += F("><span>Enable Wi-Fi repeater/NAPT</span></label><label class='check'><input type='checkbox' name='nullblock' value='1'");
   if (cfg.nullBlocking) s += F(" checked");
-  s += F("><span>Return 0.0.0.0 instead of NXDOMAIN for blocked A queries</span></label>");
-
-  s += F("<hr><div class='eyebrow'>Activity sound</div><label class='check'><input type='checkbox' name='activitybuzzer' value='1'");
-  if (cfg.activityBuzzerEnabled) s += F(" checked");
-  s += F("><span>Beep on ESPHole-observed network activity using D5 / GPIO14</span></label>");
-  s += F("<div class='two'><div><label>Buzzer frequency (Hz)</label><input type='number' name='buzzfreq' min='200' max='12000' value='");
+  s += F("><span>Return 0.0.0.0 instead of NXDOMAIN for blocked A queries</span></label>"
+         "<div class='two'><div><label>Buzzer frequency (Hz)</label><input type='number' name='buzzfreq' min='200' max='12000' value='");
   s += String(cfg.activityBuzzerFreq);
   s += F("'></div><div><label>Pulse length (ms)</label><input type='number' name='buzzpulse' min='1' max='100' value='");
   s += String(cfg.activityBuzzerPulseMs);
   s += F("'></div></div><label>Minimum gap between beeps (ms)</label><input type='number' name='buzzgap' min='15' max='1000' value='");
   s += String(cfg.activityBuzzerMinGapMs);
-  s += F("'><p class='muted'>Default 2600 Hz / 7 ms / 45 ms keeps it LAN-LED-like instead of continuously chirping.</p>");
-
-  s += F("<button>Save and reboot</button></form></div>");
-
-  s += F("<div class='card'><form method='post' action='/reboot'><button>Reboot ESPHole</button></form>"
-         "<form method='post' action='/factory' onsubmit=\"return confirm('Erase ESPHole settings and blocklist?')\">"
-         "<button class='danger'>Factory reset</button></form></div>");
+  s += F("'></details><button>Save and reboot</button></form></div>"
+         "<div class='card'><p class='muted'>Local dashboard: <code>http://blaze.iot/</code> or <code>http://10.6.20.1/</code>.</p><form method='post' action='/reboot'><button>Reboot ESPHole</button></form><form method='post' action='/factory' onsubmit=\"return confirm('Erase ESPHole settings and blocklist?')\"><button class='danger'>Factory reset</button></form></div>");
 
   s += pageBottom();
   web.send(200, "text/html", s);
@@ -1250,21 +1396,27 @@ static void handleSettings() {
 
 static void handleSaveSettings() {
   if (!requireAdmin()) return;
-  activityBeep(true);
+  pulseActivityIndicators(true);
 
-  cfg.staSSID = stripCRLF(web.arg("ssid"));
+  String ssid = stripCRLF(web.arg("ssid"));
+  bool ssidChanged = ssid.length() && ssid != cfg.staSSID;
+  if (ssid.length()) cfg.staSSID = ssid;
 
   String staPass = web.arg("stapass");
   if (staPass.length()) cfg.staPass = stripCRLF(staPass);
+  else if (ssidChanged) cfg.staPass = "";
+
+  String adminUser = stripCRLF(web.arg("adminuser"));
+  if (adminUser.length() >= 1 && adminUser.length() <= 31) cfg.adminUser = adminUser;
+
+  String adminPass = stripCRLF(web.arg("adminpass"));
+  if (adminPass.length() >= 4) cfg.adminPass = adminPass;
 
   String apSSID = stripCRLF(web.arg("apssid"));
   if (apSSID.length() >= 1 && apSSID.length() <= 31) cfg.apSSID = apSSID;
 
   String apPass = stripCRLF(web.arg("appass"));
   if (apPass.length() >= 8) cfg.apPass = apPass;
-
-  String adminPass = stripCRLF(web.arg("adminpass"));
-  if (adminPass.length() >= 4) cfg.adminPass = adminPass;
 
   cfg.dnsAuto = (web.arg("dnsmode") != F("manual"));
   IPAddress parsed;
@@ -1273,14 +1425,13 @@ static void handleSaveSettings() {
   cfg.blockingEnabled = web.hasArg("blocking");
   cfg.natEnabled = web.hasArg("nat");
   cfg.nullBlocking = web.hasArg("nullblock");
-
+  cfg.activityLedEnabled = web.hasArg("activityled");
   cfg.activityBuzzerEnabled = web.hasArg("activitybuzzer");
   cfg.activityBuzzerFreq = clampU16Arg(web.arg("buzzfreq"), cfg.activityBuzzerFreq, 200, 12000);
   cfg.activityBuzzerPulseMs = clampU16Arg(web.arg("buzzpulse"), cfg.activityBuzzerPulseMs, 1, 100);
   cfg.activityBuzzerMinGapMs = clampU16Arg(web.arg("buzzgap"), cfg.activityBuzzerMinGapMs, 15, 1000);
 
   bool ok = saveConfig();
-
   web.send(ok ? 200 : 500, "text/html",
            pageTop(F("Settings saved")) +
            String(F("<div class='card'><h2>")) +
@@ -1288,41 +1439,122 @@ static void handleSaveSettings() {
            F("</h2><p>ESPHole is rebooting to apply network settings.</p></div>") +
            pageBottom());
 
+  if (!ok) return;
   delay(350);
   ESP.restart();
 }
 
 static void handleToggle() {
   if (!requireAdmin()) return;
-  activityBeep(true);
+  pulseActivityIndicators(true);
   cfg.blockingEnabled = !cfg.blockingEnabled;
   saveConfig();
-
   web.sendHeader("Location", "/", true);
   web.send(303, "text/plain", "");
+}
+
+static void handleWifiScan() {
+  if (!requireAdmin()) return;
+
+  int n = WiFi.scanComplete();
+  if (n == -1) {
+    web.send(200, "application/json", "{\"state\":\"running\"}");
+    return;
+  }
+
+  if (n < 0) {
+    WiFi.scanDelete();
+    int started = WiFi.scanNetworks(true, true);
+    if (started == -1) web.send(200, "application/json", "{\"state\":\"started\"}");
+    else web.send(500, "application/json", "{\"state\":\"error\"}");
+    return;
+  }
+
+  const int capped = min(n, 32);
+  uint8_t order[32];
+  for (int i = 0; i < capped; ++i) order[i] = uint8_t(i);
+
+  for (int i = 0; i < capped - 1; ++i) {
+    for (int j = i + 1; j < capped; ++j) {
+      if (WiFi.RSSI(order[j]) > WiFi.RSSI(order[i])) {
+        uint8_t t = order[i]; order[i] = order[j]; order[j] = t;
+      }
+    }
+  }
+
+  String out;
+  out.reserve(280 + capped * 90);
+  out += F("{\"state\":\"ready\",\"networks\":[");
+  bool first = true;
+  for (int pos = 0; pos < capped; ++pos) {
+    uint8_t i = order[pos];
+    String ssid = WiFi.SSID(i);
+    if (!ssid.length()) continue;
+    if (!first) out += ',';
+    first = false;
+    int32_t rssi = WiFi.RSSI(i);
+    out += F("{\"ssid\":\""); out += jsonEscape(ssid);
+    out += F("\",\"rssi\":"); out += String(rssi);
+    out += F(",\"quality\":"); out += String(signalQualityFromRssi(rssi));
+    out += F(",\"channel\":"); out += String(WiFi.channel(i));
+    out += F(",\"open\":"); out += (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? F("true") : F("false");
+    out += '}';
+    yield();
+  }
+  out += F("]}");
+  WiFi.scanDelete();
+  web.send(200, "application/json", out);
 }
 
 static void handleApiStatus() {
   if (!requireAdmin()) return;
 
+  uint32_t rxPackets, txPackets, rxBytes, txBytes;
+  noInterrupts();
+  rxPackets = phyRxPackets;
+  txPackets = phyTxPackets;
+  rxBytes = phyRxBytes;
+  txBytes = phyTxBytes;
+  interrupts();
+
+  bool connected = WiFi.status() == WL_CONNECTED;
+  int32_t rssi = connected ? WiFi.RSSI() : -100;
+  int quality = connected ? signalQualityFromRssi(rssi) : 0;
+
   String s;
-  s.reserve(700);
+  s.reserve(1450);
   s += F("{\"version\":\""); s += ESPHOLE_VERSION;
   s += F("\",\"blocking\":"); s += cfg.blockingEnabled ? F("true") : F("false");
   s += F(",\"block_count\":"); s += String(blockCount);
   s += F(",\"queries\":"); s += String(statQueries);
   s += F(",\"blocked\":"); s += String(statBlocked);
   s += F(",\"forwarded\":"); s += String(statForwarded);
+  s += F(",\"replies\":"); s += String(statReplies);
   s += F(",\"errors\":"); s += String(statErrors);
-  s += F(",\"wifi_connected\":"); s += WiFi.status() == WL_CONNECTED ? F("true") : F("false");
-  s += F(",\"sta_ip\":\""); s += WiFi.localIP().toString();
+  s += F(",\"wifi_connected\":"); s += connected ? F("true") : F("false");
+  s += F(",\"sta_ssid\":\""); s += jsonEscape(connected ? WiFi.SSID() : String());
+  s += F("\",\"sta_ip\":\""); s += WiFi.localIP().toString();
+  s += F("\",\"gateway\":\""); s += WiFi.gatewayIP().toString();
   s += F("\",\"ap_ip\":\""); s += WiFi.softAPIP().toString();
+  s += F("\",\"ap_ssid\":\""); s += jsonEscape(cfg.apSSID);
   s += F("\",\"upstream_dns\":\""); s += selectedUpstreamDNS().toString();
   s += F("\",\"ap_clients\":"); s += String(WiFi.softAPgetStationNum());
+  s += F(",\"channel\":"); s += String(WiFi.channel());
+  s += F(",\"rssi\":"); s += String(rssi);
+  s += F(",\"signal_quality\":"); s += String(quality);
   s += F(",\"heap\":"); s += String(ESP.getFreeHeap());
+  s += F(",\"heap_frag\":"); s += String(heapFragmentationPercent());
+  s += F(",\"heap_max_block\":"); s += String(heapMaxBlock());
+  s += F(",\"uptime_ms\":"); s += String(millis());
   s += F(",\"napt\":"); s += naptActive ? F("true") : F("false");
   s += F(",\"activity_buzzer\":"); s += cfg.activityBuzzerEnabled ? F("true") : F("false");
+  s += F(",\"activity_led\":"); s += cfg.activityLedEnabled ? F("true") : F("false");
   s += F(",\"activity_beeps\":"); s += String(statActivityBeeps);
+  s += F(",\"activity_led_pulses\":"); s += String(statActivityLedPulses);
+  s += F(",\"rx_packets\":"); s += String(rxPackets);
+  s += F(",\"tx_packets\":"); s += String(txPackets);
+  s += F(",\"rx_bytes\":"); s += String(rxBytes);
+  s += F(",\"tx_bytes\":"); s += String(txBytes);
   s += F(",\"last_blocked\":\""); s += jsonEscape(lastBlockedDomain);
   s += F("\"}");
 
@@ -1331,26 +1563,18 @@ static void handleApiStatus() {
 
 static void handleReboot() {
   if (!requireAdmin()) return;
-  web.send(200, "text/html",
-           pageTop(F("Reboot")) +
-           F("<div class='card'><h2>Rebooting ESPHole</h2></div>") +
-           pageBottom());
+  web.send(200, "text/html", pageTop(F("Reboot")) + F("<div class='card'><h2>Rebooting ESPHole</h2></div>") + pageBottom());
   delay(350);
   ESP.restart();
 }
 
 static void handleFactoryReset() {
   if (!requireAdmin()) return;
-
   if (fsReady) {
     LittleFS.remove(CONFIG_FILE);
     LittleFS.remove(BLOCK_FILE);
   }
-
-  web.send(200, "text/html",
-           pageTop(F("Factory reset")) +
-           F("<div class='card'><h2>Factory reset complete</h2><p>Rebooting.</p></div>") +
-           pageBottom());
+  web.send(200, "text/html", pageTop(F("Factory reset")) + F("<div class='card'><h2>Factory reset complete</h2><p>Rebooting.</p></div>") + pageBottom());
   delay(350);
   ESP.restart();
 }
@@ -1362,42 +1586,22 @@ static void captiveRedirect() {
 
 static void setupWeb() {
   web.on("/", HTTP_GET, handleRoot);
-
   web.on("/quicksetup", HTTP_POST, handleQuickSetup);
-
   web.on("/blocklist", HTTP_GET, handleBlocklist);
   web.on("/saveblocklist", HTTP_POST, handleSaveBlocklist);
-
   web.on("/settings", HTTP_GET, handleSettings);
   web.on("/savesettings", HTTP_POST, handleSaveSettings);
-
   web.on("/toggle", HTTP_POST, handleToggle);
   web.on("/api/status", HTTP_GET, handleApiStatus);
-
+  web.on("/api/scan", HTTP_GET, handleWifiScan);
   web.on("/reboot", HTTP_POST, handleReboot);
   web.on("/factory", HTTP_POST, handleFactoryReset);
 
-  // Common captive-portal probe paths.
-  web.on("/generate_204", HTTP_ANY, []() {
-    if (setupCaptiveMode()) captiveRedirect();
-    else web.send(204, "text/plain", "");
-  });
-  web.on("/gen_204", HTTP_ANY, []() {
-    if (setupCaptiveMode()) captiveRedirect();
-    else web.send(204, "text/plain", "");
-  });
-  web.on("/hotspot-detect.html", HTTP_ANY, []() {
-    if (setupCaptiveMode()) captiveRedirect();
-    else web.send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
-  });
-  web.on("/connecttest.txt", HTTP_ANY, []() {
-    if (setupCaptiveMode()) captiveRedirect();
-    else web.send(200, "text/plain", "Microsoft Connect Test");
-  });
-  web.on("/ncsi.txt", HTTP_ANY, []() {
-    if (setupCaptiveMode()) captiveRedirect();
-    else web.send(200, "text/plain", "Microsoft NCSI");
-  });
+  web.on("/generate_204", HTTP_ANY, []() { if (setupCaptiveMode()) captiveRedirect(); else web.send(204, "text/plain", ""); });
+  web.on("/gen_204", HTTP_ANY, []() { if (setupCaptiveMode()) captiveRedirect(); else web.send(204, "text/plain", ""); });
+  web.on("/hotspot-detect.html", HTTP_ANY, []() { if (setupCaptiveMode()) captiveRedirect(); else web.send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"); });
+  web.on("/connecttest.txt", HTTP_ANY, []() { if (setupCaptiveMode()) captiveRedirect(); else web.send(200, "text/plain", "Microsoft Connect Test"); });
+  web.on("/ncsi.txt", HTTP_ANY, []() { if (setupCaptiveMode()) captiveRedirect(); else web.send(200, "text/plain", "Microsoft NCSI"); });
 
   web.onNotFound([]() {
     if (setupCaptiveMode()) {
@@ -1408,7 +1612,7 @@ static void setupWeb() {
   });
 
   web.begin();
-  Serial.println(F("[WEB] http://192.168.4.1/"));
+  Serial.printf("[WEB] http://%s/  http://blaze.iot/\n", AP_IP.toString().c_str());
 }
 
 // ----------------------------- Startup --------------------------------------
@@ -1433,6 +1637,8 @@ void setup() {
 
   pinMode(ACTIVITY_BUZZER_PIN, OUTPUT);
   digitalWrite(ACTIVITY_BUZZER_PIN, LOW);
+  pinMode(ACTIVITY_LED_PIN, OUTPUT);
+  digitalWrite(ACTIVITY_LED_PIN, HIGH);
 
   for (uint8_t i = 0; i < MAX_PENDING; ++i) pending[i].used = false;
 
@@ -1440,6 +1646,7 @@ void setup() {
   Serial.printf("[FS] LittleFS=%s\n", fsReady ? "OK" : "FAIL");
 
   loadConfig();
+  bootChime();
 
   if (fsReady) {
     ensureDefaultBlocklist();
@@ -1448,13 +1655,18 @@ void setup() {
 
   Serial.printf("[BLOCK] loaded=%u / %u\n", blockCount, MAX_BLOCK_HASHES);
 
+  // ESP8266 core packet capture hook. We only count direction/length and set
+  // an activity flag; packet payloads are never stored or parsed here.
+  phy_capture = networkCapture;
+
   setupWiFi();
   setupDns();
   setupWeb();
 
   Serial.printf("[AP] password: %s\n", cfg.apPass.c_str());
-  Serial.println(F("[ADMIN] user: admin"));
+  Serial.printf("[ADMIN] user: %s\n", cfg.adminUser.c_str());
   Serial.printf("[ADMIN] password: %s\n", cfg.adminPass.c_str());
+  Serial.printf("[LOCAL] http://%s/ or http://blaze.iot/\n", AP_IP.toString().c_str());
 
 #if ESPHOLE_HAS_NAPT
   Serial.println(F("[BUILD] NAPT support detected"));
@@ -1465,10 +1677,11 @@ void setup() {
 
 void loop() {
   maintainWiFi();
+  serviceActivityIndicators();
 
   if (dnsReady) processDnsQueries();
 
   web.handleClient();
-
+  serviceActivityIndicators();
   yield();
 }
