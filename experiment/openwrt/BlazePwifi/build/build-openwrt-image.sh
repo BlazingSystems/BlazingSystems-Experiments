@@ -24,9 +24,9 @@ rm -rf imagebuilder
 tar --zstd -xf "$IB"; D="$(find . -maxdepth 1 -type d -name 'immortalwrt-imagebuilder-*' | head -n1)"; mv "$D" imagebuilder
 cd imagebuilder
 if [ "$TARGET" = x86_64 ]; then
-  make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables" FILES="$ROOT/openwrt/rootfs" ROOTFS_PARTSIZE=1024
+  make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls" FILES="$ROOT/openwrt/rootfs" ROOTFS_PARTSIZE=1024
 else
-  make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables" FILES="$ROOT/openwrt/rootfs"
+  make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls" FILES="$ROOT/openwrt/rootfs"
 fi
 rm -rf "$ROOT/dist/$TARGET"
 mkdir -p "$ROOT/dist/$TARGET"

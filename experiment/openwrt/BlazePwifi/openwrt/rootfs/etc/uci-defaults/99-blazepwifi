@@ -48,28 +48,35 @@ uci commit wireless
 [ "$(uci -q get blazepwifi.main.vendo_key)" != CHANGE_ME ] || uci set blazepwifi.main.vendo_key="$(randkey)"
 uci commit blazepwifi
 
+LAN_IP='10.0.0.1'
 uci -q delete uhttpd.blazepwifi || true
+uci -q delete uhttpd.blazeadmin || true
 uci -q delete uhttpd.blazevendo || true
 uci set uhttpd.blazepwifi='uhttpd'
-uci add_list uhttpd.blazepwifi.listen_http='0.0.0.0:8080'
-uci add_list uhttpd.blazepwifi.listen_http='[::]:8080'
-uci set uhttpd.blazepwifi.home='/www/blazepwifi'
+uci add_list uhttpd.blazepwifi.listen_http="$LAN_IP:8080"
+uci set uhttpd.blazepwifi.home='/srv/blazepwifi-public'
 uci set uhttpd.blazepwifi.cgi_prefix='/cgi-bin'
 uci set uhttpd.blazepwifi.rfc1918_filter='0'
 uci set uhttpd.blazepwifi.max_requests='20'
 uci set uhttpd.blazepwifi.max_connections='100'
+uci set uhttpd.blazeadmin='uhttpd'
+uci add_list uhttpd.blazeadmin.listen_https="$LAN_IP:8443"
+uci set uhttpd.blazeadmin.home='/srv/blazepwifi-admin'
+uci set uhttpd.blazeadmin.cgi_prefix='/cgi-bin'
+uci set uhttpd.blazeadmin.cert='/etc/uhttpd.crt'
+uci set uhttpd.blazeadmin.key='/etc/uhttpd.key'
+uci set uhttpd.blazeadmin.rfc1918_filter='0'
+uci set uhttpd.blazeadmin.max_requests='10'
+uci set uhttpd.blazeadmin.max_connections='16'
 uci set uhttpd.blazevendo='uhttpd'
-uci add_list uhttpd.blazevendo.listen_http='0.0.0.0:4455'
-uci set uhttpd.blazevendo.home='/www/blazepwifi-vendo'
+uci add_list uhttpd.blazevendo.listen_http="$LAN_IP:4455"
+uci set uhttpd.blazevendo.home='/srv/blazepwifi-vendo'
 uci set uhttpd.blazevendo.cgi_prefix='/cgi-bin'
 uci set uhttpd.blazevendo.rfc1918_filter='0'
 uci set uhttpd.blazevendo.max_requests='10'
 uci set uhttpd.blazevendo.max_connections='32'
-mkdir -p /www/blazepwifi-vendo/cgi-bin
-ln -sf /www/blazepwifi/cgi-bin/vendo /www/blazepwifi-vendo/cgi-bin/vendo
 uci commit uhttpd
-
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /www/blazepwifi/cgi-bin/* 2>/dev/null || true
+chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /srv/blazepwifi-public/cgi-bin/api /srv/blazepwifi-admin/cgi-bin/admin /srv/blazepwifi-vendo/cgi-bin/vendo 2>/dev/null || true
 mkdir -p /etc/blazepwifi/state; chmod 700 /etc/blazepwifi /etc/blazepwifi/state
 /etc/init.d/blazepwifi enable
 /etc/init.d/uhttpd restart 2>/dev/null || true
