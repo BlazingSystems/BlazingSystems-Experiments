@@ -6,7 +6,7 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 ## Current status
 
-**Latest experimental release:** v1.1.0  
+**Latest experimental release:** v1.2.0  
 **Target board:** NodeMCU 1.0 / ESP-12E-class ESP8266  
 **Reference build environment:** ESP8266 Arduino Core 3.1.2, GCC 10.3, 160 MHz CPU build  
 **Promotion rule:** ESPHole stays in `BlazingSystems-Experiments` until the user confirms successful real-board testing. A validated version may then be copied to `BlazingSystems-Projects`.
@@ -15,7 +15,8 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 | Version | File | Status |
 | --- | --- | --- |
-| v1.1.0 | `ESPHole_v1.1.0.ino` | Experimental / hardware validation pending |
+| v1.2.0 | `ESPHole_v1.2.0.ino` | Experimental / Wi-Fi fix; hardware validation pending |
+| v1.1.0 | `ESPHole_v1.1.0.ino` | Experimental / preserved |
 | v1.0.0 | `ESPHole_v1.0.0.ino` | Experimental stabilization baseline |
 | Rolling copy | `ESPHole.ino` | Legacy convenience copy; not the permanent release record |
 
@@ -39,7 +40,7 @@ Experimental ESP8266 DNS sinkhole, captive setup portal, and Wi-Fi NAPT repeater
 
 ### External libraries
 
-**ESPHole v1.1.0 requires no third-party/external Arduino libraries.**
+**ESPHole v1.2.0 requires no third-party/external Arduino libraries.**
 
 Everything currently included by the sketch comes with the ESP8266 Arduino core:
 
@@ -47,6 +48,7 @@ Everything currently included by the sketch comes with the ESP8266 Arduino core:
 | --- | --- | --- | --- |
 | `Arduino.h` | ESP8266 Arduino core | No | Arduino runtime |
 | `ESP8266WiFi.h` | ESP8266 Arduino core | No | STA/AP Wi-Fi, scanning, RSSI and connection state |
+| `WiFiClient.h` | ESP8266 Arduino core | No | Internet reachability test over TCP/HTTP |
 | `ESP8266WebServer.h` | ESP8266 Arduino core | No | Local EasyMode-style web interface |
 | `WiFiUdp.h` | ESP8266 Arduino core | No | DNS UDP listener and upstream forwarding |
 | `LittleFS.h` | ESP8266 Arduino core | No | Persistent settings and blocklist |
@@ -72,6 +74,98 @@ In Arduino IDE:
 8. Use an IPv4 lwIP2 configuration with features/NAPT enabled.
 
 If a later release requires an external library, installation instructions will be added here, including the exact version if compatibility requires pinning.
+
+## v1.2.0 — Experimental Wi-Fi stabilization
+
+File: `ESPHole_v1.2.0.ino`
+
+### Bug cause found in v1.1.0
+
+v1.1.0 saved the submitted SSID/password and then immediately called `ESP.restart()` after about 350 ms. It did **not** verify any of these steps before rebooting:
+
+- that the configuration could be read back correctly from LittleFS
+- that the ESP8266 actually associated with the selected Wi-Fi
+- that DHCP supplied a usable STA address
+- that DNS resolution worked
+- that the upstream network actually had internet access
+
+The presence of a saved SSID was also treated as equivalent to a completed setup. Therefore a wrong password or failed association could leave the device in a confusing state after restart.
+
+### Fixed / changed
+
+- Removed the automatic reboot after first-run Wi-Fi setup.
+- Removed the automatic reboot after ordinary Settings saves.
+- Credentials are now written to LittleFS and **read back for verification** before ESPHole attempts to use them.
+- Added a persistent `setup_complete` flag.
+  - It remains false while Wi-Fi/internet setup has not succeeded.
+  - It is set true only after upstream internet verification succeeds and that state is saved successfully.
+- The ESPHole AP and setup/recovery interface remain available when a Wi-Fi attempt fails.
+- Added a connection state machine with visible states for:
+  - settings saved
+  - connecting
+  - Wi-Fi associated
+  - checking internet
+  - internet online
+  - connected but limited/no verified internet
+  - failed
+- Added explicit failure reporting for:
+  - SSID unavailable
+  - authentication/connection failure
+  - connection timeout
+  - DNS resolution failure
+  - Wi-Fi connected but internet unavailable
+  - captive/intercepted HTTP response
+- Added `/api/connect-status` so the setup page can show connection progress without rebooting.
+- Added live dashboard distinction between:
+  - **Internet online**
+  - **Wi-Fi connected / checking**
+  - **Setup / offline**
+- Wi-Fi credentials changed in Settings are applied live through the STA interface instead of rebooting the ESP8266.
+- ESPHole periodically rechecks internet availability after connection.
+- AP SSID/password changes are saved but intentionally require the existing **manual Reboot** control before taking effect. This avoids unexpectedly disconnecting the administrator from the ESPHole AP.
+
+### Internet verification
+
+After Wi-Fi association:
+
+1. ESPHole resolves `connectivitycheck.gstatic.com` using the upstream DNS.
+2. It requests `/generate_204` over HTTP.
+3. HTTP 204 is treated as verified internet access.
+4. If that endpoint cannot provide an HTTP response, ESPHole performs a secondary TCP reachability check to `1.1.1.1:80`.
+5. A real non-204 HTTP response is treated as limited/captive/intercepted rather than automatically declaring the connection healthy.
+
+### Libraries / dependencies
+
+v1.2.0 adds an explicit include for `WiFiClient.h`.
+
+**This is not an external dependency.** `WiFiClient` is bundled with ESP8266 Arduino Core 3.1.2, so no additional Library Manager installation is required.
+
+v1.2.0 still uses **no third-party Arduino libraries**.
+
+### Validation performed
+
+- Regression tests created for the v1.1 forced-reboot/setup failure.
+- Verified that quick setup saves before attempting a connection.
+- Verified that normal Settings saves no longer auto-reboot.
+- Verified that only the manual Reboot and Factory Reset flows retain `ESP.restart()`.
+- Verified that setup completion occurs only after successful internet verification.
+- Verified explicit Wi-Fi failure-state handling.
+- Verified DNS + HTTP internet-check code paths.
+- Embedded JavaScript syntax checks passed.
+- Host GCC C++17 syntax pass completed.
+- Host Clang C++17 syntax pass completed.
+- Simulated Arduino auto-prototype pass completed.
+
+The user's exact ESP8266 `xtensa-lx106-elf-g++` compiler and physical NodeMCU remain the authoritative final compile/runtime test.
+
+### Known limitations
+
+- Real hardware behavior is still pending confirmation.
+- Some upstream networks deliberately block Google's connectivity-check endpoint; the secondary reachability check exists for this reason.
+- Captive portals can intentionally return a non-204 page and are reported as limited rather than verified.
+- ESP8266 AP+STA uses one radio/channel. Changing the STA's upstream Wi-Fi can cause a brief client-side AP interruption while the radio changes channel even though the MCU itself is not rebooting.
+- Changing ESPHole's own AP SSID/password still needs a manual reboot to activate those AP identity changes.
+- DNS-over-HTTPS / Private DNS can still bypass DNS filtering.
 
 ## v1.1.0 — Experimental
 
