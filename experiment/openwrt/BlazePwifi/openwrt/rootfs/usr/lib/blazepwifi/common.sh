@@ -3,7 +3,7 @@ BP_STATE=${BP_STATE:-/etc/blazepwifi/state}; BP_RUN=${BP_RUN:-/tmp/blazepwifi}
 BP_CREDITS="$BP_STATE/credits.tsv"; BP_SESSIONS="$BP_STATE/sessions.tsv"; BP_VOUCHERS="$BP_STATE/vouchers.tsv"; BP_VENDOS="$BP_RUN/vendos.tsv"; BP_TARGET="$BP_RUN/coin-target.tsv"
 BP_POST_BODY=""; [ "${REQUEST_METHOD:-GET}" = POST ] && IFS= read -r BP_POST_BODY || true
 bp_cfg(){ uci -q get "blazepwifi.main.$1"; }; bp_now(){ date +%s; }
-bp_json_escape(){ printf '%s' "$1"|sed 's/\/\\/g;s/"/\"/g'; }; bp_json(){ printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }; bp_fail(){ bp_json "{\"ok\":false,\"error\":\"$(bp_json_escape "$1")\"}"; exit 0; }
+bp_json_escape(){ printf '%s' "$1"|sed 's/\\/\\\\/g;s/"/\\"/g'; }; bp_json(){ printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }; bp_fail(){ bp_json "{\"ok\":false,\"error\":\"$(bp_json_escape "$1")\"}"; exit 0; }
 bp_init_dirs(){ mkdir -p "$BP_STATE" "$BP_RUN"; chmod 700 "$BP_STATE" "$BP_RUN"; touch "$BP_CREDITS" "$BP_SESSIONS" "$BP_VOUCHERS" "$BP_VENDOS"; chmod 600 "$BP_CREDITS" "$BP_SESSIONS" "$BP_VOUCHERS" "$BP_VENDOS"; }
 bp_lock(){ i=0; while ! mkdir "$BP_RUN/lock" 2>/dev/null; do i=$((i+1)); [ "$i" -gt 40 ]&&return 1; sleep 0.05 2>/dev/null||sleep 1; done; }; bp_unlock(){ rmdir "$BP_RUN/lock" 2>/dev/null||true; }
 bp_mac_norm(){ printf '%s' "$1"|tr 'A-F' 'a-f'|grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$'||return 1; printf '%s' "$1"|tr 'A-F' 'a-f'; }
