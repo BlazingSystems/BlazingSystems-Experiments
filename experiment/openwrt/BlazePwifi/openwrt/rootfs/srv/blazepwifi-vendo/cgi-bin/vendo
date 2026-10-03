@@ -1,0 +1,49 @@
+#!/bin/sh
+. "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
+bp_init_dirs
+action="$(bp_param action)"; id="$(bp_param id)"; nonce="$(bp_param nonce)"; pulses="$(bp_param pulses)"; target="$(bp_param target)"; seq="$(bp_param seq)"; sig="$(bp_param sig)"
+printf '%s' "$id" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || bp_fail "invalid vendo id"
+printf '%s' "$nonce" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid nonce"
+[ -n "$pulses" ] || pulses=0; [ -n "$seq" ] || seq=0
+bp_check_vendo_sig "$action" "$id" "$nonce" "$pulses" "$target" "$seq" "$sig" || bp_fail "bad signature"
+now="$(bp_now)"; ipaddr="${REMOTE_ADDR:-0.0.0.0}"
+
+# Runtime-only heartbeat: never write poll traffic to flash.
+bp_lock || bp_fail "vendo service busy"
+tmp="$BP_RUN/v.$$"
+awk -F '\t' -v OFS='\t' -v id="$id" -v n="$now" -v ip="$ipaddr" 'BEGIN{f=0}$1==id{$2=n;$3=ip;f=1}{print}END{if(!f)print id,n,ip}' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
+bp_unlock
+
+case "$action" in
+  register|ping)
+    bp_json "{\"ok\":true,\"server_time\":$now}"
+    ;;
+  poll)
+    insert=0; tn=""; expires=0; lastseq=0
+    bp_lock || bp_fail "vendo service busy"
+    if [ -f "$BP_TARGET" ]; then
+      IFS='|' read -r mac tn expires wanted lastseq < "$BP_TARGET"
+      if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then insert=1; fi
+    fi
+    bp_unlock
+    bp_json "{\"ok\":true,\"insert\":$insert,\"target_nonce\":\"$tn\",\"expires\":${expires:-0}}"
+    ;;
+  coin)
+    case "$pulses:$seq" in *[!0-9:]*|:*|*:) bp_fail "invalid pulse/sequence";; esac
+    [ "$pulses" -ge 1 ] && [ "$pulses" -le 20 ] || bp_fail "pulse count out of range"
+    bp_lock || bp_fail "accounting busy"
+    [ -f "$BP_TARGET" ] || { bp_unlock; bp_fail "no active coin window"; }
+    IFS='|' read -r mac tn expires wanted lastseq < "$BP_TARGET"
+    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$BP_TARGET"; bp_unlock; bp_fail "coin window expired"; }
+    [ "$target" = "$tn" ] || { bp_unlock; bp_fail "stale target"; }
+    [ -z "$wanted" ] || [ "$wanted" = "$id" ] || { bp_unlock; bp_fail "another vendo selected"; }
+    [ "$seq" -gt "${lastseq:-0}" ] || { bp_unlock; bp_fail "replayed coin event"; }
+    unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+    add=$((unit*pulses)); old="$(bp_get_credit "$mac")"; new=$((old+add))
+    bp_set_credit "$mac" "$new" || { bp_unlock; bp_fail "credit write failed"; }
+    printf '%s|%s|%s|%s|%s\n' "$mac" "$tn" "$expires" "$wanted" "$seq" > "$BP_TARGET"
+    bp_unlock
+    bp_json "{\"ok\":true,\"credited_cents\":$add,\"credit_cents\":$new}"
+    ;;
+  *) bp_fail "unknown vendo action" ;;
+esac

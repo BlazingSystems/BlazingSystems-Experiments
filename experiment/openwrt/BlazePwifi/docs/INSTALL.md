@@ -1,30 +1,54 @@
 # Installation
 
-## Supported base
+## Production image base
 
-OpenWrt 25.12.x. The initial release is developed against 25.12.5.
+ImmortalWrt 25.12.2. The installer also accepts OpenWrt/ImmortalWrt 25.12.x systems using the `apk` package manager.
 
-On a custom firmware image, retrieve the generated first-boot secrets with `uci -q get blazepwifi.main.admin_key` and `uci -q get blazepwifi.main.vendo_key`.
+## Existing 25.12.x system
 
-## Existing OpenWrt
+1. Back up the router configuration.
+2. Copy the project to `/tmp` or `/root`.
+3. Run `sh installer/install.sh` as root.
+4. Save the generated admin and Vendo keys.
+5. Provision the ESP8266 with the LAN IP, Vendo key and GPIO mapping.
+6. Edit rates in `/etc/config/blazepwifi`, then `uci commit blazepwifi && /etc/init.d/blazepwifi restart`.
 
-1. Upload the BlazePwifi project directory to `/tmp` or `/root`.
-2. Run `sh installer/install.sh` as root.
-3. Save the generated admin and Vendo keys.
-4. Connect the ESP8266 to the BlazePwifi LAN and provision it with the Vendo key.
-5. Configure rates in `/etc/config/blazepwifi`, then run `uci commit blazepwifi && /etc/init.d/blazepwifi restart`.
+The installer does **not** replace your LAN IP, DHCP or SSID settings.
 
-## Custom images
+## Build custom images
 
-On Linux with `curl`, `zstd`, `tar` and `make`:
+Linux host requirements: `curl`, `zstd`, `tar`, `make`, `sha256sum`.
 
 ```sh
 ./build/build-openwrt-image.sh ruijie
 ./build/build-openwrt-image.sh x86_64
 ```
 
-The script downloads the official OpenWrt 25.12.5 ImageBuilder, verifies it against the official `sha256sums`, injects the BlazePwifi root filesystem and copies resulting installable images to `dist/`.
+The build downloads the official ImmortalWrt 25.12.2 ImageBuilder, verifies its checksum against the official target `sha256sums`, builds the requested profile and writes flashable outputs plus checksums to `dist/`.
 
-## Recovery
+Ruijie output must contain both an initramfs recovery/install image and a sysupgrade image. x86 output must contain a combined EFI disk image. The build fails rather than reusing stale output when any required image is missing.
 
-For Ruijie RG-EW1200G Pro v1.1, preserve access to the documented U-Boot/TFTP recovery path before flashing custom images. Never test an image intended for v1.1 on another hardware revision unless that revision has its own verified OpenWrt support.
+## ImageBuilder limitation
+
+The Ruijie target supports initramfs recovery kernels in official/full-build outputs, but ImageBuilder may emit only the customized sysupgrade image. BlazePwifi does not relabel a sysupgrade file as a recovery image. For TFTP/bootloader recovery, keep a verified official initramfs/vendor recovery image or build one with the full ImmortalWrt buildroot.
+
+## Ruijie recovery rule
+
+Before flashing, verify that U-Boot TFTP recovery works for the exact **RG-EW1200G Pro v1.1**. Keep an original recovery image and Ethernet/TFTP host available. Do not flash v1.1 images onto another hardware revision.
+
+## First boot of a custom image
+
+Custom images configure:
+- gateway `10.0.0.1/19`
+- IPv4-only hotspot DHCP, 8190 leases, 72-hour lease time
+- open client-isolated SSIDs named `BlazePwifi`, `BlazePwifi-2`, etc.
+- portal/admin listener :8080
+- isolated ESP/Vendo listener :4455
+
+Retrieve generated keys over SSH:
+
+```sh
+uci -q get blazepwifi.main.admin_key
+uci -q get blazepwifi.main.vendo_key
+```
+\n## Admin certificate\n\nThe production image includes `px5g-mbedtls` so uHTTPd can generate the device-local certificate used by the HTTPS-only admin listener. The browser may show a self-signed-certificate warning until you replace `/etc/uhttpd.crt` and `/etc/uhttpd.key` with a certificate you trust.\n

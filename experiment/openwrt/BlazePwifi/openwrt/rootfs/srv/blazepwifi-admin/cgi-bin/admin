@@ -13,7 +13,8 @@ case "$action" in
     ;;
   voucher_create)
     cents="$(bp_param cents)"; case "$cents" in ''|*[!0-9]*) bp_fail "invalid amount";; esac
-    code="$(hexdump -n 5 -e '5/1 "%02X"' /dev/urandom 2>/dev/null || date +%s)"
+    code="$(od -An -N8 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | tr 'a-f' 'A-F')"
+    [ ${#code} -eq 16 ] || bp_fail "random source unavailable"
     printf '%s\t%s\t\t\n' "$code" "$cents" >> "$BP_VOUCHERS"
     bp_json "{\"ok\":true,\"code\":\"$code\",\"cents\":$cents}"
     ;;

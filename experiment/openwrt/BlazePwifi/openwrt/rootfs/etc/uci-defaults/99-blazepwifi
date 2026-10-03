@@ -1,22 +1,86 @@
 #!/bin/sh
-randkey(){ hexdump -n 18 -e '18/1 "%02x"' /dev/urandom; }
+# BlazePwifi custom-image first boot. Installer deployments remove this file before copying.
+randkey(){ od -An -N18 -tx1 /dev/urandom | tr -d ' \n'; }
+
+# WiFi5-compatible hotspot defaults: 10.0.0.1/19, IPv4-only hotspot.
+uci set network.lan.ipaddr='10.0.0.1'
+uci set network.lan.netmask='255.255.224.0'
+uci set network.lan.ip6assign='0'
+uci -q delete network.lan.ip6hint || true
+uci commit network
+
+uci set dhcp.lan.start='2'
+uci set dhcp.lan.limit='8190'
+uci set dhcp.lan.leasetime='72h'
+uci set dhcp.lan.dhcpv4='server'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.lan.ndp='disabled'
+uci commit dhcp
+
+# On x86, create a DHCP WAN on eth1 when the image has a second NIC and no WAN yet.
+BOARD="$(ubus call system board 2>/dev/null | jsonfilter -e '@.board_name' 2>/dev/null || true)"
+if echo "$BOARD" | grep -q '^x86'; then
+  if [ -d /sys/class/net/eth1 ] && ! uci -q get network.wan >/dev/null; then
+    uci set network.wan='interface'
+    uci set network.wan.device='eth1'
+    uci set network.wan.proto='dhcp'
+    uci commit network
+  fi
+fi
+
+# Enable generated AP interfaces and make the hotspot open but client-isolated.
+[ -s /etc/config/wireless ] || wifi config >/dev/null 2>&1 || true
+idx=0
+for s in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-iface$/\1/p'); do
+  uci set wireless.$s.disabled='0'
+  uci set wireless.$s.mode='ap'
+  uci set wireless.$s.network='lan'
+  uci set wireless.$s.encryption='none'
+  uci set wireless.$s.isolate='1'
+  if [ "$idx" -eq 0 ]; then uci set wireless.$s.ssid='BlazePwifi'; else uci set wireless.$s.ssid="BlazePwifi-$((idx+1))"; fi
+  idx=$((idx+1))
+done
+for s in $(uci -q show wireless | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do uci set wireless.$s.disabled='0'; done
+uci commit wireless
+
 [ "$(uci -q get blazepwifi.main.admin_key)" != CHANGE_ME ] || uci set blazepwifi.main.admin_key="$(randkey)"
 [ "$(uci -q get blazepwifi.main.vendo_key)" != CHANGE_ME ] || uci set blazepwifi.main.vendo_key="$(randkey)"
 uci commit blazepwifi
+
+LAN_IP='10.0.0.1'
 uci -q delete uhttpd.blazepwifi || true
+uci -q delete uhttpd.blazeadmin || true
+uci -q delete uhttpd.blazevendo || true
 uci set uhttpd.blazepwifi='uhttpd'
-uci add_list uhttpd.blazepwifi.listen_http='0.0.0.0:8080'
-uci add_list uhttpd.blazepwifi.listen_http='[::]:8080'
-uci add_list uhttpd.blazepwifi.listen_http='0.0.0.0:4455'
-uci set uhttpd.blazepwifi.home='/www/blazepwifi'
+uci add_list uhttpd.blazepwifi.listen_http="$LAN_IP:8080"
+uci set uhttpd.blazepwifi.home='/srv/blazepwifi-public'
 uci set uhttpd.blazepwifi.cgi_prefix='/cgi-bin'
 uci set uhttpd.blazepwifi.rfc1918_filter='0'
 uci set uhttpd.blazepwifi.max_requests='20'
 uci set uhttpd.blazepwifi.max_connections='100'
+uci set uhttpd.blazeadmin='uhttpd'
+uci add_list uhttpd.blazeadmin.listen_https="$LAN_IP:8443"
+uci set uhttpd.blazeadmin.home='/srv/blazepwifi-admin'
+uci set uhttpd.blazeadmin.cgi_prefix='/cgi-bin'
+uci set uhttpd.blazeadmin.cert='/etc/uhttpd.crt'
+uci set uhttpd.blazeadmin.key='/etc/uhttpd.key'
+uci set uhttpd.blazeadmin.rfc1918_filter='0'
+uci set uhttpd.blazeadmin.max_requests='10'
+uci set uhttpd.blazeadmin.max_connections='16'
+uci set uhttpd.blazevendo='uhttpd'
+uci add_list uhttpd.blazevendo.listen_http="$LAN_IP:4455"
+uci set uhttpd.blazevendo.home='/srv/blazepwifi-vendo'
+uci set uhttpd.blazevendo.cgi_prefix='/cgi-bin'
+uci set uhttpd.blazevendo.rfc1918_filter='0'
+uci set uhttpd.blazevendo.max_requests='10'
+uci set uhttpd.blazevendo.max_connections='32'
 uci commit uhttpd
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /www/blazepwifi/cgi-bin/* 2>/dev/null || true
+chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /srv/blazepwifi-public/cgi-bin/api /srv/blazepwifi-admin/cgi-bin/admin /srv/blazepwifi-vendo/cgi-bin/vendo 2>/dev/null || true
 mkdir -p /etc/blazepwifi/state; chmod 700 /etc/blazepwifi /etc/blazepwifi/state
 /etc/init.d/blazepwifi enable
 /etc/init.d/uhttpd restart 2>/dev/null || true
+/etc/init.d/network restart 2>/dev/null || true
+wifi reload 2>/dev/null || true
 /etc/init.d/blazepwifi start 2>/dev/null || true
 exit 0
