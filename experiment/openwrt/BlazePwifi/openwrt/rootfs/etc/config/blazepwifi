@@ -5,7 +5,7 @@ config core 'main'
 	option vendo_port '4455'
 	option coin_window '120'
 	option pulse_value_centavos '100'
-	option checkpoint_seconds '30'
+	option allow_ipv6 '0'
 	option admin_key 'CHANGE_ME'
 	option vendo_key 'CHANGE_ME'
 

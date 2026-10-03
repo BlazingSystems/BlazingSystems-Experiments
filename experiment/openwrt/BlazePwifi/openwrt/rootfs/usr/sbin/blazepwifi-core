@@ -1,43 +1,12 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
-
-setup_nft() {
-	lan_if="$(bp_cfg lan_if)"; [ -n "$lan_if" ] || lan_if=br-lan
-	nft delete table inet blazepwifi 2>/dev/null || true
-	nft -f - <<NFT
- table inet blazepwifi {
-   set auth_macs { type ether_addr; }
-   chain captive {
-     type nat hook prerouting priority -105; policy accept;
-     iifname "$lan_if" ether saddr @auth_macs return
-     iifname "$lan_if" tcp dport 80 redirect to :$(bp_cfg portal_port)
-   }
-   chain gate {
-     type filter hook forward priority -5; policy accept;
-     iifname "$lan_if" ether saddr @auth_macs accept
-     iifname "$lan_if" drop
-     ct state established,related accept
-   }
- }
+setup_nft(){ lan_if="$(bp_cfg lan_if)";[ -n "$lan_if" ]||lan_if=br-lan; allow6="$(bp_cfg allow_ipv6)"; [ "$allow6" = 1 ] && v6rule='' || v6rule='meta nfproto ipv6 drop;'; nft delete table inet blazepwifi 2>/dev/null||true;nft -f - <<NFT
+table inet blazepwifi {
+ set auth_macs { type ether_addr; }
+ chain captive { type nat hook prerouting priority -105; policy accept; iifname "$lan_if" ether saddr @auth_macs return; iifname "$lan_if" tcp dport 80 redirect to :$(bp_cfg portal_port); }
+ chain gate { type filter hook forward priority -5; policy accept; $v6rule iifname "$lan_if" ether saddr @auth_macs accept; iifname "$lan_if" drop; ct state established,related accept; }
+}
 NFT
 }
-
-sync_sessions() {
-	now="$(bp_now)"; tmp="$BP_RUN/sessions.active.$$"; : > "$tmp"
-	while IFS="$(printf '\t')" read -r mac expiry ipaddr; do
-		[ -n "$mac" ] || continue
-		case "$expiry" in *[!0-9]*|'') continue;; esac
-		if [ "$expiry" -gt "$now" ]; then
-			printf '%s\t%s\t%s\n' "$mac" "$expiry" "$ipaddr" >> "$tmp"
-			bp_authorize_mac "$mac"
-		else
-			bp_deauthorize_mac "$mac"
-		fi
-	done < "$BP_SESSIONS"
-	mv "$tmp" "$BP_SESSIONS"
-}
-
-bp_init_dirs
-setup_nft || exit 1
-trap 'nft delete table inet blazepwifi 2>/dev/null || true; exit 0' TERM INT
-while :; do sync_sessions; sleep 5; done
+sync_sessions(){ now="$(bp_now)";while IFS="$(printf '\t')" read -r mac expiry ipaddr;do [ -n "$mac" ]||continue;case "$expiry" in *[!0-9]*|'')continue;;esac;if [ "$expiry" -gt "$now" ];then bp_authorize_mac "$mac";else bp_deauthorize_mac "$mac";fi;done<"$BP_SESSIONS"; }
+bp_init_dirs;setup_nft||exit 1;sync_sessions;trap 'nft delete table inet blazepwifi 2>/dev/null||true;exit 0' TERM INT;while :;do sync_sessions;sleep 5;done
