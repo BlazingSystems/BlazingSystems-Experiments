@@ -1,48 +1,53 @@
 # BlazePwifi architecture
 
+## Base system
+
+BlazePwifi's production images use **ImmortalWrt 25.12.2**. The application layer is intentionally portable to OpenWrt 25.12.x.
+
+The change from the original alpha's OpenWrt base is evidence-driven: the supplied WiFi5 Ruijie firmware reports revision `r37854-4b24da3b4c5c`, which is ImmortalWrt 25.12.0, and the supplied x86 build contains ImmortalWrt build paths and package feeds. The current stable ImmortalWrt 25.12.2 therefore provides the closest maintained base.
+
 ## Components
 
-1. **OpenWrt 25.12.x** — WAN/LAN, Wi-Fi, DHCP/DNS, NAT and base firewall.
-2. **BlazePwifi core** — lightweight procd service that owns the paid-client nftables table and expires sessions.
-3. **uhttpd portal** — client UI on port 8080 and vendo API on port 4455.
-4. **Persistent state** — TSV files under `/etc/blazepwifi/state`; runtime locks/coin target stay under `/tmp/blazepwifi`.
-5. **ESP8266 Vendo** — counts coin pulses, controls insert LED/relay, and reports signed coin events.
+1. **ImmortalWrt/OpenWrt** — Ethernet/Wi-Fi, DHCP/DNS, NAT and firewall4.
+2. **BlazePwifi core** — procd service owning an independent `inet blazepwifi` nftables table.
+3. **Portal listener :8080** — client portal, accounting API and admin UI.
+4. **Vendo listener :4455** — isolated CGI root exposing only the ESP/Vendo endpoint.
+5. **Persistent state** — credits, sessions and vouchers under `/etc/blazepwifi/state`.
+6. **Runtime state** — coin target, locks and Vendo heartbeats under `/tmp/blazepwifi`; high-frequency polling never writes flash.
+7. **ESP8266** — interrupt-driven pulse counter and GPIO controller; routing/accounting remain server-side.
 
 ## Traffic path
 
 ```text
-Internet
-   |
-  WAN
-   |
-OpenWrt routing/firewall4
-   |
-BlazePwifi nft table
-   |---- paid MAC -> forward
-   |---- unpaid MAC -> local/walled traffic only
-   `---- unpaid HTTP -> redirect :8080
-   |
-LAN / Wi-Fi clients
+Internet -> WAN -> firewall4 -> BlazePwifi nftables gate -> LAN/Wi-Fi
+                                                | paid MAC: forward
+                                                | unpaid MAC: drop
+                                                ` unpaid HTTP: redirect :8080
 ```
 
-BlazePwifi does not replace firewall4. It creates a separate `inet blazepwifi` table with an authorization set so uninstalling or stopping the service is deterministic.
+Custom images default to an IPv4-only hotspot. This matches the reference system and removes an entire class of unpaid IPv6 bypass and captive-detection inconsistencies.
 
 ## Accounting path
 
 ```text
-Client -> Start coin insert -> temporary target (MAC + nonce + expiry)
-ESP -> poll -> insert command
-Coin acceptor -> ESP pulse(s)
-ESP -> signed coin event -> credit balance
-Client -> buy configured rate -> session expiry
-Core -> adds MAC to nft set
-Expiry -> core removes MAC from nft set
+client -> coin_start -> locked target {MAC, target_nonce, expiry, vendo, seq=0}
+ESP -> poll -> receives target_nonce
+coin acceptor -> pulse batch
+ESP -> signed coin(target_nonce, seq, pulses)
+server -> atomic replay check + credit write + seq advance
+client -> purchases rate
+server -> persistent session expiry + nft authorized MAC
+core -> removes authorization after expiry
 ```
 
-## Why OpenWrt rather than ImmortalWrt
+The periodic session watcher never rewrites persistent session files; it only synchronizes the in-kernel nftables set.
 
-The primary target, Ruijie RG-EW1200G Pro v1.1, is directly supported by upstream OpenWrt. Using upstream 25.12.x reduces fork-specific assumptions and gives BlazePwifi a larger compatibility surface. ImmortalWrt remains a possible secondary target later if a device or package specifically benefits from its patches.
+## Reference-aligned custom image defaults
 
-## Small-router constraints
-
-The RG-EW1200G Pro v1.1 has 16 MB flash and 128 MB RAM. Therefore the router runtime uses BusyBox shell, UCI, uhttpd and nftables instead of Node.js/Python/databases. x86 installations can later add an optional richer management layer without changing the ESP protocol.
+- LAN: `10.0.0.1/19`
+- DHCP start: 2
+- DHCP limit: 8190
+- lease: 72 hours
+- DHCPv6/RA/NDP: disabled
+- router Wi-Fi interfaces: enabled, open hotspot, client isolation enabled
+- x86: creates DHCP WAN on `eth1` when a second NIC exists and no WAN is configured

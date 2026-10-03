@@ -1,36 +1,40 @@
-# Blaze Vendo protocol v1
+# Blaze Vendo protocol v2
 
-Transport: HTTP POST, `application/x-www-form-urlencoded`, default TCP port 4455.
+Transport: HTTP POST, `application/x-www-form-urlencoded`, TCP port 4455 on the trusted hotspot/Vendo LAN.
 
 Endpoint: `/cgi-bin/vendo`
 
-Required fields:
-- `action`: `register`, `ping`, `poll`, or `coin`
-- `id`: configured Vendo identifier
-- `nonce`: 8–32 hex characters, freshly generated per request
-- `pulses`: decimal pulse count; `0` for non-coin requests
-- `sig`: SHA-256 signature
+Fields:
+- `action`: `register`, `ping`, `poll`, `coin`
+- `id`: Vendo identifier
+- `nonce`: fresh random request nonce
+- `pulses`: pulse count (`0` for non-coin requests)
+- `target`: server-issued coin-window nonce; required for `coin`
+- `seq`: monotonically increasing coin batch sequence within the current target
+- `sig`: SHA-256 keyed request digest
 
 Signature input:
 
 ```text
-VENDO_KEY|action|id|nonce|pulses|VENDO_KEY
+VENDO_KEY|action|id|nonce|pulses|target|seq|VENDO_KEY
 ```
 
-The key itself is never sent over the network. For `coin`, the server records the last accepted nonce for that Vendo and rejects a replay using the same nonce. The signature also prevents changing the pulse count without knowing the secret.
+The Vendo key is never transmitted. For each coin window, the server creates a fresh `target` and initializes sequence 0. The ESP resets its sequence when the target changes. A coin request is accepted only when its target matches the active window and `seq` is greater than the last committed sequence. Sequence validation, credit persistence and sequence advancement occur under the same server lock.
 
-`poll` response contains:
+This prevents replay across old coin windows and prevents concurrent duplicates inside the same window.
+
+## Poll response
 
 ```json
-{"ok":true,"insert":1,"target_nonce":"...","expires":1234567890}
+{"ok":true,"insert":1,"target_nonce":"0123abcd...","expires":1234567890}
 ```
-
-`coin` response contains credited centavos and the resulting customer credit.
 
 ## Provisioning
 
-The ESP firmware starts an AP named `BlazePwifi-Vendo-<chipid>`. Open its setup page and configure Wi-Fi SSID/password, BlazePwifi server IP, Vendo key, Vendo ID and GPIO mapping.
+When unconfigured or unable to join Wi-Fi at boot, the ESP opens `BlazePwifi-Vendo-<chipid>` with a device-derived setup password. After a successful station connection the setup AP is automatically shut down after the initial recovery window.
 
-## Security note
+Coin pulses are captured by an interrupt rather than by the network polling loop, so short pulses are not lost while an HTTP request is in progress.
 
-Protocol v1 authenticates requests but does not encrypt payloads. Deploy the Vendo on the same trusted/isolated LAN or management VLAN. A future protocol revision may add TLS without changing the accounting model.
+## Transport security
+
+v2 authenticates and replay-binds payment messages but does not encrypt HTTP. Keep Vendos on the trusted hotspot LAN or a dedicated management/Vendo VLAN. Do not expose TCP 4455 to WAN.
