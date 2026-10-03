@@ -13,7 +13,7 @@ echo '10.0.0.2 dev br-lan lladdr aa:bb:cc:dd:ee:ff REACHABLE'
 IP
 printf '#!/bin/sh\nexit 0\n' >"$T/bin/nft"; chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run" BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh" REMOTE_ADDR=10.0.0.2 REQUEST_METHOD=POST
-API="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/api"; V="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
+API="$ROOT/openwrt/rootfs/srv/blazepwifi-public/cgi-bin/api"; V="$ROOT/openwrt/rootfs/srv/blazepwifi-vendo/cgi-bin/vendo"
 OUT="$(printf 'action=coin_start&mac=de:ad:be:ef:00:01'|sh "$API")"; grep -q '^aa:bb:cc:dd:ee:ff|' "$T/run/coin-target.tsv"
 TN="$(cut -d'|' -f2 "$T/run/coin-target.tsv")"; N=aaaaaaaa11111111
 sig(){ printf 'vendokey|coin|vendo-01|%s|1|%s|%s|vendokey' "$N" "$1" "$2"|sha256sum|awk '{print $1}'; }

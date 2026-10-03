@@ -29,8 +29,8 @@ exit 0
 NFT
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run" BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh" REMOTE_ADDR=10.0.0.2 REQUEST_METHOD=POST
-API="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/api"
-VENDO="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
+API="$ROOT/openwrt/rootfs/srv/blazepwifi-public/cgi-bin/api"
+VENDO="$ROOT/openwrt/rootfs/srv/blazepwifi-vendo/cgi-bin/vendo"
 OUT="$(printf 'action=coin_start' | sh "$API")"; echo "$OUT" | grep -q '"ok":true'
 NONCE="$(printf '%s' "$OUT" | sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p')"; [ -n "$NONCE" ]
 REQNONCE=1122334455667788
