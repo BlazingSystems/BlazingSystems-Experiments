@@ -8,6 +8,7 @@ Compatibility studies, exploratory software, and proof-of-concept embedded syste
 |---|---|---|---|---|
 | BlazeAPK | Browser runtime research | Beta 0.6 experiment | [Open project](web/blazeapk/) | [Landing](web/blazeapk/index.html) · [Research build](web/blazeapk/app.html) |
 | BlazeJ2ME | Browser runtime research | v1.6 experiment | [Open project](web/blazej2me/) | [Landing](web/blazej2me/index.html) · [Research build](web/blazej2me/app.html) |
+| BlazePwifi | OpenWrt + ESP8266 captive portal | 0.1.0-alpha.1 reconstruction | [Open project](experiment/openwrt/BlazePwifi/) | [Install guide](experiment/openwrt/BlazePwifi/docs/INSTALL.md) · [Architecture](experiment/openwrt/BlazePwifi/docs/ARCHITECTURE.md) |
 | TokenLauncher | Android + ESP32 | Security/device-control prototype | [Open project](android/token-launcher/) | [Preview](android/token-launcher/preview.html) |
 | ESP8266 AP LED Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-ap-led-controller/) | [Preview](embedded/esp8266-ap-led-controller/preview.html) |
 | ESP8266 Relay Controller | Embedded web UI | Prototype | [Open project](embedded/esp8266-relay-controller/) | [Preview](embedded/esp8266-relay-controller/preview.html) |
