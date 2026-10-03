@@ -22,7 +22,7 @@ BlazePwifi is a clean-room prepaid Wi-Fi/captive-portal platform for OpenWrt-fam
 - IPv4-only hotspot by default on custom images to prevent IPv6 bypass
 - 10.0.0.1/19, 8,190-address DHCP pool, 72-hour leases on custom images
 - isolated client APs on router-class custom images
-- admin UI and isolated Vendo API listeners
+- isolated public portal, HTTPS-only admin UI, and Vendo API listeners bound to the LAN address
 - ESP8266 setup fallback AP, interrupt-driven coin GPIO, LED and relay controls
 - server-bound coin-window nonce plus monotonic sequence anti-replay
 - no heartbeat/session polling writes to flash
@@ -40,7 +40,7 @@ The installer preserves your existing LAN addressing and wireless configuration.
 
 Portal: `http://<LAN-IP>:8080/`
 
-Admin: `http://<LAN-IP>:8080/admin.html`
+Admin: `https://<LAN-IP>:8443/admin.html` (self-signed certificate by default)
 
 Vendo API: `http://<LAN-IP>:4455/cgi-bin/vendo`
 

@@ -12,9 +12,9 @@ The change from the original alpha's OpenWrt base is evidence-driven: the suppli
 2. **BlazePwifi core** — procd service owning an independent `inet blazepwifi` nftables table.
 3. **Portal listener :8080** — client portal, accounting API and admin UI.
 4. **Vendo listener :4455** — isolated CGI root exposing only the ESP/Vendo endpoint.
-5. **Persistent state** — credits, sessions and vouchers under `/etc/blazepwifi/state`.
-6. **Runtime state** — coin target, locks and Vendo heartbeats under `/tmp/blazepwifi`; high-frequency polling never writes flash.
-7. **ESP8266** — interrupt-driven pulse counter and GPIO controller; routing/accounting remain server-side.
+6. **Persistent state** — credits, sessions and vouchers under `/etc/blazepwifi/state`.
+7. **Runtime state** — coin target, locks and Vendo heartbeats under `/tmp/blazepwifi`; high-frequency polling never writes flash.
+8. **ESP8266** — interrupt-driven pulse counter and GPIO controller; routing/accounting remain server-side.
 
 ## Traffic path
 
@@ -51,3 +51,4 @@ The periodic session watcher never rewrites persistent session files; it only sy
 - DHCPv6/RA/NDP: disabled
 - router Wi-Fi interfaces: enabled, open hotspot, client isolation enabled
 - x86: creates DHCP WAN on `eth1` when a second NIC exists and no WAN is configured
+\n## Web-surface isolation\n\nCustom images bind portal, admin and Vendo services to the LAN address only. Their document roots live under `/srv`, not under the default `/www` tree, so the router's normal web server cannot accidentally expose admin/Vendo files. Admin is HTTPS-only on port 8443.\n

@@ -12,8 +12,8 @@
 - Prevented active coin-window takeover by another client.
 - Removed client-supplied MAC fallback; MAC derives from source-IP neighbor/DHCP state.
 - Admin secrets no longer accepted from query parameters.
-- Split portal/admin and Vendo uhttpd document roots.
-- Added secure setup-AP fallback behavior for ESP8266.
+- Split public portal, HTTPS admin, and Vendo API into separate `/srv` uhttpd document roots, bound them to the LAN address only, and removed BlazePwifi pages from the router default `/www` root.
+- Added HTTPS-only admin access with a device-local certificate.\n- Added secure setup-AP fallback behavior for ESP8266.
 - Changed ESP8266 coin capture to interrupt-driven counting so HTTP/Wi-Fi polling cannot miss short coin pulses.
 - Added ESP GPIO validation to reject flash-reserved pins and GPIO16 for coin interrupts.
 - Added IPv4-only hotspot default and reference-aligned 10.0.0.1/19 DHCP configuration for custom images.

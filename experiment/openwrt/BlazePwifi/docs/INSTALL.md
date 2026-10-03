@@ -47,3 +47,4 @@ Retrieve generated keys over SSH:
 uci -q get blazepwifi.main.admin_key
 uci -q get blazepwifi.main.vendo_key
 ```
+\n## Admin certificate\n\nThe production image includes `px5g-mbedtls` so uHTTPd can generate the device-local certificate used by the HTTPS-only admin listener. The browser may show a self-signed-certificate warning until you replace `/etc/uhttpd.crt` and `/etc/uhttpd.key` with a certificate you trust.\n
