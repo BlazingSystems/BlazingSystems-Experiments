@@ -21,6 +21,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v03_foundation.sh
       - name: Admin security validation
         run: sh experiment/openwrt/BlazePwifi/tests/security.sh
+      - name: Config API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/config.sh
       - name: Accounting integration test x3
         run: |
           for i in 1 2 3; do
