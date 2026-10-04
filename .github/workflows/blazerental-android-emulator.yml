@@ -1,0 +1,39 @@
+name: BlazeRental Android Emulator Audit
+on:
+  push:
+    branches: [blazepwifi-v0.3.0-simulation]
+    paths:
+      - '.github/workflows/blazerental-android-emulator.yml'
+      - 'experiment/openwrt/BlazePwifi/simulation/android_emulator_audit.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p BlazeRental.apk --clobber
+      - run: |
+          sudo chmod 666 /dev/kvm 2>/dev/null || true
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "emulator" "system-images;android-30;default;x86_64"
+          echo no | avdmanager create avd -f -n blazeaudit -k "system-images;android-30;default;x86_64"
+          nohup emulator -avd blazeaudit -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > emulator.log 2>&1 &
+          adb wait-for-device
+          for i in $(seq 1 150); do
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+            sleep 2
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+          bash experiment/openwrt/BlazePwifi/simulation/android_emulator_audit.sh
+          adb emu kill || true
+          sleep 3
+          gzip -c "$HOME/.android/avd/blazeaudit.avd/userdata-qemu.img" > simulation-results/android/BlazeRental-Android-DeviceOwner-VM-backup.img.gz
+          cp emulator.log simulation-results/android/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-android
+          path: simulation-results/android/
