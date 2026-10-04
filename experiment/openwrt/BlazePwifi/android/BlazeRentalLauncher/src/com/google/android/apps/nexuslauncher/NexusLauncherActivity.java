@@ -12,6 +12,7 @@ import com.android.launcher3.compat.WallpaperManagerCompat;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.util.ComponentKeyMapper;
 import com.android.launcher3.util.ViewOnDrawExecutor;
+import com.blazesystems.blazerental.ManagedPolicyController;
 import com.google.android.libraries.gsa.launcherclient.LauncherClient;
 
 import java.util.List;
@@ -48,6 +49,13 @@ public class NexusLauncherActivity extends Launcher {
             // This is overwritten in Launcher.onResume
             setWorkspaceLoading(false);
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ManagedPolicyController.apply(this);
+        ManagedPolicyController.enforceLauncherTask(this);
     }
 
     @Override
