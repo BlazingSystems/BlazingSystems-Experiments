@@ -84,7 +84,8 @@ driver=webdriver.Chrome(options=opts)
 wait=WebDriverWait(driver,10)
 
 def click_button(name):
-    wait.until(EC.element_to_be_clickable((By.XPATH,"//button[normalize-space()='"+name+"']"))).click()
+    el=wait.until(EC.presence_of_element_located((By.XPATH,"//button[normalize-space()='"+name+"']")))
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();",el)
 
 step('Portal home',lambda:(driver.get('https://127.0.0.1:8443/index.html?preview=1'),wait.until(EC.presence_of_element_located((By.ID,'coinHero')))))
 driver.save_screenshot(OUT+'/01-portal.png')
