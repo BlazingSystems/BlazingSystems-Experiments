@@ -59,6 +59,12 @@ echo "$OUT" | grep -q '"ok":true'
 OUT="$(printf 'action=vendos' | sh "$API")"
 echo "$OUT" | grep -q '"vendo-01"'
 
+# Register a second physical Vendo so simultaneous target isolation is exercised.
+REG2NONCE=0203040506070809
+REG2SIG="$(printf 'vendokey|register|vendo-02|%s|0||vendokey' "$REG2NONCE" | sha256sum | awk '{print $1}')"
+OUT="$(printf 'action=register&id=vendo-02&nonce=%s&pulses=0&target=&sig=%s' "$REG2NONCE" "$REG2SIG" | sh "$VENDO")"
+echo "$OUT" | grep -q '"ok":true'
+
 OUT="$(printf 'action=me&device=%s' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"credit_cents":0'
 echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
@@ -67,6 +73,20 @@ OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
+
+# Another customer cannot steal vendo-01, but can use vendo-02 concurrently.
+DEVICE2=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+export TEST_IP=10.0.0.4 TEST_MAC=02:aa:bb:cc:dd:ee REMOTE_ADDR=10.0.0.4
+OUT="$(printf 'action=me&device=%s' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q 'selected vendo is busy'
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-02' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+echo "$OUT" | grep -q '"vendo":"vendo-02"'
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true"'
+export TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff REMOTE_ADDR=10.0.0.2
 
 EVENT=1122334455667788
 SIG="$(printf 'vendokey|coin|vendo-01|%s|1|%s|vendokey' "$EVENT" "$TARGET" | sha256sum | awk '{print $1}')"
@@ -110,7 +130,6 @@ printf 'TESTCODE\t250\n' > "$T/state/vouchers.tsv"
 OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"credit_cents":250'
 
-DEVICE2=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 export TEST_IP=10.0.0.4 TEST_MAC=02:aa:bb:cc:dd:ee REMOTE_ADDR=10.0.0.4
 OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE2" | sh "$API")"
 echo "$OUT" | grep -q 'voucher invalid or used'
