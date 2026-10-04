@@ -82,6 +82,7 @@ export BP_CONFIG_APPLY_HOOK=false
 ! bp_config_set admin_port 9555
 [ "$(uci -q get blazepwifi.main.admin_port)" = 9443 ]
 unset BP_CONFIG_APPLY_HOOK
+export SERVER_PORT=9443
 
 . "$BP_AUTH_LIB"
 bp_auth_init
