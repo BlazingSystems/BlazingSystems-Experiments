@@ -21,8 +21,8 @@ android {
     defaultConfig {
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 30911
-        versionName "3.9.1"
+        versionCode 40000
+        versionName "0.4.0-dev"
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
@@ -83,6 +83,10 @@ android {
             res.srcDirs = ['tests/res']
             java.srcDirs = ['tests/src']
             manifest.srcFile "tests/AndroidManifest-common.xml"
+        }
+
+        test {
+            java.srcDirs = ['tests/unit']
         }
 
         aosp {
