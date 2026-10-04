@@ -14,8 +14,8 @@ done
 # v0.4 must preserve the v0.3 controller action surface and target-bound coin semantics.
 for action in register poll coin; do
   grep -q "$action" "$VENDO"
-  grep -q "post("$action"" "$E6" || [ "$action" = coin ]
-  grep -q "post("$action"" "$E32" || [ "$action" = coin ]
+  grep -Fq "post(\"$action\"" "$E6" || [ "$action" = coin ]
+  grep -Fq "post(\"$action\"" "$E32" || [ "$action" = coin ]
 done
 grep -q 'target_nonce' "$VENDO"
 grep -q 'coin target mismatch' "$VENDO"
