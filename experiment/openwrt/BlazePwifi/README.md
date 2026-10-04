@@ -1,96 +1,112 @@
 # BlazePwifi
 
-BlazePwifi is an open-source prepaid Wi-Fi/captive-portal platform built around OpenWrt, ESP controllers, Linux SBCs and x86 systems.
+BlazePwifi is an open-source prepaid Wi-Fi, captive-portal, coin-controller and managed rental-device platform for OpenWrt, Orange Pi, x86 PCs, ESP8266/ESP32 and Android.
 
-Target base: OpenWrt 25.12.x  
-Current development release: 0.3.0-rc.1  
-Primary OpenWrt build target: 25.12.5
+Current release candidate: **0.3.0-rc.1**  
+OpenWrt build baseline: **25.12.5**
 
 ## Capability tiers
 
-BlazePwifi does not force heavy services onto small hardware.
+- **Lite** — constrained OpenWrt routers: hardened accounting, sessions/vouchers, compact admin and portal editor, network/VLAN controls and ESP controller support.
+- **Standard** — Orange Pi/SBC: Lite features plus richer administration, libgpiod controller agent and Android-rental services.
+- **Full** — x86_64: Standard features plus the full admin/portal experience, larger retention and fleet-oriented rental management.
 
-- **Lite** — constrained OpenWrt routers. Hardened accounting, sessions, vouchers, compact admin, compact portal editor, VLAN/network configuration and ESP controller support.
-- **Standard** — Orange Pi and similar Linux/OpenWrt SBCs. Adds richer preview, Linux GPIO agent, rental-device service and fuller auditing.
-- **Full** — x86_64 PCs/thin clients/VMs. Adds the full admin/portal experience, longer local history, larger asset storage and fleet-oriented rental management.
+Heavy features are not forced onto small routers.
 
-Auto detection is conservative and can be overridden explicitly in configuration.
+## Build-validated targets
 
-## Hardware goals
+The CI matrix builds and checksum-verifies:
+- Ruijie RG-EW1200G Pro v1.1
+- x86_64 legacy BIOS and UEFI
+- Orange Pi Zero 3
+- Orange Pi One
+- Orange Pi PC
+- ESP8266
+- ESP32
+- BlazeRental Android APK
 
-- OpenWrt routers including Ruijie RG-EW1200G Pro v1.1.
-- x86_64 legacy BIOS and UEFI systems.
-- Orange Pi family, prioritizing Zero 3, One and PC, with additional upstream-supported boards added only when their exact image builds succeed.
-- ESP8266 and ESP32 external coin/Vendo controllers.
-- Android rental devices using BlazeRental, with managed QR provisioning and a lower-security normal APK mode.
+Additional Orange Pi targets are attempted independently and are published only when their build succeeds.
 
-## v0.3 direction
+## Security and user handling
 
-- Preserve v0.2 durable accounting, private-MAC rebinding, pause/resume, vouchers and idempotent coin handling.
-- Add capability-aware packaging so constrained hardware remains stable.
-- Replace single admin-key access with authenticated admin sessions, lockouts, CSRF protection and role-aware operations.
-- Add a configurable portal renderer, compact Lite editor and richer Standard/Full builder.
-- Add previewable portal/admin/controller/rental templates under `portal-templates/`.
-- Add ESP32 and Linux GPIO controller implementations.
-- Add Orange Pi and expanded x86 image targets.
-- Add BlazeRental Android managed-device provisioning.
-- Publish only successful build outputs and checksums as versioned GitHub Release assets.
+BlazePwifi includes:
+- browser-backed user identity that survives normal private/random MAC changes;
+- durable balances and timed sessions;
+- pause/resume and one-time vouchers;
+- target-bound signed/idempotent coin events and replay protection;
+- persistent pending-event recovery;
+- HTTPS-only local administration by default;
+- generated first-boot admin credential, not a universal password;
+- per-IP/per-account brute-force lockouts with escalation;
+- secure HttpOnly SameSite admin sessions;
+- CSRF checks and Admin/Operator/Viewer roles;
+- audited money, configuration and rental operations;
+- fail-closed behavior when router time is not synchronized.
 
-## Current v0.2 runtime behavior retained during development
+## Portal and admin
 
-- Browser-backed device identity that survives normal Android/iOS private-MAC rotation.
-- Persistent credit and timed sessions.
-- Pause/resume.
-- One-time vouchers.
-- Multiple Vendo discovery.
-- Target-bound signed coin events with retry/idempotency protection.
-- ESP8266 pending-event journaling.
-- Dynamic walled garden.
-- firewall4/nftables enforcement.
-- HTTPS-only local administration.
-- Crash-safe persistent accounting and migration tests.
+Lite targets keep a compact native shell. Standard/Full targets use a capability-gated Tabler core admin shell; optional heavy chart/plugin bundles are excluded.
 
-## Quick install
+The customer portal keeps the first view simple: remaining time, Insert Coin, voucher and rates. Non-sensitive device/network details are below the primary actions.
 
-For the current OpenWrt runtime, copy the project to an OpenWrt 25.12.x system and run:
+Static previews live in [portal-templates](portal-templates/).
 
-`installer/install.sh`
+## Controllers
 
-The v0.3 installer work will keep first-run secrets generated/provisioned locally; no universal production password is stored in the repository.
+ESP8266 and ESP32 use one target-bound accounting protocol. Orange Pi/SBC controllers use libgpiod instead of deprecated sysfs GPIO.
 
-Typical local endpoints follow the configured LAN/management address:
+Pins, polarity, debounce, pulse grouping, controller identity, ports, VLANs, network interfaces, rates and portal appearance are configuration rather than production source edits.
 
-- Portal: `http://LAN_IP:8080/`
-- Admin: `https://LAN_IP:8443/admin.html`
-- Controller API: `http://LAN_IP:4455/cgi-bin/vendo`
+## BlazeRental
 
-## Build images
+Package: **com.blazesystems.blazerental**
 
-Use `build/build-openwrt-image.sh` for currently supported targets. v0.3 expands this build matrix while retaining the rule that a target is only published when its build and checksum gate succeeds.
+BlazeRental supports:
+- factory-reset QR Device Owner provisioning for strongest management on owned/authorized devices;
+- normal APK installation as an explicitly lower-security fallback.
 
-Generated development artifacts are temporary CI artifacts. Versioned successful deliverables are indexed under `releases/<version>/` and attached to the matching GitHub Release.
+Rental time remains authoritative on the BlazePwifi server. Enrollment tokens are one-time and exchanged for per-device authentication.
+
+## Installation
+
+See [docs/INSTALL.md](docs/INSTALL.md) for:
+- first-login/bootstrap credentials;
+- VLAN/interface examples;
+- ESP8266/ESP32 pin examples and electrical warnings;
+- Orange Pi imaging and GPIO discovery;
+- x86 BIOS/UEFI imaging;
+- Ruijie bootstrap/sysupgrade guidance;
+- Android QR/manual provisioning;
+- checksum verification.
+
+Default local endpoints:
+- Portal: http://LAN_IP:8080/
+- Admin: https://LAN_IP:8443/admin.html
+- Vendo API: http://LAN_IP:4455/cgi-bin/vendo
+
+## Releases
+
+Versioned source indexes live under [releases](releases/). Large generated installers and firmware are attached to the matching GitHub Release instead of being committed into Git history.
+
+The release pipeline keeps direct installable assets such as APK, BIN, IMG.GZ, INO and TAR.GZ files, plus per-target ZIP archives, manifest.json and SHA256SUMS. Failed optional targets are never replaced by placeholders.
 
 ## Validation boundary
 
-Automated build success is not the same as field validation. Each exact router/SBC/device revision still needs physical boot, recovery, GPIO/electrical, brownout and real-client testing before it is described as hardware validated.
+CI success is build validation. Production deployment still requires physical boot/recovery, electrical, captive-client, brownout and sustained-load testing on the exact hardware revision.
 
 ## Repository map
 
-- `openwrt/rootfs/` — runtime overlay
-- `installer/` — install/uninstall
-- `esp8266/` — ESP8266 Vendo firmware
-- `esp32/` — ESP32 Vendo firmware (v0.3)
-- `linux-agent/` — SBC GPIO controller agent (v0.3)
-- `android/` — BlazeRental managed-device client (v0.3)
-- `portal-templates/` — static previews and template definitions (v0.3)
-- `build/` — image/build automation
-- `tests/` — regression, security and persistence tests
-- `docs/ARCHITECTURE.md` — system design
-- `docs/PROTOCOL.md` — controller protocol
-- `docs/SECURITY.md` — deployment/security model
-- `docs/REFERENCE_NOTES.md` — neutral public-reference notes
-- `AUDIT.md` — readiness audit
+- openwrt/rootfs — OpenWrt runtime
+- installer — OpenWrt installer/uninstaller
+- esp8266 and esp32 — controller firmware
+- linux-agent — Orange Pi/SBC GPIO agent and profiles
+- android/BlazeRental — Android DPC/companion
+- portal-templates — static interface previews
+- build — reproducible image/UI preparation
+- tools — provisioning helpers
+- tests — security/accounting/persistence/UI gates
+- releases — versioned release indexes
 
-## Clean-room notice
+## Publication policy
 
-BlazePwifi contains original project code and public/open-source integration patterns only. It does not redistribute closed commercial binaries, licensing mechanisms, private keys, databases, branding, proprietary portal assets or private firmware.
+The public repository contains original project code and documented/open-source integration patterns. It does not redistribute closed commercial binaries, licensing systems, private keys, confidential databases, proprietary artwork or private controller firmware.
