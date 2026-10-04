@@ -17,7 +17,7 @@ public class BlazeDeviceAdminService extends DeviceAdminService {
                 long now = SystemClock.elapsedRealtime();
                 long interval = RentalLeaseStore.isLeaseValid(BlazeDeviceAdminService.this)
                         ? 15000L : 4000L;
-                if (RentalLeaseStore.isEnrolled(BlazeDeviceAdminService.this)
+                if (RentalLeaseStore.hasEnrollmentConfig(BlazeDeviceAdminService.this)
                         && now - lastSync > interval) {
                     lastSync = now;
                     new Thread(new Runnable() {
