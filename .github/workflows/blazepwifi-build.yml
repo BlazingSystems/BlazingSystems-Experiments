@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [ruijie, x86_64]
+        target: [ruijie, x86_64, orangepi_zero3, orangepi_one, orangepi_pc]
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y zstd
@@ -120,3 +120,25 @@ jobs:
         with:
           name: BlazePwifi-esp32-firmware
           path: experiment/openwrt/BlazePwifi/dist/esp32/
+
+
+  firmware_optional:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [orangepi_pc_plus, orangepi_pc2, orangepi_zero, orangepi_zero2, orangepi_zero2w, orangepi_one_plus]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Build optional OpenWrt image
+        run: sh experiment/openwrt/BlazePwifi/build/build-openwrt-image.sh ${{ matrix.target }}
+      - name: Verify optional firmware checksums
+        run: |
+          cd experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-${{ matrix.target }}-firmware
+          path: experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}/
