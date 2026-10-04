@@ -260,6 +260,46 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+
+  production_import_signed_apk:
+    if: github.ref == 'refs/heads/blazepwifi-v0.3.0-production' && contains(github.event.head_commit.message, '[import-sign]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SIGN_RUN: '37210720716'
+      APK_SHA256: '2062c0ad1245b1a5dbfec8fea1cfef4286906f943ba54c6a7005ca7ca872bac0'
+      CERT_SHA256: '49b2f1ad1c8214b35935fa266f6afdd5db12f9739dee0eef0b31c69848dcd09e'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: blazepwifi-v0.3.0-production
+      - name: Download verified production signing handoff
+        run: |
+          set -euo pipefail
+          mkdir -p signed
+          gh run download "$SIGN_RUN" -n BlazeRental-production-signing-handoff -D signed
+          echo "$APK_SHA256  signed/BlazeRental.apk" | sha256sum -c -
+          echo "$CERT_SHA256  signed/BlazeRental-signing-cert.pem" | sha256sum -c -
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' signed/BlazeRental-apksigner-verify.txt
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' signed/BlazeRental-apksigner-verify.txt
+      - name: Commit public production APK and certificate metadata
+        run: |
+          set -euo pipefail
+          DEST=experiment/openwrt/BlazePwifi/releases/0.3.0
+          cp signed/BlazeRental.apk "$DEST/BlazeRental.apk"
+          cp signed/BlazeRental-signing-cert.pem "$DEST/BlazeRental-signing-cert.pem"
+          cp signed/BlazeRental-signing-fingerprint.txt "$DEST/BlazeRental-signing-fingerprint.txt"
+          cp signed/BlazeRental-apksigner-verify.txt "$DEST/BlazeRental-apksigner-verify.txt"
+          printf '%s  %s\n' "$APK_SHA256" BlazeRental.apk > "$DEST/BlazeRental.apk.sha256"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "release(blazepwifi): add signed BlazeRental.apk [skip ci]"
+          git push origin HEAD:blazepwifi-v0.3.0-production
+
   publish_prerelease:
     if: github.ref == 'refs/heads/blazepwifi-v0.3.0-design' && contains(github.event.head_commit.message, '[release]')
     needs: [validate, esp8266, esp32, android, firmware, firmware_optional]
