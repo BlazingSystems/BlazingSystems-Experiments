@@ -10,10 +10,10 @@ mac="$(bp_mac_norm "$mac" 2>/dev/null || true)"
 
 case "$action" in
   rates)
-    bp_json "{\"ok\":true,\"rates\":$(bp_rates_json)}"
+    bp_json "{\"ok\":true,\"rates\":$(bp_rates_json)}"; exit 0
     ;;
   vendos)
-    bp_json "{\"ok\":true,\"vendos\":$(bp_online_vendos_json)}"
+    bp_json "{\"ok\":true,\"vendos\":$(bp_online_vendos_json)}"; exit 0
     ;;
 esac
 
