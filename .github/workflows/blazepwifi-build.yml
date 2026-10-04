@@ -27,6 +27,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
       - name: Controller protocol parity
         run: sh experiment/openwrt/BlazePwifi/tests/controllers.sh
+      - name: Linux GPIO agent validation
+        run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
