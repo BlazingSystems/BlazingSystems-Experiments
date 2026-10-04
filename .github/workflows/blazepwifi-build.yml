@@ -45,7 +45,14 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp8266:esp8266
       - name: Compile BlazePwifi Vendo
-        run: arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo
+        run: |
+          mkdir -p experiment/openwrt/BlazePwifi/dist/esp8266
+          arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 --output-dir experiment/openwrt/BlazePwifi/dist/esp8266 experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo
+          (cd experiment/openwrt/BlazePwifi/dist/esp8266 && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-esp8266-firmware
+          path: experiment/openwrt/BlazePwifi/dist/esp8266/
 
   firmware:
     runs-on: ubuntu-latest
