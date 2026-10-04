@@ -122,7 +122,20 @@ public final class RentalLeaseStore {
     }
 
     public static void markInitialSetupComplete(Context context, boolean complete) {
-        prefs(context).edit().putBoolean("setup_complete", complete).apply();
+        SharedPreferences.Editor edit = prefs(context).edit().putBoolean("setup_complete", complete);
+        if (complete) edit.remove("admin_unlock_until");
+        edit.apply();
+    }
+
+    public static void beginInitialSetupWindow(Context context) {
+        if (isInitialSetupComplete(context)) return;
+        prefs(context).edit()
+                .putLong("admin_unlock_until", SystemClock.elapsedRealtime() + 600000L)
+                .apply();
+    }
+
+    public static void endAdminWindow(Context context) {
+        prefs(context).edit().remove("admin_unlock_until").apply();
     }
 
     public static void prepareTransfer(Context context) {
