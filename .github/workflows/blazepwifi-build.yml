@@ -76,6 +76,7 @@ jobs:
         run: |
           mkdir -p experiment/openwrt/BlazePwifi/dist/esp8266
           arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 --output-dir experiment/openwrt/BlazePwifi/dist/esp8266 experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo
+          cp experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino experiment/openwrt/BlazePwifi/dist/esp8266/
           (cd experiment/openwrt/BlazePwifi/dist/esp8266 && sha256sum * > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
@@ -189,3 +190,62 @@ jobs:
         with:
           name: BlazePwifi-android-BlazeRental
           path: experiment/openwrt/BlazePwifi/dist/android/
+
+
+  publish_prerelease:
+    if: github.ref == 'refs/heads/blazepwifi-v0.3.0-design' && contains(github.event.head_commit.message, '[release]')
+    needs: [validate, esp8266, esp32, android, firmware, firmware_optional]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.3.0-rc.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: BlazePwifi-*
+          path: downloaded
+      - name: Assemble permanent release assets
+        run: |
+          set -eu
+          mkdir -p release-out
+          find downloaded -mindepth 1 -maxdepth 1 -type d | while read d; do
+            n=$(basename "$d")
+            (cd "$d" && zip -qr "../../release-out/${n}.zip" .)
+            find "$d" -type f | while read f; do
+              b=$(basename "$f")
+              case "$b" in
+                *.apk|*.bin|*.img.gz|*.ino|*.tar.gz|*.json|*.png)
+                  if [ ! -e "release-out/$b" ]; then cp "$f" "release-out/$b"; fi
+                  ;;
+              esac
+            done
+          done
+          tar -czf release-out/BlazePwifi-portal-templates.tar.gz -C experiment/openwrt/BlazePwifi portal-templates
+          cp experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md release-out/RELEASE_NOTES.md
+          (
+            cd release-out
+            sha256sum * | grep -v ' SHA256SUMS$' > SHA256SUMS
+            python3 - <<'PY'
+import hashlib,json,pathlib
+root=pathlib.Path(".")
+items=[]
+for p in sorted(root.iterdir()):
+    if p.name in {"manifest.json"} or not p.is_file():
+        continue
+    h=hashlib.sha256(p.read_bytes()).hexdigest()
+    items.append({"name":p.name,"size":p.stat().st_size,"sha256":h})
+pathlib.Path("manifest.json").write_text(json.dumps({"version":"0.3.0-rc.1","assets":items},indent=2)+"\n")
+PY
+          )
+      - name: Create or update GitHub prerelease
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
+          fi
+          gh release upload "$TAG" release-out/* --clobber
