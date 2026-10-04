@@ -81,6 +81,7 @@ bp_rental_list_json() {
         hash="$(printf '%s' "$v2" | cut -f16)"
       fi
     fi
+    [ "$allowed" = "-" ] && allowed=""
     [ "$hidden" = "-" ] && hidden=""
     [ "$preferred" = "-" ] && preferred=""
     [ "$quick" = "-" ] && quick=""

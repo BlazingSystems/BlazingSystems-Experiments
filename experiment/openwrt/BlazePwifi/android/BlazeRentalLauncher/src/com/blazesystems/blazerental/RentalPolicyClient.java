@@ -18,12 +18,12 @@ public final class RentalPolicyClient {
 
             JSONObject patch = new JSONObject(patchJson);
             String mode = value(patch, "launcher_mode");
-            String allowed = value(patch, "allowed_packages");
-            String hidden = value(patch, "hidden_packages");
+            String allowed = listValue(patch, "allowed_packages");
+            String hidden = listValue(patch, "hidden_packages");
             String preferred = value(patch, "preferred_vendo");
             String timer = value(patch, "timer_user_toggle");
             String notifications = value(patch, "notifications_enabled");
-            String quick = value(patch, "quick_controls");
+            String quick = listValue(patch, "quick_controls");
             String gesture = value(patch, "admin_gesture_value");
             String adminPassword = value(patch, "admin_password");
 
@@ -49,6 +49,12 @@ public final class RentalPolicyClient {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static String listValue(JSONObject patch, String key) {
+        String out = value(patch, key);
+        if (KEEP.equals(out)) return out;
+        return out.length() == 0 ? "-" : out;
     }
 
     private static String value(JSONObject patch, String key) {

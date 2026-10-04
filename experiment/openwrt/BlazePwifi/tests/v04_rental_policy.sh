@@ -30,7 +30,16 @@ L2="$(bp_rental_policy_v2_get "$D")"
 [ "$(printf '%s' "$L2" | cut -f7)" = - ]
 [ "$(printf '%s' "$L2" | cut -f9)" = always ]
 [ "$(printf '%s' "$L2" | cut -f14)" = 5000 ]
-if bp_rental_policy_v2_patch "$D" 1 stale rental @keep @keep @keep @keep @keep @keep @keep @keep >/dev/null; then
+R3="$(bp_rental_policy_v2_patch "$D" 2 clear rental - @keep @keep 1 1 - @keep @keep off)"
+[ "$R3" = 3 ]
+L3="$(bp_rental_policy_v2_get "$D")"
+[ "$(printf '%s' "$L3" | cut -f6)" = - ]
+[ "$(printf '%s' "$L3" | cut -f9)" = off ]
+[ "$(printf '%s' "$L3" | cut -f11)" = - ]
+J3="$(bp_rental_policy_v2_json "$D")"
+printf '%s' "$J3" | grep -q '"allowed_packages":""'
+printf '%s' "$J3" | grep -q '"quick_controls":""'
+if bp_rental_policy_v2_patch "$D" 2 stale rental @keep @keep @keep @keep @keep @keep @keep @keep >/dev/null; then
   echo "stale CAS unexpectedly succeeded" >&2; exit 1
 else
   [ "$?" -eq 4 ]

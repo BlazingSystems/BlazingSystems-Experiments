@@ -58,6 +58,7 @@ bp_rental_policy_v2_json() {
   IFS="$(printf '\t')" read -r did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
 $line
 EOF
+  [ "$allowed" = "-" ] && allowed=""
   [ "$hidden" = "-" ] && hidden=""
   [ "$preferred" = "-" ] && preferred=""
   [ "$quick" = "-" ] && quick=""

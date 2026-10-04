@@ -51,6 +51,7 @@ case "$action" in
     IFS="$(printf '\t')" read -r _did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
 $v2
 EOF
+    [ "$allowed" = "-" ] && allowed=""
     [ "$hidden" = "-" ] && hidden=""
     [ "$preferred" = "-" ] && preferred=""
     [ "$quick" = "-" ] && quick=""

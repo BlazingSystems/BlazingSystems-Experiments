@@ -45,4 +45,5 @@ N3=stale
 SIG3="$(bp_rental_hmac "$S" "policy_patch|$N3|$D|1|rental|@keep|@keep|@keep|@keep|@keep|@keep|@keep|@keep")"
 OUT3="$(printf 'action=policy_patch&device_id=%s&nonce=%s&expected_revision=1&launcher_mode=rental&allowed_packages=%%40keep&hidden_packages=%%40keep&preferred_vendo=%%40keep&timer_user_toggle=%%40keep&notifications_enabled=%%40keep&quick_controls=%%40keep&admin_gesture_value=%%40keep&admin_password=%%40keep&sig=%s' "$D" "$N3" "$SIG3" | REQUEST_METHOD=POST sh "$CGI")"
 printf '%s' "$OUT3" | grep -q 'stale policy revision'
+grep -q '\[ "\$allowed" = "-" \] && allowed=""' "$CGI" || { echo "empty-list sentinel normalization missing" >&2; exit 1; }
 echo "v0.4 rental API tests passed"
