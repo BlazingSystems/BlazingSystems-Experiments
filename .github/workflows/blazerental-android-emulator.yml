@@ -18,9 +18,11 @@ jobs:
         run: gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p BlazeRental.apk --clobber
       - run: |
           sudo chmod 666 /dev/kvm 2>/dev/null || true
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "emulator" "system-images;android-30;default;x86_64"
-          echo no | avdmanager create avd -f -n blazeaudit -k "system-images;android-30;default;x86_64"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-30;default;x86_64"
+          echo no | "$AVDMANAGER" create avd -f -n blazeaudit -k "system-images;android-30;default;x86_64"
           nohup emulator -avd blazeaudit -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > emulator.log 2>&1 &
           adb wait-for-device
           for i in $(seq 1 150); do
