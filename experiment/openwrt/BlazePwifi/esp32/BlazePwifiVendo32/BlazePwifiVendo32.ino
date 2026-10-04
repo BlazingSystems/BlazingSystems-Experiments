@@ -26,9 +26,13 @@ Config cfg;
 Preferences prefs;
 WebServer web(80);
 bool insertMode=false, lastCoin=false, pendingReady=false, fsReady=false;
+bool controllerEnabled=true, coinEnabled=true, relayEnabled=true, ledEnabled=true, setupApOn=false;
+bool runCoinActiveLow=true, runRelayActiveHigh=true, runLedActiveHigh=true;
 uint32_t lastPoll=0, lastEdge=0, lastSend=0, configuredApSince=0;
 uint8_t pendingPulses=0;
-String activeTarget, pendingTarget, pendingNonce;
+int runCoinPin=27, runLedPin=2, runRelayPin=26, maxWifiRetries=6, wifiFailures=0, remoteRevision=0;
+uint16_t runDebounceMs=40, runPulseGroupMs=400;
+String activeTarget, pendingTarget, pendingNonce, setupApName;
 
 String hexDigest(const String &s){
   unsigned char out[32]; char buf[65];
@@ -143,6 +147,41 @@ String jsonString(const String &r,const String &k){
   p+=n.length(); int e=r.indexOf('"',p); if(e<0) return ""; return r.substring(p,e);
 }
 bool jsonTrue(const String &r,const String &k){ return r.indexOf("\""+k+"\":1")>=0 || r.indexOf("\""+k+"\":true")>=0; }
+int jsonInt(const String &r,const String &k,int def){
+  String n="\""+k+"\":"; int p=r.indexOf(n); if(p<0) return def; p+=n.length();
+  while(p<(int)r.length() && r[p]==' ') p++;
+  int e=p; if(e<(int)r.length() && r[e]=='-') e++;
+  while(e<(int)r.length() && isDigit(r[e])) e++;
+  if(e==p || (e==p+1 && r[p]=='-')) return def;
+  return r.substring(p,e).toInt();
+}
+
+void configureRuntimePins(int coinPin,int relayPin,int ledPin){
+  if(runLedPin!=ledPin) writeLogical(runLedPin,false,runLedActiveHigh);
+  if(runRelayPin!=relayPin) writeLogical(runRelayPin,false,runRelayActiveHigh);
+  runCoinPin=coinPin; runRelayPin=relayPin; runLedPin=ledPin;
+  pinMode(runCoinPin,INPUT_PULLUP); pinMode(runRelayPin,OUTPUT); pinMode(runLedPin,OUTPUT);
+  writeLogical(runRelayPin,false,runRelayActiveHigh); writeLogical(runLedPin,false,runLedActiveHigh);
+}
+
+void applyRemoteConfig(const String &r){
+  int rev=jsonInt(r,"config_revision",remoteRevision);
+  if(rev==remoteRevision && remoteRevision!=0) return;
+  controllerEnabled=jsonInt(r,"enabled",1)!=0;
+  coinEnabled=jsonInt(r,"coin_enabled",1)!=0;
+  relayEnabled=jsonInt(r,"relay_enabled",1)!=0;
+  ledEnabled=jsonInt(r,"led_enabled",1)!=0;
+  int cp=jsonInt(r,"coin_pin",-1), rp=jsonInt(r,"relay_pin",-1), lp=jsonInt(r,"led_pin",-1);
+  int nextCoin=(cp>=0&&cp<=39)?cp:cfg.coinPin;
+  int nextRelay=(rp>=0&&rp<=39)?rp:cfg.relayPin;
+  int nextLed=(lp>=0&&lp<=39)?lp:cfg.insertLedPin;
+  runCoinActiveLow=jsonInt(r,"coin_active_low",cfg.coinActiveLow?1:0)!=0;
+  runRelayActiveHigh=jsonInt(r,"relay_active_high",cfg.relayActiveHigh?1:0)!=0;
+  runLedActiveHigh=jsonInt(r,"led_active_high",cfg.ledActiveHigh?1:0)!=0;
+  int db=jsonInt(r,"coin_debounce_ms",cfg.coinDebounceMs), pg=jsonInt(r,"pulse_group_ms",cfg.pulseGroupMs), mr=jsonInt(r,"max_wifi_retries",6);
+  runDebounceMs=(uint16_t)constrain(db,1,2000); runPulseGroupMs=(uint16_t)constrain(pg,10,10000); maxWifiRetries=constrain(mr,1,60);
+  configureRuntimePins(nextCoin,nextRelay,nextLed); remoteRevision=rev; applyOutputs();
+}
 
 String signedBody(const String &action,const String &pulses,const String &target,const String &forcedNonce=""){
   String n=forcedNonce.length()?forcedNonce:freshNonce();
@@ -162,17 +201,26 @@ String post(const String &action,const String &pulses="0",const String &target="
 
 void writeLogical(int pin,bool on,bool activeHigh){ digitalWrite(pin,(on==activeHigh)?HIGH:LOW); }
 void applyOutputs(){
-  bool accepting=insertMode && fsReady && !pendingReady;
-  writeLogical(cfg.insertLedPin,accepting,cfg.ledActiveHigh);
-  writeLogical(cfg.relayPin,accepting,cfg.relayActiveHigh);
+  bool accepting=controllerEnabled && coinEnabled && insertMode && fsReady && !pendingReady;
+  if(ledEnabled) writeLogical(runLedPin,accepting,runLedActiveHigh); else writeLogical(runLedPin,false,runLedActiveHigh);
+  if(relayEnabled) writeLogical(runRelayPin,accepting,runRelayActiveHigh); else writeLogical(runRelayPin,false,runRelayActiveHigh);
+}
+
+void startSetupAp(){
+  if(setupApName.isEmpty()) setupApName="BlazePwifi-Vendo32-"+String((uint32_t)(ESP.getEfuseMac() & 0xffffffffULL),HEX);
+  WiFi.mode(WIFI_AP_STA); WiFi.softAP(setupApName.c_str(),cfg.apPass.c_str()); setupApOn=true; configuredApSince=millis();
+  Serial.println("BlazePwifi ESP32 setup AP: "+setupApName); Serial.println("Setup code: "+cfg.apPass);
+}
+
+bool verifyWifi(const String &ssid,const String &pass){
+  if(ssid.isEmpty()) return false;
+  WiFi.disconnect(); delay(150); WiFi.begin(ssid.c_str(),pass.c_str());
+  uint32_t t=millis(); while(WiFi.status()!=WL_CONNECTED && millis()-t<12000){delay(250);}
+  return WiFi.status()==WL_CONNECTED;
 }
 
 void setupPortal(){
-  String suffix=String((uint32_t)(ESP.getEfuseMac() & 0xffffffffULL),HEX);
-  String ap="BlazePwifi-Vendo32-"+suffix;
-  WiFi.mode(WIFI_AP_STA); WiFi.softAP(ap.c_str(),cfg.apPass.c_str());
-  Serial.println("BlazePwifi ESP32 setup AP: "+ap);
-  Serial.println("Setup code: "+cfg.apPass);
+  startSetupAp();
   web.on("/",[](){
     String h="<meta name=viewport content='width=device-width'><h2>BlazePwifi ESP32 Vendo</h2><form method=POST action=/save>"
       "SSID <input name=s value='"+cfg.ssid+"'><br>WiFi credential <input name=p type=password><br>"
@@ -186,15 +234,17 @@ void setupPortal(){
     web.send(200,"text/html",h);
   });
   web.on("/save",HTTP_POST,[](){
-    cfg.ssid=web.arg("s"); if(web.arg("p").length()) cfg.pass=web.arg("p");
-    cfg.server=web.arg("server"); if(web.arg("k").length()) cfg.key=web.arg("k"); cfg.id=web.arg("id");
+    String newSsid=web.arg("s"), newPass=web.arg("p").length()?web.arg("p"):cfg.pass;
+    if(!verifyWifi(newSsid,newPass)){
+      web.send(400,"text/plain","Wi-Fi verification failed. Settings were NOT saved. Setup mode remains active.");
+      if(!cfg.ssid.isEmpty()) WiFi.begin(cfg.ssid.c_str(),cfg.pass.c_str());
+      startSetupAp(); return;
+    }
+    cfg.ssid=newSsid; cfg.pass=newPass; cfg.server=web.arg("server"); if(web.arg("k").length()) cfg.key=web.arg("k"); cfg.id=web.arg("id");
     cfg.coinPin=web.arg("coin").toInt(); cfg.insertLedPin=web.arg("led").toInt(); cfg.relayPin=web.arg("relay").toInt();
-    long db=web.arg("db").toInt(); long pg=web.arg("pg").toInt();
-    if(db<1) db=1; if(db>2000) db=2000;
-    if(pg<10) pg=10; if(pg>10000) pg=10000;
-    cfg.coinDebounceMs=(uint16_t)db; cfg.pulseGroupMs=(uint16_t)pg;
-    cfg.coinActiveLow=web.arg("cl")!="0"; cfg.relayActiveHigh=web.arg("rh")!="0"; cfg.ledActiveHigh=web.arg("lh")!="0";
-    saveConfig(); web.send(200,"text/plain","Saved. Rebooting..."); delay(500); ESP.restart();
+    long db=web.arg("db").toInt(), pg=web.arg("pg").toInt(); if(db<1)db=1;if(db>2000)db=2000;if(pg<10)pg=10;if(pg>10000)pg=10000;
+    cfg.coinDebounceMs=(uint16_t)db; cfg.pulseGroupMs=(uint16_t)pg; cfg.coinActiveLow=web.arg("cl")!="0"; cfg.relayActiveHigh=web.arg("rh")!="0"; cfg.ledActiveHigh=web.arg("lh")!="0";
+    saveConfig(); web.send(200,"text/plain","Wi-Fi verified and settings saved. Rebooting..."); delay(700); ESP.restart();
   });
   web.begin(); configuredApSince=millis();
 }
@@ -204,31 +254,34 @@ void connectSta(){
   WiFi.begin(cfg.ssid.c_str(),cfg.pass.c_str());
   uint32_t t=millis();
   while(WiFi.status()!=WL_CONNECTED && millis()-t<12000){ delay(250); }
-  if(WiFi.status()==WL_CONNECTED) post("register");
+  if(WiFi.status()==WL_CONNECTED){ wifiFailures=0; String r=post("register"); applyRemoteConfig(r); }
 }
 
 void setup(){
   Serial.begin(115200); loadConfig();
   fsReady=LittleFS.begin(true); if(fsReady) loadPending();
   else Serial.println("CRITICAL: LittleFS unavailable; relay remains disabled.");
-  pinMode(cfg.coinPin,INPUT_PULLUP); pinMode(cfg.insertLedPin,OUTPUT); pinMode(cfg.relayPin,OUTPUT);
-  writeLogical(cfg.insertLedPin,false,cfg.ledActiveHigh); writeLogical(cfg.relayPin,false,cfg.relayActiveHigh);
+  runCoinPin=cfg.coinPin; runLedPin=cfg.insertLedPin; runRelayPin=cfg.relayPin;
+  runCoinActiveLow=cfg.coinActiveLow; runRelayActiveHigh=cfg.relayActiveHigh; runLedActiveHigh=cfg.ledActiveHigh;
+  runDebounceMs=cfg.coinDebounceMs; runPulseGroupMs=cfg.pulseGroupMs;
+  configureRuntimePins(runCoinPin,runRelayPin,runLedPin);
   setupPortal(); connectSta();
 }
 
 void loop(){
   web.handleClient();
-  if(WiFi.status()!=WL_CONNECTED && !cfg.ssid.isEmpty() && millis()-lastPoll>10000){
-    WiFi.disconnect(); WiFi.begin(cfg.ssid.c_str(),cfg.pass.c_str()); lastPoll=millis();
+  if(WiFi.status()!=WL_CONNECTED && !cfg.ssid.isEmpty() && millis()-lastPoll>8000){
+    WiFi.disconnect(); WiFi.begin(cfg.ssid.c_str(),cfg.pass.c_str()); wifiFailures++; lastPoll=millis();
+    if(wifiFailures>=maxWifiRetries) startSetupAp();
   }
   if(WiFi.status()==WL_CONNECTED && millis()-lastPoll>1500){
-    String r=post("poll"); insertMode=jsonTrue(r,"insert"); activeTarget=jsonString(r,"target_nonce");
+    wifiFailures=0; String r=post("poll"); insertMode=jsonTrue(r,"insert"); activeTarget=jsonString(r,"target_nonce"); applyRemoteConfig(r);
     applyOutputs(); lastPoll=millis();
   }
 
-  bool raw=digitalRead(cfg.coinPin);
-  bool active=cfg.coinActiveLow?!raw:raw;
-  if(insertMode && fsReady && activeTarget.length() && !pendingReady && active && !lastCoin && millis()-lastEdge>cfg.coinDebounceMs){
+  bool raw=digitalRead(runCoinPin);
+  bool active=runCoinActiveLow?!raw:raw;
+  if(insertMode && fsReady && activeTarget.length() && !pendingReady && active && !lastCoin && millis()-lastEdge>runDebounceMs){
     if(pendingPulses==0){ pendingNonce=freshNonce(); pendingTarget=activeTarget; }
     if(pendingTarget==activeTarget && pendingPulses<20){
       pendingPulses++; lastEdge=millis();
@@ -236,7 +289,7 @@ void loop(){
     }
   }
   lastCoin=active;
-  if(pendingPulses && !pendingReady && millis()-lastEdge>cfg.pulseGroupMs){ pendingReady=true; lastSend=0; applyOutputs(); }
+  if(pendingPulses && !pendingReady && millis()-lastEdge>runPulseGroupMs){ pendingReady=true; lastSend=0; applyOutputs(); }
   if(pendingPulses && pendingReady && WiFi.status()==WL_CONNECTED && (lastSend==0 || millis()-lastSend>900)){
     String r=post("coin",String(pendingPulses),pendingTarget,pendingNonce); lastSend=millis();
     if(r.indexOf("\"ok\":true")>=0 ||
@@ -245,6 +298,6 @@ void loop(){
       clearPending(); applyOutputs();
     }
   }
-  if(!cfg.ssid.isEmpty() && WiFi.status()==WL_CONNECTED && millis()-configuredApSince>600000UL) WiFi.softAPdisconnect(true);
+  if(setupApOn && !cfg.ssid.isEmpty() && WiFi.status()==WL_CONNECTED && millis()-configuredApSince>600000UL){ WiFi.softAPdisconnect(true); setupApOn=false; }
   delay(2);
 }
