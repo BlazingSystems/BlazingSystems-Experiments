@@ -164,6 +164,8 @@ LOUT="$(printf '%s' 'username=admin&password=Integration-Admin-123%21' | REQUEST
 LERR="$(printf '%s' "$LOUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
 LUSER="$(printf '%s' "$LOUT" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')"
 echo "integration: auth login => ${LERR:-ok} user=${LUSER:-missing}"
+SAFE_LOUT="$(printf '%s\n' "$LOUT" | sed -E 's/(blaze_admin=)[0-9a-f]+/\1<redacted>/g; s/("csrf":")[^"]*/\1<redacted>/g')"
+printf '%s\n' "$SAFE_LOUT" | sed 's/^/integration: login-response /'
 COOKIE="$(printf '%s\n' "$LOUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
 CSRF="$(printf '%s' "$LOUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 echo "integration: auth material cookie=${COOKIE:+present} csrf=${CSRF:+present}"
