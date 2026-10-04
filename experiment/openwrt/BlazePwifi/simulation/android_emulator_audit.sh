@@ -7,8 +7,11 @@ adb install -r BlazeRental.apk | tee "$OUT/install.txt"
 adb shell settings put global device_provisioned 0 || true
 adb shell settings put secure user_setup_complete 0 || true
 adb shell dpm set-device-owner com.blazesystems.blazerental/.BlazeDeviceAdminReceiver | tee "$OUT/device-owner.txt"
-adb shell am start -n com.blazesystems.blazerental/.MainActivity >/dev/null
-sleep 3
+adb shell am start -n com.blazesystems.blazerental/.MainActivity > "$OUT/am-start.txt" 2>&1 || true
+adb shell input keyevent HOME || true
+sleep 5
+adb shell dumpsys activity activities > "$OUT/activity-before-ui.txt"
+adb logcat -d -t 300 > "$OUT/logcat-before-ui.txt" || true
 adb shell uiautomator dump /sdcard/window.xml >/dev/null
 adb pull /sdcard/window.xml "$OUT/01-window.xml" >/dev/null
 grep -q 'BlazeRental' "$OUT/01-window.xml"
@@ -24,8 +27,10 @@ for i in $(seq 1 90); do
   sleep 2
 done
 test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-adb shell am start -n com.blazesystems.blazerental/.MainActivity >/dev/null
-sleep 2
+adb shell am start -n com.blazesystems.blazerental/.MainActivity > "$OUT/am-start-after-reboot.txt" 2>&1 || true
+adb shell input keyevent HOME || true
+sleep 4
+adb logcat -d -t 300 > "$OUT/logcat-after-reboot.txt" || true
 adb shell uiautomator dump /sdcard/window.xml >/dev/null
 adb pull /sdcard/window.xml "$OUT/02-window.xml" >/dev/null
 grep -q 'BlazeRental' "$OUT/02-window.xml"
