@@ -22,8 +22,9 @@ jobs:
           AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-30;default;x86_64"
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           echo no | "$AVDMANAGER" create avd -f -n blazeaudit -k "system-images;android-30;default;x86_64"
-          nohup emulator -avd blazeaudit -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > emulator.log 2>&1 &
+          nohup "$ANDROID_HOME/emulator/emulator" -avd blazeaudit -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > emulator.log 2>&1 &
           adb wait-for-device
           for i in $(seq 1 150); do
             [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
