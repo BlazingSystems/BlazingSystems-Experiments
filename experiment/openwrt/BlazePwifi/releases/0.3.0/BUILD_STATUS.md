@@ -17,3 +17,5 @@ The final GitHub Release is created only after this gate is green and the signed
 Signing handoff: requested after full green validation.
 
 Signing workflow YAML repaired; signing handoff retriggered.
+
+Signed APK import requested from verified signing handoff.
