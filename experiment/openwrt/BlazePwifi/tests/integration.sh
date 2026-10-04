@@ -85,7 +85,7 @@ OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-02' "$DEVICE2" | sh "$API
 echo "$OUT" | grep -q '"ok":true'
 echo "$OUT" | grep -q '"vendo":"vendo-02"'
 OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE2" | sh "$API")"
-echo "$OUT" | grep -q '"ok":true"'
+echo "$OUT" | grep -q '"ok":true'
 export TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff REMOTE_ADDR=10.0.0.2
 
 EVENT=1122334455667788
