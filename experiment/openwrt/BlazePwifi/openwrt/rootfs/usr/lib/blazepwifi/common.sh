@@ -27,7 +27,7 @@ bp_init_dirs() {
 
 bp_self_pid() { sh -c 'printf %s "$PPID"'; }
 bp_tmp_suffix() {
-	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$(date +%s)-$RANDOM"
+	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s-%s' "$(date +%s)" "$(bp_self_pid)"
 }
 
 bp_lock() {
