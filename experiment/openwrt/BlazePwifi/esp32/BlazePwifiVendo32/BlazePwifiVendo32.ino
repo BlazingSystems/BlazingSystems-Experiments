@@ -189,7 +189,10 @@ void setupPortal(){
     cfg.ssid=web.arg("s"); if(web.arg("p").length()) cfg.pass=web.arg("p");
     cfg.server=web.arg("server"); if(web.arg("k").length()) cfg.key=web.arg("k"); cfg.id=web.arg("id");
     cfg.coinPin=web.arg("coin").toInt(); cfg.insertLedPin=web.arg("led").toInt(); cfg.relayPin=web.arg("relay").toInt();
-    cfg.coinDebounceMs=max(1,web.arg("db").toInt()); cfg.pulseGroupMs=max(10,web.arg("pg").toInt());
+    long db=web.arg("db").toInt(); long pg=web.arg("pg").toInt();
+    if(db<1) db=1; if(db>2000) db=2000;
+    if(pg<10) pg=10; if(pg>10000) pg=10000;
+    cfg.coinDebounceMs=(uint16_t)db; cfg.pulseGroupMs=(uint16_t)pg;
     cfg.coinActiveLow=web.arg("cl")!="0"; cfg.relayActiveHigh=web.arg("rh")!="0"; cfg.ledActiveHigh=web.arg("lh")!="0";
     saveConfig(); web.send(200,"text/plain","Saved. Rebooting..."); delay(500); ESP.restart();
   });
