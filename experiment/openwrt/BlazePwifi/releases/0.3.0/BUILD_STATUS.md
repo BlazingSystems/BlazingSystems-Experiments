@@ -19,3 +19,6 @@ Signing handoff: requested after full green validation.
 Signing workflow YAML repaired; signing handoff retriggered.
 
 Signed APK import requested from verified signing handoff.
+
+Signed BlazeRental APK imported and verified.
+Final production publication requested.
