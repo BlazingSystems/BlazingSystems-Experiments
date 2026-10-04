@@ -8,8 +8,9 @@
 4. Vendo uHTTPd — HTTP ESP8266 API on the configured LAN port (default 4455).
 5. Admin uHTTPd — HTTPS-only admin UI/API on the configured LAN port (default 8443).
 6. Persistent accounting — device-token accounts and vouchers under /etc/blazepwifi/state.
-7. Runtime state — locks, online Vendos and active coin target under /tmp/blazepwifi.
-8. ESP8266 Vendo — counts coin pulses, controls LED/relay, and retries signed target-bound events until acknowledged.
+7. Runtime state — locks and online Vendo heartbeats under /tmp/blazepwifi.
+8. Durable coin windows — short target records under /etc/blazepwifi/state/targets survive router reboot/brownout.
+9. ESP8266 Vendo — counts coin pulses, controls LED/relay, journals an unacknowledged event to LittleFS, and retries the exact signed event until acknowledged.
 
 ## Client identity
 
@@ -34,13 +35,13 @@ Unpaid TCP/80 traffic is redirected locally to the portal. HTTPS destinations ar
 Client device token -> start coin window -> target nonce + selected Vendo
 ESP poll -> target nonce
 Coin acceptor -> pulse burst
-ESP -> signed event ID + target nonce
-Server -> atomic account update + durable replay marker
+ESP -> persist event in LittleFS -> signed event ID + target nonce
+Server -> same-filesystem atomic account update + durable replay marker
 Client -> buy configured rate
 Server -> expiry/remaining-time update
 Core -> current MAC authorization
 
-A lost server response does not create another credit: the ESP retries the same event nonce and target; the server returns an idempotent duplicate acknowledgement.
+A lost server response does not create another credit: the ESP retries the same event nonce and target; the server returns an idempotent duplicate acknowledgement. If either the router or ESP reboots before acknowledgement, the persistent target record plus ESP LittleFS journal allow the same event to be retried without changing the customer association.
 
 ## Pause/resume
 
