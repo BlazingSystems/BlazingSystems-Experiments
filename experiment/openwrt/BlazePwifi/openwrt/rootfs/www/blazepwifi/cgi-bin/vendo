@@ -43,7 +43,9 @@ bp_unlock
 
 case "$action" in
   register|ping)
-    bp_json "{"ok":true,"server_time":$now,"controller":$(bp_controller_json "$id")}"
+    controller="$(bp_controller_json "$id")"
+    body="$(printf '{"ok":true,"server_time":%s,"controller":%s}' "$now" "$controller")"
+    bp_json "$body"
     ;;
   poll)
     bp_time_sane "$now" || bp_fail "router clock not synchronized"
@@ -63,7 +65,8 @@ case "$action" in
     enabled="$(printf '%s' "$controller" | sed -n 's/.*"enabled":\([01]\).*/\1/p')"
     coin_enabled="$(printf '%s' "$controller" | sed -n 's/.*"coin_enabled":\([01]\).*/\1/p')"
     [ "$enabled" = 1 ] && [ "$coin_enabled" = 1 ] || insert=0
-    bp_json "{"ok":true,"insert":$insert,"target_nonce":"$(bp_json_escape "$target_nonce")","expires":${expires:-0},"controller":$controller}"
+    body="$(printf '{"ok":true,"insert":%s,"target_nonce":"%s","expires":%s,"controller":%s}' "$insert" "$(bp_json_escape "$target_nonce")" "${expires:-0}" "$controller")"
+    bp_json "$body"
     ;;
   coin)
     bp_time_sane "$now" || bp_fail "router clock not synchronized"
@@ -88,7 +91,8 @@ case "$action" in
       state="$(printf '%s' "$result" | cut -f1)"
       lease="$(printf '%s' "$result" | cut -f2)"
       [ "$state" = duplicate ] && duplicate=true || duplicate=false
-      bp_json "{"ok":true,"duplicate":$duplicate,"rental":true,"lease_until":$lease,"target_nonce":"$target"}"
+      body="$(printf '{"ok":true,"duplicate":%s,"rental":true,"lease_until":%s,"target_nonce":"%s"}' "$duplicate" "$lease" "$(bp_json_escape "$target")")"
+      bp_json "$body"
       exit 0
     fi
 
@@ -96,7 +100,8 @@ case "$action" in
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
-      bp_json "{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":$credit,"target_nonce":"$target"}"
+      body="$(printf '{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":%s,"target_nonce":"%s"}' "$credit" "$(bp_json_escape "$target")")"
+      bp_json "$body"
       exit 0
     fi
 
@@ -105,7 +110,8 @@ case "$action" in
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
       bp_unlock
-      bp_json "{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":$credit,"target_nonce":"$target"}"
+      body="$(printf '{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":%s,"target_nonce":"%s"}' "$credit" "$(bp_json_escape "$target")")"
+      bp_json "$body"
       exit 0
     fi
 
@@ -126,7 +132,8 @@ case "$action" in
     newevents="$(bp_events_push "$events" "$event")"
     bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
     bp_unlock
-    bp_json "{"ok":true,"duplicate":false,"credited_cents":$add,"credit_cents":$newcredit,"target_nonce":"$target"}"
+    body="$(printf '{"ok":true,"duplicate":false,"credited_cents":%s,"credit_cents":%s,"target_nonce":"%s"}' "$add" "$newcredit" "$(bp_json_escape "$target")")"
+    bp_json "$body"
     ;;
   *) bp_fail "unknown vendo action" ;;
 esac
