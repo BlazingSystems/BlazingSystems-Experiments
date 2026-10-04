@@ -26,7 +26,16 @@ bp_init_dirs() {
 }
 
 bp_capture_pid() {
-	d='
+	IFS=' ' read -r BP_SELF_PID _ < /proc/self/stat
+}
+bp_tmp_suffix() {
+	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || date +%s
+}
+
+bp_lock() {
+	lock="$BP_RUN/lock"
+	bp_capture_pid
+	self="$BP_SELF_PID"
 	i=0
 	while ! mkdir "$lock" 2>/dev/null; do
 		owner="$(cat "$lock/pid" 2>/dev/null || true)"
