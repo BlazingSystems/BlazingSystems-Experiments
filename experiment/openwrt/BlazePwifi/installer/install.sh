@@ -11,7 +11,7 @@ FREE_KB="$(df -k /overlay 2>/dev/null | awk 'NR==2{print $4}')"; [ -n "${FREE_KB
 [ "$FREE_KB" -ge 900 ] || { echo "ERROR: need at least 900 KB free overlay space; found ${FREE_KB} KB." >&2; exit 1; }
 
 echo "Installing runtime packages..."
-apk -U add uhttpd nftables px5g-mbedtls >/dev/null
+apk -U add uhttpd nftables px5g-mbedtls flock >/dev/null
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
