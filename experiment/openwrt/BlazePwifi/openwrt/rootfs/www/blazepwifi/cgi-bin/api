@@ -15,6 +15,10 @@ case "$action" in
   vendos)
     bp_json "{\"ok\":true,\"vendos\":$(bp_online_vendos_json)}"; exit 0
     ;;
+  config)
+    admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
+    bp_json "{\"ok\":true,\"admin_port\":$admin_port}"; exit 0
+    ;;
 esac
 
 device="$(bp_device_norm "$(bp_param device)" 2>/dev/null || true)"
@@ -151,7 +155,7 @@ case "$action" in
     bp_lock || bp_fail "accounting busy"
     used="$(bp_find_event_device "$event")"
     [ -z "$used" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
-    cents="$(awk -F '\t' -v c="$code" '$1==c {print $2; exit}' "$BP_VOUCHERS")"
+    cents="$(awk -F '\t' -v c="$code" '$1==c && (NF<3 || $3=="") {print $2; exit}' "$BP_VOUCHERS")"
     [ -n "$cents" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
 
     line="$(bp_account_line "$device")"
