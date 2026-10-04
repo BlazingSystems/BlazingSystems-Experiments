@@ -54,6 +54,11 @@ if grep -Rqs 'HTTP_X_BLAZE_ADMIN' "$ROOT/openwrt/rootfs"; then
   exit 1
 fi
 
+if grep -Fq '"$" | sha256sum' "$ROOT/installer/install.sh"; then
+  echo 'installer entropy fallback must mix the process id, not a literal dollar sign' >&2
+  exit 1
+fi
+
 if grep -q '0.0.0.0:8443' "$ROOT/installer/install.sh"; then
   echo 'admin listener must not bind WAN wildcard' >&2
   exit 1
