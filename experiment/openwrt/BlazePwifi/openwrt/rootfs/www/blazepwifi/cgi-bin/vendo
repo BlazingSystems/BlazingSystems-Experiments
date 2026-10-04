@@ -1,7 +1,13 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
+. "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
+. "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 bp_init_dirs
-vendo_port="$(bp_cfg vendo_port)"; [ -n "$vendo_port" ] || vendo_port=4455
+bp_rental_init
+bp_controller_init
+
+vendo_port="$(bp_cfg vendo_port)"
+[ -n "$vendo_port" ] || vendo_port=4455
 [ "${SERVER_PORT:-}" = "$vendo_port" ] || bp_fail "vendo API requires dedicated port"
 
 action="$(bp_param action)"
@@ -20,14 +26,15 @@ now="$(bp_now)"
 ipaddr="${REMOTE_ADDR:-0.0.0.0}"
 
 heartbeat() {
-	tmp="$BP_RUN/vendos.$$"
-	awk -F '\t' -v OFS='\t' -v id="$id" -v n="$now" -v ip="$ipaddr" '
-		BEGIN{f=0}
-		$1==id {print id,n,ip;f=1;next}
-		{print}
-		END{if(!f) print id,n,ip}
-	' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
-	chmod 600 "$BP_VENDOS"
+  tmp="$BP_RUN/vendos.$$"
+  awk -F '\t' -v OFS='\t' -v id="$id" -v n="$now" -v ip="$ipaddr" '
+    BEGIN{f=0}
+    $1==id {print id,n,ip;f=1;next}
+    {print}
+    END{if(!f) print id,n,ip}
+  ' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
+  chmod 600 "$BP_VENDOS"
+  bp_controller_ensure "$id"
 }
 
 bp_lock || bp_fail "vendo state busy"
@@ -36,35 +43,60 @@ bp_unlock
 
 case "$action" in
   register|ping)
-    bp_json "{\"ok\":true,\"server_time\":$now}"
+    bp_json "{"ok":true,"server_time":$now,"controller":$(bp_controller_json "$id")}"
     ;;
-
   poll)
     bp_time_sane "$now" || bp_fail "router clock not synchronized"
-    insert=0; target_nonce=""; expires=0
+    insert=0
+    target_nonce=""
+    expires=0
     target_file="$BP_TARGET_DIR/$id.tsv"
     if [ -f "$target_file" ]; then
-      IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$target_file"
+      IFS="$(printf '\t')" read -r device mac target_nonce expires wanted kind < "$target_file"
       if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then
         insert=1
       else
         rm -f "$target_file"
       fi
     fi
-    bp_json "{\"ok\":true,\"insert\":$insert,\"target_nonce\":\"$(bp_json_escape "$target_nonce")\",\"expires\":${expires:-0}}"
+    controller="$(bp_controller_json "$id")"
+    enabled="$(printf '%s' "$controller" | sed -n 's/.*"enabled":\([01]\).*/\1/p')"
+    coin_enabled="$(printf '%s' "$controller" | sed -n 's/.*"coin_enabled":\([01]\).*/\1/p')"
+    [ "$enabled" = 1 ] && [ "$coin_enabled" = 1 ] || insert=0
+    bp_json "{"ok":true,"insert":$insert,"target_nonce":"$(bp_json_escape "$target_nonce")","expires":${expires:-0},"controller":$controller}"
     ;;
-
   coin)
     bp_time_sane "$now" || bp_fail "router clock not synchronized"
     case "$pulses" in ''|*[!0-9]*) bp_fail "invalid pulse count";; esac
     [ "$pulses" -ge 1 ] && [ "$pulses" -le 20 ] || bp_fail "pulse count out of range"
     printf '%s' "$target" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid coin target"
 
+    target_file="$BP_TARGET_DIR/$id.tsv"
+    [ -f "$target_file" ] || bp_fail "no active coin window"
+    IFS="$(printf '\t')" read -r device mac target_nonce expires wanted kind < "$target_file"
+    kind="${kind:-hotspot}"
+    [ "$target" = "$target_nonce" ] || bp_fail "coin target mismatch"
+    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_fail "coin window expired"; }
+    [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
+
+    if [ "$kind" = rental ]; then
+      bp_lock || bp_fail "rental accounting busy"
+      result="$(bp_rental_apply_coin "$device" "$id" "$nonce" "$target" "$pulses")"
+      rc=$?
+      bp_unlock
+      [ "$rc" -eq 0 ] || bp_fail "rental target not found"
+      state="$(printf '%s' "$result" | cut -f1)"
+      lease="$(printf '%s' "$result" | cut -f2)"
+      [ "$state" = duplicate ] && duplicate=true || duplicate=false
+      bp_json "{"ok":true,"duplicate":$duplicate,"rental":true,"lease_until":$lease,"target_nonce":"$target"}"
+      exit 0
+    fi
+
     event="c:$(bp_event_hash "coin|$id|$nonce|$target")"
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
-      bp_json "{\"ok\":true,\"duplicate\":true,\"credited_cents\":0,\"credit_cents\":$credit,\"target_nonce\":\"$target\"}"
+      bp_json "{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":$credit,"target_nonce":"$target"}"
       exit 0
     fi
 
@@ -73,16 +105,9 @@ case "$action" in
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
       bp_unlock
-      bp_json "{\"ok\":true,\"duplicate\":true,\"credited_cents\":0,\"credit_cents\":$credit,\"target_nonce\":\"$target\"}"
+      bp_json "{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":$credit,"target_nonce":"$target"}"
       exit 0
     fi
-
-    target_file="$BP_TARGET_DIR/$id.tsv"
-    [ -f "$target_file" ] || { bp_unlock; bp_fail "no active coin window"; }
-    IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$target_file"
-    [ "$target" = "$target_nonce" ] || { bp_unlock; bp_fail "coin target mismatch"; }
-    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_unlock; bp_fail "coin window expired"; }
-    [ "$wanted" = "$id" ] || { bp_unlock; bp_fail "another vendo selected"; }
 
     line="$(bp_account_line "$device")"
     [ -n "$line" ] || { bp_unlock; bp_fail "target account not found"; }
@@ -94,16 +119,14 @@ case "$action" in
     account_mac="$(printf '%s' "$line" | cut -f7)"
     account_ip="$(printf '%s' "$line" | cut -f8)"
     events="$(printf '%s' "$line" | cut -f9)"
-
-    unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+    unit="$(bp_cfg pulse_value_centavos)"
+    [ -n "$unit" ] || unit=100
     add=$((unit*pulses))
     newcredit=$((credit+add))
     newevents="$(bp_events_push "$events" "$event")"
     bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
     bp_unlock
-
-    bp_json "{\"ok\":true,\"duplicate\":false,\"credited_cents\":$add,\"credit_cents\":$newcredit,\"target_nonce\":\"$target\"}"
+    bp_json "{"ok":true,"duplicate":false,"credited_cents":$add,"credit_cents":$newcredit,"target_nonce":"$target"}"
     ;;
-
   *) bp_fail "unknown vendo action" ;;
 esac
