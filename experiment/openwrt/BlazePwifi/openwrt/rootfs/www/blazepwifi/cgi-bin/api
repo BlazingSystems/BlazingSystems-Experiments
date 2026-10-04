@@ -146,7 +146,7 @@ case "$action" in
   redeem)
     code="$(printf '%s' "$(bp_param code)" | tr 'a-z' 'A-Z')"
     printf '%s' "$code" | grep -Eq '^[A-Z0-9-]{4,32}$' || bp_fail "invalid voucher"
-    event="$(bp_event_hash "voucher|$code")"
+    event="v:$(bp_event_hash "voucher|$code")"
 
     bp_lock || bp_fail "accounting busy"
     used="$(bp_find_event_device "$event")"
