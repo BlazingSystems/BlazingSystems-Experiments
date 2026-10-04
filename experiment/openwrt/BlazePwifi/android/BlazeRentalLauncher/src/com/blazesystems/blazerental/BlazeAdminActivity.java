@@ -45,6 +45,8 @@ public class BlazeAdminActivity extends Activity {
     private void route() {
         if (!RentalLeaseStore.isInitialSetupComplete(this)
                 || !RentalLeaseStore.hasAdminVerifier(this)) {
+            RentalLeaseStore.beginInitialSetupWindow(this);
+            ManagedPolicyController.apply(this);
             showInitialSetup();
         } else if (RentalLeaseStore.isAdminWindowActive(this)) {
             showDashboard();
@@ -264,6 +266,7 @@ public class BlazeAdminActivity extends Activity {
         content.addView(close, full());
         close.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
+                RentalLeaseStore.endAdminWindow(BlazeAdminActivity.this);
                 ManagedPolicyController.apply(BlazeAdminActivity.this);
                 ManagedPolicyController.openHome(BlazeAdminActivity.this);
                 finish();
