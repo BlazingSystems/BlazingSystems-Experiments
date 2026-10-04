@@ -11,4 +11,8 @@ grep -q 'setLockTaskPackages' "$A/app/src/main/java/com/blazesystems/blazerental
 grep -q 'isDeviceOwnerApp' "$A/app/src/main/java/com/blazesystems/blazerental/Policy.java"
 grep -q 'elapsedRealtime' "$A/app/src/main/java/com/blazesystems/blazerental/LeaseStore.java"
 grep -q 'Manual APK' "$A/app/src/main/java/com/blazesystems/blazerental/MainActivity.java"
+grep -q 'Manual setup' "$A/app/src/main/java/com/blazesystems/blazerental/MainActivity.java"
+grep -q 'server_url' "$A/app/src/main/java/com/blazesystems/blazerental/MainActivity.java"
+grep -q 'enrollment_token' "$A/app/src/main/java/com/blazesystems/blazerental/MainActivity.java"
+grep -q 'saveManualEnrollment' "$A/app/src/main/java/com/blazesystems/blazerental/LeaseStore.java"
 echo "BlazeRental source gates passed"
