@@ -13,13 +13,8 @@ bp_rental_hex() { bp_auth_random_hex "$1"; }
 
 bp_rental_hmac() {
   secret="$1"; data="$2"
-  if command -v openssl >/dev/null 2>&1; then
-    printf '%s' "$data" | openssl dgst -sha256 -hmac "$secret" 2>/dev/null | awk '{print $NF}'
-  else
-    # Portable keyed construction used consistently by the Android client/server
-    # only when openssl HMAC is unavailable. The device secret remains required.
-    printf '%s|%s|%s' "$secret" "$data" "$secret" | bp_sha256
-  fi
+  command -v openssl >/dev/null 2>&1 || return 2
+  printf '%s' "$data" | openssl dgst -sha256 -hmac "$secret" 2>/dev/null | awk '{print $NF}'
 }
 
 bp_rental_enroll_create() {

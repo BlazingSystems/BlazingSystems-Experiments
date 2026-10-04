@@ -10,10 +10,6 @@ case "$*" in
  *) exit 1;;
 esac
 UCI
-cat > "$T/bin/openssl" <<'OPENSSL'
-#!/bin/sh
-exit 1
-OPENSSL
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run"
 export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
@@ -35,7 +31,6 @@ OUT2="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" |
 echo "$OUT2" | grep -q 'invalid or used'
 
 bp_rental_device_write "$DID" "$DSEC" 2000003600 'Phone 01' 2000000000
-export BP_RENTAL_NOW=2000000000
 N2=stat123
 SIG2="$(bp_rental_hmac "$DSEC" "status|$N2|$DSEC")"
 OUT="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$N2" "$SIG2" | REQUEST_METHOD=POST sh "$CGI")"
