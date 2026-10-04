@@ -29,7 +29,7 @@ boot_one(){
     extra=(-bios "$ovmf")
   fi
   set +e
-  timeout 100 qemu-system-x86_64 -m 512 -smp 1 -nodefaults     -drive "file=$img,format=raw,if=virtio"     -device virtio-net-pci,netdev=n0 -netdev user,id=n0     -serial "file:$log" -display none -monitor none -no-reboot "${extra[@]}"
+  timeout 100 qemu-system-x86_64 -m 512 -smp 1     -drive "file=$img,format=raw,if=ide"     -nic user,model=e1000     -serial "file:$log" -display none -monitor none -no-reboot "${extra[@]}"
   rc=$?
   set -e
   [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ] || return "$rc"

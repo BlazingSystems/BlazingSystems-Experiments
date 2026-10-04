@@ -1,13 +1,10 @@
 name: BlazePwifi v0.4 environment simulation
 
 on:
-  workflow_run:
-    workflows: ["BlazePwifi build"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       run_id:
-        description: "Successful BlazePwifi build run ID to audit"
+        description: "Successful BlazePwifi build run ID to re-audit"
         required: true
         type: string
       candidate_sha:
@@ -15,45 +12,45 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: blazerental-v04-manual-simulation
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
-  cancel-in-progress: true
+env:
+  GH_TOKEN: ${{ github.token }}
+  RUN_ID: ${{ inputs.run_id }}
+  CANDIDATE_SHA: ${{ inputs.candidate_sha }}
 
 jobs:
-  android-emulator:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
+  verify-source-run:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          JSON="$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID")"
+          test "$(printf '%s' "$JSON" | jq -r .conclusion)" = success
+          test "$(printf '%s' "$JSON" | jq -r .head_sha)" = "$CANDIDATE_SHA"
+
+  android-emulator:
+    needs: verify-source-run
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
-
-      - name: Download exact v0.4 Android candidate
-        shell: bash
-        run: |
-          set -euo pipefail
+      - run: |
           mkdir -p candidate/android
-          gh run download "$RUN_ID"             --repo "${{ github.repository }}"             --name BlazePwifi-android-BlazeRental-v0.4             --dir candidate/android
-          find candidate/android -maxdepth 2 -type f -print
+          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name BlazePwifi-android-BlazeRental-v0.4 --dir candidate/android
           APK="$(find candidate/android -type f -name 'BlazeRental-v0.4.0-ci.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
           echo "APK=$APK" >> "$GITHUB_ENV"
-          sha256sum "$APK" | tee candidate/android/AUDITED_APK_SHA256
-
-      - name: Run API 27 Device Owner emulator audit
-        uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 27
           arch: x86
@@ -62,27 +59,17 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
-
-      - name: Upload Android audit evidence
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-v0.4-android-simulation
-          path: |
-            simulation-out/android/
-            candidate/android/AUDITED_APK_SHA256
+          name: BlazePwifi-v0.4-manual-android-simulation
+          path: simulation-out/android/
           if-no-files-found: warn
-
 
   browser-ui:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
+    needs: verify-source-run
     runs-on: ubuntu-22.04
     timeout-minutes: 25
-    env:
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,141 +77,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install Chromium simulation runtime
-        run: |
+      - run: |
           python -m pip install --disable-pip-version-check playwright
           python -m playwright install --with-deps chromium
-      - name: Exercise v0.4 admin UI
-        run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
+      - run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-browser-simulation
+          name: BlazePwifi-v0.4-manual-browser-simulation
           path: simulation-out/browser/
-          if-no-files-found: warn
-
-  esp-binary:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        kind: [esp8266, esp32]
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SHA }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install --disable-pip-version-check esptool
-      - name: Download exact controller candidate
-        run: |
-          mkdir -p candidate/${{ matrix.kind }}
-          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name "BlazePwifi-${{ matrix.kind }}-firmware" --dir "candidate/${{ matrix.kind }}"
-      - name: Parse compiled controller firmware
-        run: bash experiment/openwrt/BlazePwifi/simulation/esp_v04_audit.sh "candidate/${{ matrix.kind }}" "${{ matrix.kind }}" "simulation-out/${{ matrix.kind }}"
-      - name: Recheck protocol compatibility at exact source SHA
-        run: sh experiment/openwrt/BlazePwifi/tests/v04_controller_compat.sh
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: BlazePwifi-v0.4-${{ matrix.kind }}-simulation
-          path: simulation-out/${{ matrix.kind }}/
-          if-no-files-found: warn
-
-  ruijie-structure:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SHA }}
-      - run: sudo apt-get update && sudo apt-get install -y squashfs-tools
-      - name: Download exact Ruijie candidate
-        run: |
-          mkdir -p candidate/ruijie
-          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name BlazePwifi-ruijie-firmware --dir candidate/ruijie
-      - run: bash experiment/openwrt/BlazePwifi/simulation/ruijie_v04_audit.sh candidate/ruijie simulation-out/ruijie
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: BlazePwifi-v0.4-ruijie-simulation
-          path: simulation-out/ruijie/
-          if-no-files-found: warn
-
-  orangepi-userspace:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
-    runs-on: ubuntu-22.04
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [orangepi_zero3, orangepi_one, orangepi_pc]
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SHA }}
-      - run: sudo apt-get update && sudo apt-get install -y qemu-user-static util-linux
-      - name: Download exact Orange Pi candidate
-        run: |
-          mkdir -p "candidate/${{ matrix.target }}"
-          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name "BlazePwifi-${{ matrix.target }}-firmware" --dir "candidate/${{ matrix.target }}"
-      - run: bash experiment/openwrt/BlazePwifi/simulation/orangepi_v04_userspace_audit.sh "candidate/${{ matrix.target }}" "${{ matrix.target }}" "simulation-out/${{ matrix.target }}"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: BlazePwifi-v0.4-${{ matrix.target }}-simulation
-          path: simulation-out/${{ matrix.target }}/
-          if-no-files-found: warn
-
-  x86-qemu:
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
-    runs-on: ubuntu-22.04
-    timeout-minutes: 25
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
-      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_sha || github.event.workflow_run.head_sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SHA }}
-      - run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf util-linux
-      - name: Download exact x86 candidate
-        run: |
-          mkdir -p candidate/x86
-          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name BlazePwifi-x86_64-firmware --dir candidate/x86
-      - run: bash experiment/openwrt/BlazePwifi/simulation/x86_v04_qemu_audit.sh candidate/x86 simulation-out/x86
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: BlazePwifi-v0.4-x86-simulation
-          path: simulation-out/x86/
           if-no-files-found: warn
