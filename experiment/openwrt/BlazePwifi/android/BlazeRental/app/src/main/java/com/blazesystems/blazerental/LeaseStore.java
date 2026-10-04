@@ -20,6 +20,19 @@ public final class LeaseStore {
         e.apply();
     }
 
+    public static void saveManualEnrollment(Context c, String serverUrl, String enrollmentToken, String deviceName) {
+        SharedPreferences.Editor e=p(c).edit();
+        e.putString("server", safe(serverUrl));
+        e.putString("enroll", safe(enrollmentToken));
+        e.putString("device_name", safe(deviceName));
+        e.remove("device_id");
+        e.remove("device_secret");
+        e.remove("server_now");
+        e.remove("lease_until");
+        e.remove("elapsed_sync");
+        e.apply();
+    }
+
     public static void recordServerLease(Context c, long serverNowMs, long leaseUntilMs, String deviceSecret) {
         p(c).edit()
                 .putLong("server_now", serverNowMs)
