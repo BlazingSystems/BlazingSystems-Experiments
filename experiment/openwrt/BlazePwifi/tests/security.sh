@@ -20,6 +20,15 @@ case "$*" in
 esac
 UCI
 chmod +x "$T/bin/uci"
+
+# Keep this test deterministic and representative of constrained OpenWrt builds
+# where the optional openssl CLI is not installed.
+cat > "$T/bin/openssl" <<'OPENSSL'
+#!/bin/sh
+exit 1
+OPENSSL
+chmod +x "$T/bin/openssl"
+# deterministic auth backend
 export PATH="$T/bin:$PATH"
 export BP_STATE="$T/state" BP_RUN="$T/run"
 export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
