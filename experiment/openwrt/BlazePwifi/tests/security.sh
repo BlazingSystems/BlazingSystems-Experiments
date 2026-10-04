@@ -35,6 +35,7 @@ export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 export BP_CONFIG_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/config.sh"
 export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+export BP_CONTROLLER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
 export SERVER_PORT=8443 REMOTE_ADDR=10.0.0.9 BP_AUTH_NOW=2000000000
 
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
@@ -68,9 +69,12 @@ echo "security: correct-during-lock => ${CLASS:-no-error-class}"
 echo "$OUT" | grep -q 'locked'
 
 echo "security: post-lock login"
-export BP_AUTH_NOW=2000000901
+export BP_AUTH_NOW=2000000910
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
-echo "$OUT" | grep -q '"ok":true'
+if ! echo "$OUT" | grep -q '"ok":true'; then
+  echo "security: post-lock response => $OUT" >&2
+  exit 1
+fi
 echo "$OUT" | grep -q 'Secure'
 echo "$OUT" | grep -q 'HttpOnly'
 echo "$OUT" | grep -q 'SameSite=Strict'
@@ -120,7 +124,7 @@ echo "$OUT" | grep -q 'unauthorized'
 echo "security: idle expiry"
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
 COOKIE2="$(printf '%s\n' "$OUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
-export BP_AUTH_NOW=2000001802
+export BP_AUTH_NOW=2000001811
 OUT="$(HTTP_COOKIE="$COOKIE2" REQUEST_METHOD=GET sh "$SESSION")"
 echo "$OUT" | grep -q 'unauthorized'
 

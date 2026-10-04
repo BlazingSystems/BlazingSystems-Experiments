@@ -1,11 +1,14 @@
 #!/bin/sh
 BP_RENTAL_DEVICES="${BP_RENTAL_DEVICES:-$BP_STATE/rental-devices.tsv}"
 BP_RENTAL_ENROLL="${BP_RENTAL_ENROLL:-$BP_STATE/rental-enroll.tsv}"
+BP_RENTAL_POLICY="${BP_RENTAL_POLICY:-$BP_STATE/rental-policy.tsv}"
+BP_RENTAL_INVENTORY="${BP_RENTAL_INVENTORY:-$BP_STATE/rental-inventory.tsv}"
+BP_RENTAL_EVENTS="${BP_RENTAL_EVENTS:-$BP_STATE/rental-events.tsv}"
 
 bp_rental_init() {
   bp_init_dirs
-  touch "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL"
-  chmod 600 "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL"
+  touch "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
+  chmod 600 "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
 }
 
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
@@ -53,8 +56,124 @@ bp_rental_list_json() {
   first=1; printf '['
   while IFS="$(printf '\t')" read -r id secret lease label last; do
     [ -n "$id" ] || continue
+    p="$(bp_rental_policy_line "$id")"
+    allowed="$(printf '%s' "$p" | cut -f2)"
+    salt="$(printf '%s' "$p" | cut -f3)"
+    hash="$(printf '%s' "$p" | cut -f4)"
+    preferred="$(printf '%s' "$p" | cut -f6)"
+    [ "$preferred" = "-" ] && preferred=""
+    inventory="$(bp_rental_inventory_get "$id")"
+    [ "$salt" != "-" ] && [ "$hash" != "-" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s}'       "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}"
+    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s,"allowed_packages":"%s","preferred_vendo":"%s","admin_password_set":%s,"inventory":"%s"}' \
+      "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$preferred")" "$admin_set" "$(bp_json_escape "$inventory")"
   done < "$BP_RENTAL_DEVICES"
   printf ']'
+}
+
+
+bp_rental_policy_line() {
+  did="$1"
+  line="$(awk -F '\t' -v d="$did" '$1==d {print; exit}' "$BP_RENTAL_POLICY")"
+  [ -n "$line" ] && printf '%s\n' "$line" || printf '%s\t*\t-\t-\t4096\t-\n' "$did"
+}
+
+bp_rental_policy_ensure() {
+  did="$1"
+  grep -q "^$did$(printf '\t')" "$BP_RENTAL_POLICY" 2>/dev/null || {
+    printf '%s\t*\t-\t-\t4096\t-\n' "$did" >> "$BP_RENTAL_POLICY"
+    chmod 600 "$BP_RENTAL_POLICY"
+    bp_durable_sync
+  }
+}
+
+bp_rental_policy_write() {
+  did="$1"; allowed="$2"; salt="$3"; hash="$4"; rounds="$5"; preferred="$6"
+  tmp="$BP_STATE/.rental-policy.$(bp_tmp_suffix)"
+  awk -F '\t' -v d="$did" '$1!=d {print}' "$BP_RENTAL_POLICY" > "$tmp"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$did" "$allowed" "$salt" "$hash" "$rounds" "$preferred" >> "$tmp"
+  chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_POLICY"
+  bp_durable_sync
+}
+
+bp_rental_packages_valid() {
+  value="$1"
+  [ "$value" = "*" ] && return 0
+  len="$(printf '%s' "$value" | wc -c)"
+  [ "$len" -ge 1 ] && [ "$len" -le 2048 ] || return 1
+  printf '%s' "$value" | grep -Eq '^[A-Za-z0-9._,*-]+$'
+}
+
+bp_rental_vendo_valid() {
+  value="$1"
+  [ -z "$value" ] || [ "$value" = "-" ] || printf '%s' "$value" | grep -Eq '^[A-Za-z0-9._-]{1,48}$'
+}
+
+bp_rental_policy_set() {
+  did="$1"; allowed="$2"; preferred="$3"
+  bp_rental_packages_valid "$allowed" || return 2
+  bp_rental_vendo_valid "$preferred" || return 2
+  line="$(bp_rental_policy_line "$did")"
+  salt="$(printf '%s' "$line" | cut -f3)"
+  hash="$(printf '%s' "$line" | cut -f4)"
+  rounds="$(printf '%s' "$line" | cut -f5)"
+  [ -n "$preferred" ] || preferred="-"
+  bp_rental_policy_write "$did" "$allowed" "$salt" "$hash" "${rounds:-4096}" "$preferred"
+}
+
+bp_rental_admin_password_set() {
+  did="$1"; pass="$2"
+  [ "$(printf '%s' "$pass" | wc -c)" -ge 8 ] || return 2
+  printf '%s' "$pass" | grep -q '[[:cntrl:]]' && return 2
+  line="$(bp_rental_policy_line "$did")"
+  allowed="$(printf '%s' "$line" | cut -f2)"
+  preferred="$(printf '%s' "$line" | cut -f6)"
+  salt="$(bp_rental_hex 12)"; rounds=4096
+  hash="$(bp_auth_sha256i "$pass" "$salt" "$rounds")" || return 1
+  bp_rental_policy_write "$did" "$allowed" "$salt" "$hash" "$rounds" "$preferred"
+}
+
+bp_rental_inventory_write() {
+  did="$1"; inventory="$2"
+  len="$(printf '%s' "$inventory" | wc -c)"
+  [ "$len" -le 4096 ] || return 2
+  [ -z "$inventory" ] || printf '%s' "$inventory" | grep -Eq '^[A-Za-z0-9._,*-]+$' || return 2
+  tmp="$BP_STATE/.rental-inventory.$(bp_tmp_suffix)"
+  awk -F '\t' -v d="$did" '$1!=d {print}' "$BP_RENTAL_INVENTORY" > "$tmp"
+  [ -n "$inventory" ] || inventory="-"
+  printf '%s\t%s\n' "$did" "$inventory" >> "$tmp"
+  chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_INVENTORY"
+}
+
+bp_rental_inventory_get() {
+  v="$(awk -F '\t' -v d="$1" '$1==d {print $2; exit}' "$BP_RENTAL_INVENTORY")"
+  [ "$v" = "-" ] && v=""
+  printf '%s' "$v"
+}
+
+bp_rental_apply_coin() {
+  did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
+  event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
+  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")"
+  if [ -n "$old" ]; then
+    printf 'duplicate\t%s\n' "$(printf '%s' "$old" | cut -f3)"
+    return 0
+  fi
+  line="$(bp_rental_device_line "$did")"
+  [ -n "$line" ] || return 2
+  secret="$(printf '%s' "$line" | cut -f2)"
+  lease="$(printf '%s' "$line" | cut -f3)"
+  label="$(printf '%s' "$line" | cut -f4)"
+  per="$(bp_cfg rental_seconds_per_pulse)"
+  [ -n "$per" ] || per=600
+  case "$per" in ''|*[!0-9]*) per=600;; esac
+  [ "$per" -ge 1 ] 2>/dev/null && [ "$per" -le 86400 ] 2>/dev/null || per=600
+  base="$lease"
+  [ "$base" -gt "$now" ] 2>/dev/null || base="$now"
+  newlease=$((base + per * pulses))
+  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"
+  printf '%s\t%s\t%s\t%s\n' "$event" "$did" "$newlease" "$now" >> "$BP_RENTAL_EVENTS"
+  chmod 600 "$BP_RENTAL_EVENTS"
+  bp_durable_sync
+  printf 'credited\t%s\n' "$newlease"
 }

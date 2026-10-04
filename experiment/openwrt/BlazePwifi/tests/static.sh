@@ -28,7 +28,11 @@ grep -q 'vendo API requires dedicated port' "$ROOT/openwrt/rootfs/www/blazepwifi
 grep -q 'admin API requires HTTPS' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
 grep -q 'listen_https' "$ROOT/installer/install.sh"
 grep -q 'px5g-mbedtls' "$ROOT/build/build-openwrt-image.sh"
-grep -q 'WiFi.softAP(ap.c_str(),cfg.apPass)' "$ROOT/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino"
+grep -q 'WiFi.softAP(setupApName.c_str(),cfg.apPass)' "$ROOT/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino"
+grep -q 'verifyWifi' "$ROOT/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino"
+grep -q 'verifyWifi' "$ROOT/esp32/BlazePwifiVendo32/BlazePwifiVendo32.ino"
+grep -q 'bp_controller_json' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
+grep -q 'bp_rental_apply_coin' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
 grep -q '#include <LittleFS.h>' "$ROOT/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino"
 grep -q 'Recovered unacknowledged coin event from flash' "$ROOT/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino"
 grep -q 'BP_TARGET_DIR="$BP_STATE/targets"' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
@@ -39,6 +43,8 @@ for x in \
   openwrt/rootfs/etc/uci-defaults/99-blazepwifi \
   openwrt/rootfs/usr/sbin/blazepwifi-core \
   openwrt/rootfs/usr/lib/blazepwifi/auth.sh \
+  openwrt/rootfs/usr/lib/blazepwifi/controller.sh \
+  openwrt/rootfs/usr/lib/blazepwifi/rental.sh \
   openwrt/rootfs/www/blazepwifi/cgi-bin/api \
   openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login \
   openwrt/rootfs/www/blazepwifi/cgi-bin/admin-session \

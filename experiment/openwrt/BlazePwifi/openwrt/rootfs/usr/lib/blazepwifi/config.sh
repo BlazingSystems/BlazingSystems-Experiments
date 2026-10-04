@@ -1,7 +1,7 @@
 #!/bin/sh
 # Validated, capability-neutral BlazePwifi configuration layer.
 
-BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms"
+BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos rental_seconds_per_pulse event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms"
 
 bp_config_key_allowed() {
 	key="$1"
@@ -30,6 +30,7 @@ bp_config_validate() {
 		portal_port|vendo_port|admin_port) bp_config_uint_range "$value" 1 65535 ;;
 		coin_window) bp_config_uint_range "$value" 5 3600 ;;
 		pulse_value_centavos) bp_config_uint_range "$value" 1 100000 ;;
+		rental_seconds_per_pulse) bp_config_uint_range "$value" 1 86400 ;;
 		event_history) bp_config_uint_range "$value" 8 512 ;;
 		pause_max_seconds) bp_config_uint_range "$value" 0 31536000 ;;
 		walled_refresh_seconds) bp_config_uint_range "$value" 30 86400 ;;

@@ -3,6 +3,7 @@
 . "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
 . "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
+. "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -31,6 +32,45 @@ case "$action" in
     bp_rental_init
     body="$(bp_rental_list_json)"
     bp_json "$(printf '{"ok":true,"devices":%s}' "$body")"
+    ;;
+  rental_policy_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"
+    allowed="$(bp_param allowed_packages)"
+    preferred="$(bp_param preferred_vendo)"
+    [ -n "$(bp_rental_device_line "$did")" ] || bp_fail "unknown rental device"
+    bp_rental_policy_set "$did" "${allowed:-*}" "$preferred" || bp_fail "invalid rental policy"
+    bp_auth_audit rental_policy_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
+    bp_json '{"ok":true}'
+    ;;
+  rental_admin_password_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"
+    admin_password="$(bp_param admin_password)"
+    [ -n "$(bp_rental_device_line "$did")" ] || bp_fail "unknown rental device"
+    bp_rental_admin_password_set "$did" "$admin_password" || bp_fail "admin password must be at least 8 characters"
+    bp_auth_audit rental_admin_password_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
+    bp_json '{"ok":true}'
+    ;;
+  controller_list)
+    require_role viewer
+    bp_controller_init
+    body="$(bp_controller_list_json)"
+    bp_json "$(printf '{"ok":true,"controllers":%s}' "$body")"
+    ;;
+  controller_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    id="$(bp_param id)"
+    printf '%s' "$id" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || bp_fail "invalid controller"
+    bp_controller_ensure "$id"
+    bp_controller_set "$id" "$(bp_param enabled)" "$(bp_param coin_enabled)" "$(bp_param relay_enabled)" "$(bp_param led_enabled)" "$(bp_param coin_pin)" "$(bp_param relay_pin)" "$(bp_param led_pin)" "$(bp_param coin_active_low)" "$(bp_param relay_active_high)" "$(bp_param led_active_high)" "$(bp_param coin_debounce_ms)" "$(bp_param pulse_group_ms)" "$(bp_param max_wifi_retries)" || bp_fail "invalid controller configuration"
+    bp_auth_audit controller_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$id"
+    bp_json '{"ok":true}'
     ;;
   rental_lease_set)
     require_role operator

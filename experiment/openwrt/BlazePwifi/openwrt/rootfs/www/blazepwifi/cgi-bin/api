@@ -79,7 +79,7 @@ case "$action" in
       fi
     fi
     target_tmp="$BP_TARGET_DIR/.$vendo.$(bp_tmp_suffix)"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
+    printf '%s\t%s\t%s\t%s\t%s\thotspot\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
     chmod 600 "$target_tmp"
     mv "$target_tmp" "$target_file"
     bp_durable_sync

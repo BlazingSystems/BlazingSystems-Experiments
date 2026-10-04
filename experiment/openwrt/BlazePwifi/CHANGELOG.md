@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.3.0-rc.1 — development
+## 0.3.0 — production
+
+- Production phone-rental enforcement: Device Owner lock-task allowlist, server-authoritative lease, coin targeting, app policy, phone-admin password verifier and PC QR provisioning.
+- Managed ESP8266/ESP32 controller policy with verified first-boot Wi-Fi setup and reconnect fallback.
+- Permanent production GitHub Release assets for supported router/SBC/x86/Android/controller targets.
 
 - Added capability-tier architecture: Lite for constrained routers, Standard for Orange Pi/SBC deployments and Full for x86 systems.
 - Began public-tree cleanup and neutral reference documentation.
