@@ -81,6 +81,8 @@ public final class ManagedPolicyController {
                 context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         if (dpm == null || !dpm.isDeviceOwnerApp(context.getPackageName())) return;
         ComponentName admin = admin(context);
+        try { dpm.setUninstallBlocked(admin, context.getPackageName(), true); }
+        catch (Exception ignored) {}
         RentalPolicy policy = AndroidRentalPolicyRepository.load(context);
         boolean unrestricted = policy.isUnrestricted();
         boolean adminWindow = RentalLeaseStore.isAdminWindowActive(context);
