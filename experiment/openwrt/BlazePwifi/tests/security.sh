@@ -24,6 +24,7 @@ export PATH="$T/bin:$PATH"
 export BP_STATE="$T/state" BP_RUN="$T/run"
 export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
+export BP_CONFIG_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/config.sh"
 export SERVER_PORT=8443 REMOTE_ADDR=10.0.0.9 BP_AUTH_NOW=2000000000
 
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
