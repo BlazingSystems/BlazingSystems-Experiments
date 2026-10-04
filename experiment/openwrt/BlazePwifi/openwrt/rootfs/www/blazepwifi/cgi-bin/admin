@@ -15,8 +15,25 @@ bp_rental_policy_v2_init
 bp_admin_server_url() {
   supplied="$(bp_param server_url)"
   if [ -n "$supplied" ]; then
-    printf '%s' "$supplied" | grep -Eq '^https?://[A-Za-z0-9.:[\]_-]+(:[0-9]{1,5})?(/[^[:space:]]*)?
+    case "$supplied" in
+      http://*|https://*) ;;
+      *) return 1 ;;
+    esac
+    printf '%s' "$supplied" | grep -q '[[:space:][:cntrl:]]' && return 1
+    [ "$(printf '%s' "$supplied" | wc -c)" -le 256 ] || return 1
+    printf '%s' "$supplied" | sed 's:/*$::'
+    return 0
+  fi
+  host="${HTTP_HOST:-}"
+  [ -n "$host" ] || host="${SERVER_NAME:-blazepwifi.local}:$admin_port"
+  printf 'https://%s' "$host"
+}
 
+bp_admin_qr_payload() {
+  server="$1"; token="$2"; label="$3"
+  printf '{"server_url":"%s","enrollment_token":"%s","device_name":"%s"}' \
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+}
 require_role() {
 	need="$1"
 	bp_auth_require_role "$need"
