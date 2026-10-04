@@ -13,3 +13,5 @@ Required build targets:
 - BlazeRental Android source-validation APK
 
 The final GitHub Release is created only after this gate is green and the signed BlazeRental APK has been committed to the 0.3.0 release index.
+
+Signing handoff: requested after full green validation.
