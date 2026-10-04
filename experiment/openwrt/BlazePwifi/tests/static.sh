@@ -50,4 +50,4 @@ if grep -q '0.0.0.0:8443' "$ROOT/installer/install.sh"; then
   exit 1
 fi
 
-echo 'BlazePwifi v0.2 static checks passed'
+echo 'BlazePwifi static checks passed'
