@@ -155,14 +155,21 @@ bp_events_has() {
 }
 
 bp_events_push() {
-	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=12
-	out="$event"; count=1
+	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=64
+	out="$event"; coin_count=0
+	case "$event" in c:*) coin_count=1;; esac
 	oldIFS="$IFS"; IFS=','
 	for e in $events; do
 		[ -n "$e" ] || continue
 		[ "$e" = "$event" ] && continue
-		[ "$count" -ge "$max" ] && break
-		out="$out,$e"; count=$((count+1))
+		case "$e" in
+			v:*) out="$out,$e" ;;
+			c:*)
+				[ "$coin_count" -ge "$max" ] && continue
+				out="$out,$e"; coin_count=$((coin_count+1))
+				;;
+			*) out="$out,$e" ;;
+		esac
 	done
 	IFS="$oldIFS"
 	printf '%s' "$out"
