@@ -16,6 +16,7 @@ case "$*" in
   *'get blazepwifi.main.event_history') echo 16;;
   *'get blazepwifi.main.admin_port') echo 8443;;
   *'get blazepwifi.main.walled_refresh_seconds') echo 120;;
+  *'get blazepwifi.main.durable_sync') echo 0;;
   *'get blazepwifi.main.walled_ip') exit 1;;
   *'get blazepwifi.main.walled_domain') exit 1;;
   *'get blazepwifi.p1.cents') echo 100;;
@@ -68,11 +69,18 @@ echo "$OUT" | grep -q '"ok":true'
 OUT="$(printf 'action=me&device=%s' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"credit_cents":0'
 echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
+[ ! -s "$T/state/accounts.tsv" ]
 
 OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
+[ -s "$T/state/targets/vendo-01.tsv" ]
+
+# Simulate a router reboot/tmpfs loss before the ESP reports the coin.
+rm -rf "$T/run"
+mkdir -p "$T/run"
+chmod 700 "$T/run"
 
 # Another customer cannot steal vendo-01, but can use vendo-02 concurrently.
 DEVICE2=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

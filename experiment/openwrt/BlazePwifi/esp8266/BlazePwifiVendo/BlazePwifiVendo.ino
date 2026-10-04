@@ -2,6 +2,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
 #include <EEPROM.h>
+#include <LittleFS.h>
 #include <bearssl/bearssl_hash.h>
 
 struct ConfigV1 {
@@ -39,8 +40,18 @@ const uint32_t MAGIC=0x42505732;
 bool insertMode=false;
 bool lastCoin=false;
 uint32_t lastPoll=0, lastEdge=0, lastSend=0, configuredApSince=0;
-uint8_t pulseCount=0, pendingPulses=0;
+uint8_t pendingPulses=0;
+bool pendingReady=false, fsReady=false;
 String activeTarget, pendingTarget, pendingNonce;
+
+struct PendingRecord {
+  uint32_t magic;
+  uint8_t pulses;
+  char nonce[17];
+  char target[33];
+  uint32_t checksum;
+};
+const uint32_t PENDING_MAGIC=0x42504331;
 
 String hexDigest(const String &s){
   br_sha256_context c; uint8_t out[32]; char buf[65];
@@ -51,6 +62,65 @@ String hexDigest(const String &s){
 String freshNonce(){
   char b[17]; uint32_t a=ESP.random(),c=micros();
   sprintf(b,"%08lx%08lx",(unsigned long)a,(unsigned long)c); return String(b);
+}
+
+uint32_t pendingChecksum(const PendingRecord &r){
+  const uint8_t *p=(const uint8_t*)&r; uint32_t h=2166136261UL;
+  for(size_t i=0;i<offsetof(PendingRecord,checksum);i++){h^=p[i];h*=16777619UL;}
+  return h;
+}
+
+bool readPendingFile(const char *path, PendingRecord &r){
+  if(!fsReady || !LittleFS.exists(path)) return false;
+  File f=LittleFS.open(path,"r"); if(!f) return false;
+  size_t n=f.readBytes((char*)&r,sizeof(r)); f.close();
+  return n==sizeof(r) && r.magic==PENDING_MAGIC && r.pulses>0 && r.pulses<=20 &&
+         r.checksum==pendingChecksum(r) && strlen(r.nonce)>=8 && strlen(r.target)>=8;
+}
+
+bool savePending(){
+  if(!fsReady || pendingPulses==0 || !pendingNonce.length() || !pendingTarget.length()) return false;
+  PendingRecord r; memset(&r,0,sizeof(r)); r.magic=PENDING_MAGIC; r.pulses=pendingPulses;
+  strlcpy(r.nonce,pendingNonce.c_str(),sizeof(r.nonce));
+  strlcpy(r.target,pendingTarget.c_str(),sizeof(r.target));
+  r.checksum=pendingChecksum(r);
+  File f=LittleFS.open("/pending.new","w"); if(!f) return false;
+  size_t n=f.write((const uint8_t*)&r,sizeof(r)); f.flush(); f.close();
+  if(n!=sizeof(r)){LittleFS.remove("/pending.new");return false;}
+  LittleFS.remove("/pending.bak");
+  if(LittleFS.exists("/pending.dat")) LittleFS.rename("/pending.dat","/pending.bak");
+  if(!LittleFS.rename("/pending.new","/pending.dat")){
+    if(LittleFS.exists("/pending.bak")) LittleFS.rename("/pending.bak","/pending.dat");
+    return false;
+  }
+  LittleFS.remove("/pending.bak");
+  return true;
+}
+
+void loadPending(){
+  if(!fsReady) return;
+  PendingRecord r;
+  const char *chosen=nullptr;
+  if(readPendingFile("/pending.dat",r)) chosen="/pending.dat";
+  else if(readPendingFile("/pending.new",r)) chosen="/pending.new";
+  else if(readPendingFile("/pending.bak",r)) chosen="/pending.bak";
+  if(!chosen) return;
+  pendingPulses=r.pulses; pendingNonce=String(r.nonce); pendingTarget=String(r.target);
+  pendingReady=true; lastSend=0;
+  if(strcmp(chosen,"/pending.dat")!=0){
+    LittleFS.remove("/pending.dat"); LittleFS.rename(chosen,"/pending.dat");
+  }
+  Serial.println("Recovered unacknowledged coin event from flash.");
+}
+
+void initPendingStore(){
+  fsReady=LittleFS.begin();
+  if(!fsReady){
+    Serial.println("LittleFS mount failed; formatting Vendo journal.");
+    if(LittleFS.format()) fsReady=LittleFS.begin();
+  }
+  if(fsReady) loadPending();
+  else Serial.println("CRITICAL: coin journal unavailable; coin relay will stay disabled.");
 }
 
 String esc(const String &s){
@@ -131,8 +201,9 @@ String post(const String& action,const String& pulses="0",const String& target="
 }
 
 void applyOutputs(){
-  digitalWrite(cfg.insertLedPin,insertMode?HIGH:LOW);
-  digitalWrite(cfg.relayPin,insertMode?HIGH:LOW);
+  bool accepting=insertMode && fsReady && !pendingReady;
+  digitalWrite(cfg.insertLedPin,accepting?HIGH:LOW);
+  digitalWrite(cfg.relayPin,accepting?HIGH:LOW);
 }
 
 void setupPortal(){
@@ -180,11 +251,16 @@ void connectSta(){
 }
 
 void clearPending(){
-  pendingPulses=0; pendingNonce=""; pendingTarget=""; lastSend=0;
+  pendingPulses=0; pendingReady=false; pendingNonce=""; pendingTarget=""; lastSend=0;
+  if(fsReady){
+    LittleFS.remove("/pending.dat");
+    LittleFS.remove("/pending.new");
+    LittleFS.remove("/pending.bak");
+  }
 }
 
 void setup(){
-  Serial.begin(115200); loadCfg();
+  Serial.begin(115200); loadCfg(); initPendingStore();
   pinMode(cfg.coinPin,INPUT_PULLUP); pinMode(cfg.insertLedPin,OUTPUT); pinMode(cfg.relayPin,OUTPUT);
   digitalWrite(cfg.insertLedPin,LOW); digitalWrite(cfg.relayPin,LOW);
   setupPortal(); connectSta();
@@ -207,24 +283,39 @@ void loop(){
 
   bool raw=digitalRead(cfg.coinPin);
   bool active=cfg.coinActiveLow?!raw:raw;
-  if(insertMode && activeTarget.length() && pendingPulses==0 && active && !lastCoin && millis()-lastEdge>35){
-    pulseCount++; lastEdge=millis();
+  if(insertMode && fsReady && activeTarget.length() && !pendingReady && active && !lastCoin && millis()-lastEdge>35){
+    if(pendingPulses==0){
+      pendingNonce=freshNonce();
+      pendingTarget=activeTarget;
+    }
+    if(pendingTarget==activeTarget && pendingPulses<20){
+      pendingPulses++;
+      lastEdge=millis();
+      if(!savePending()){
+        fsReady=false;
+        pendingReady=true;
+        Serial.println("CRITICAL: failed to persist coin journal; relay disabled.");
+      }
+    }
   }
   lastCoin=active;
 
-  if(pulseCount && pendingPulses==0 && millis()-lastEdge>350){
-    pendingPulses=pulseCount; pulseCount=0;
-    pendingNonce=freshNonce(); pendingTarget=activeTarget; lastSend=0;
+  if(pendingPulses && !pendingReady && millis()-lastEdge>350){
+    pendingReady=true;
+    lastSend=0;
+    applyOutputs();
   }
 
-  if(pendingPulses && WiFi.status()==WL_CONNECTED && (lastSend==0 || millis()-lastSend>900)){
+  if(pendingPulses && pendingReady && WiFi.status()==WL_CONNECTED && (lastSend==0 || millis()-lastSend>900)){
     String r=post("coin",String(pendingPulses),pendingTarget,pendingNonce);
     lastSend=millis();
     if(r.indexOf("\"ok\":true")>=0){
       clearPending();
+      applyOutputs();
     } else if(r.indexOf("coin window expired")>=0 || r.indexOf("coin target mismatch")>=0 ||
               r.indexOf("no active coin window")>=0 || r.indexOf("another vendo selected")>=0){
       clearPending();
+      applyOutputs();
     }
   }
 

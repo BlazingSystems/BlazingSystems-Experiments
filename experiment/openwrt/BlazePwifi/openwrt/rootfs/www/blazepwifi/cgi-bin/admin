@@ -17,13 +17,20 @@ case "$action" in
   voucher_create)
     cents="$(bp_param cents)"; case "$cents" in ''|*[!0-9]*) bp_fail "invalid amount";; esac
     [ "$cents" -gt 0 ] 2>/dev/null || bp_fail "invalid amount"
+    bp_lock || bp_fail "accounting busy"
     i=0
     while :; do
       code="$(hexdump -n 5 -e '5/1 "%02X"' /dev/urandom 2>/dev/null || date +%s)"
       grep -q "^$code	" "$BP_VOUCHERS" 2>/dev/null || break
-      i=$((i+1)); [ "$i" -lt 10 ] || bp_fail "voucher generator unavailable"
+      i=$((i+1)); [ "$i" -lt 10 ] || { bp_unlock; bp_fail "voucher generator unavailable"; }
     done
-    printf '%s\t%s\n' "$code" "$cents" >> "$BP_VOUCHERS"
+    tmp="$BP_STATE/.vouchers.$(bp_tmp_suffix)"
+    cat "$BP_VOUCHERS" > "$tmp"
+    printf '%s\t%s\n' "$code" "$cents" >> "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$BP_VOUCHERS"
+    bp_durable_sync
+    bp_unlock
     bp_json "{\"ok\":true,\"code\":\"$code\",\"cents\":$cents}"
     ;;
   *) bp_fail "unknown admin action" ;;

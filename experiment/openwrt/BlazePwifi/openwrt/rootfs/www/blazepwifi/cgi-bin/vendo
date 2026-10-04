@@ -40,6 +40,7 @@ case "$action" in
     ;;
 
   poll)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
     insert=0; target_nonce=""; expires=0
     target_file="$BP_TARGET_DIR/$id.tsv"
     if [ -f "$target_file" ]; then
@@ -54,6 +55,7 @@ case "$action" in
     ;;
 
   coin)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
     case "$pulses" in ''|*[!0-9]*) bp_fail "invalid pulse count";; esac
     [ "$pulses" -ge 1 ] && [ "$pulses" -le 20 ] || bp_fail "pulse count out of range"
     printf '%s' "$target" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid coin target"

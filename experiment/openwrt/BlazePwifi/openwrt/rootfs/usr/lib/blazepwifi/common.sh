@@ -5,7 +5,7 @@ BP_RUN=${BP_RUN:-/tmp/blazepwifi}
 BP_ACCOUNTS="$BP_STATE/accounts.tsv"
 BP_VOUCHERS="$BP_STATE/vouchers.tsv"
 BP_VENDOS="$BP_RUN/vendos.tsv"
-BP_TARGET_DIR="$BP_RUN/targets"
+BP_TARGET_DIR="$BP_STATE/targets"
 BP_LEGACY_CREDITS="$BP_STATE/credits.tsv"
 BP_LEGACY_SESSIONS="$BP_STATE/sessions.tsv"
 BP_POST_BODY=""
@@ -13,6 +13,10 @@ if [ "${REQUEST_METHOD:-GET}" = POST ]; then IFS= read -r BP_POST_BODY; fi
 
 bp_cfg() { uci -q get "blazepwifi.main.$1"; }
 bp_now() { date +%s; }
+bp_time_sane() {
+	now="${1:-$(bp_now)}"
+	[ "$now" -ge 1700000000 ] 2>/dev/null
+}
 bp_sha256() { sha256sum | awk '{print $1}'; }
 bp_json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 bp_json() { printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }
@@ -25,15 +29,50 @@ bp_init_dirs() {
 	chmod 600 "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 }
 
+bp_capture_pid() {
+	IFS=' ' read -r BP_SELF_PID BP_SELF_REST < /proc/self/stat
+}
+bp_tmp_suffix() {
+	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || date +%s
+}
+
 bp_lock() {
-	i=0
-	while ! mkdir "$BP_RUN/lock" 2>/dev/null; do
-		i=$((i+1))
-		[ "$i" -gt 80 ] && return 1
+	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER BP_LOCK_TRIES
+	BP_LOCK_PATH="$BP_RUN/lock"
+	bp_capture_pid
+	BP_LOCK_SELF="$BP_SELF_PID"
+	BP_LOCK_TRIES=0
+	while ! mkdir "$BP_LOCK_PATH" 2>/dev/null; do
+		BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
+		if [ -n "$BP_LOCK_OWNER" ] && ! kill -0 "$BP_LOCK_OWNER" 2>/dev/null; then
+			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
+			continue
+		fi
+		BP_LOCK_TRIES=$((BP_LOCK_TRIES+1))
+		if [ -z "$BP_LOCK_OWNER" ] && [ "$BP_LOCK_TRIES" -ge 4 ]; then
+			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
+			BP_LOCK_TRIES=0
+			continue
+		fi
+		[ "$BP_LOCK_TRIES" -gt 80 ] && return 1
 		usleep 50000 2>/dev/null || sleep 1
 	done
+	printf '%s\n' "$BP_LOCK_SELF" > "$BP_LOCK_PATH/pid"
 }
-bp_unlock() { rmdir "$BP_RUN/lock" 2>/dev/null || true; }
+bp_unlock() {
+	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER
+	BP_LOCK_PATH="$BP_RUN/lock"
+	bp_capture_pid
+	BP_LOCK_SELF="$BP_SELF_PID"
+	BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
+	[ -z "$BP_LOCK_OWNER" ] || [ "$BP_LOCK_OWNER" = "$BP_LOCK_SELF" ] || return 0
+	rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
+}
+
+bp_durable_sync() {
+	[ "$(bp_cfg durable_sync 2>/dev/null || true)" = 1 ] || return 0
+	sync
+}
 
 bp_mac_norm() {
 	printf '%s' "$1" | tr 'A-F' 'a-f' | grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$' || return 1
@@ -68,7 +107,7 @@ bp_account_field() {
 
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
-	tmp="$BP_RUN/accounts.$$"
+	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
 	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
 		BEGIN{f=0}
 		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
@@ -76,15 +115,16 @@ bp_account_write() {
 		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
 	' "$BP_ACCOUNTS" > "$tmp" && mv "$tmp" "$BP_ACCOUNTS"
 	chmod 600 "$BP_ACCOUNTS"
+	bp_durable_sync
 }
 
 bp_remove_legacy_mac() {
 	mac="$1"
 	if [ -f "$BP_LEGACY_CREDITS" ]; then
-		tmp="$BP_RUN/legacy-credits.$$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
+		tmp="$BP_STATE/.legacy-credits.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
 	fi
 	if [ -f "$BP_LEGACY_SESSIONS" ]; then
-		tmp="$BP_RUN/legacy-sessions.$$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
+		tmp="$BP_STATE/.legacy-sessions.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
 	fi
 }
 
@@ -101,14 +141,24 @@ bp_pause_limit_expired() {
 }
 
 bp_bind_device() {
-	d="$1"; mac="$2"; ipaddr="$3"
+	d="$1"; mac="$2"; ipaddr="$3"; create="${4:-1}"
 	line="$(bp_account_line "$d")"
 	if [ -z "$line" ]; then
 		credit=0; expiry=0
-		if [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END{print v+0}' "$BP_LEGACY_CREDITS")"; fi
-		if [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END{print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		claimed=""
+		[ -n "$mac" ] && claimed="$(awk -F '\t' -v m="$mac" '$7==m {print $1; exit}' "$BP_ACCOUNTS")"
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_CREDITS")"; fi
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		if [ -n "$claimed" ] && [ -n "$mac" ]; then
+			bp_remove_legacy_mac "$mac"
+			bp_durable_sync
+		fi
+		if [ "$create" != 1 ] && [ "$credit" -eq 0 ] 2>/dev/null && { [ -z "$expiry" ] || [ "$expiry" -le "$(bp_now)" ] 2>/dev/null; }; then
+			return 0
+		fi
 		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""
-		[ -n "$mac" ] && bp_remove_legacy_mac "$mac"
+		[ -n "$mac" ] && [ -z "$claimed" ] && bp_remove_legacy_mac "$mac"
+		bp_durable_sync
 		[ "$expiry" -gt "$(bp_now)" ] 2>/dev/null && bp_authorize_mac "$mac"
 		return 0
 	fi

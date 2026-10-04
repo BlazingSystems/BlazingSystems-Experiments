@@ -17,6 +17,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
 mkdir -p "$BACKUP"
 cp -a /etc/config/uhttpd "$BACKUP/" 2>/dev/null || true
+cp -a /etc/config/firewall "$BACKUP/" 2>/dev/null || true
 EXISTING_CONFIG=0
 if [ -f /etc/config/blazepwifi ]; then
   cp -a /etc/config/blazepwifi "$BACKUP/blazepwifi.config"
@@ -43,6 +44,8 @@ ensure_opt pulse_value_centavos 100
 ensure_opt event_history 64
 ensure_opt pause_max_seconds 0
 ensure_opt walled_refresh_seconds 120
+ensure_opt durable_sync 1
+ensure_opt firewall_zone lan
 
 randkey(){ hexdump -n 18 -e '18/1 "%02x"' /dev/urandom; }
 ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
@@ -93,6 +96,32 @@ uci set uhttpd.defaults.commonname="$LAN_IP"
 uci set uhttpd.defaults.organization='BlazePwifi'
 uci commit uhttpd
 
+FIREWALL_ZONE="$(uci -q get blazepwifi.main.firewall_zone || echo lan)"
+for r in blazepwifi_portal blazepwifi_vendo blazepwifi_admin; do uci -q delete "firewall.$r" || true; done
+
+uci set firewall.blazepwifi_portal='rule'
+uci set firewall.blazepwifi_portal.name='Allow-BlazePwifi-Portal'
+uci set firewall.blazepwifi_portal.src="$FIREWALL_ZONE"
+uci set firewall.blazepwifi_portal.proto='tcp'
+uci set firewall.blazepwifi_portal.dest_port="$PORTAL"
+uci set firewall.blazepwifi_portal.target='ACCEPT'
+
+uci set firewall.blazepwifi_vendo='rule'
+uci set firewall.blazepwifi_vendo.name='Allow-BlazePwifi-Vendo'
+uci set firewall.blazepwifi_vendo.src="$FIREWALL_ZONE"
+uci set firewall.blazepwifi_vendo.proto='tcp'
+uci set firewall.blazepwifi_vendo.dest_port="$VENDO_PORT"
+uci set firewall.blazepwifi_vendo.target='ACCEPT'
+
+uci set firewall.blazepwifi_admin='rule'
+uci set firewall.blazepwifi_admin.name='Allow-BlazePwifi-Admin'
+uci set firewall.blazepwifi_admin.src="$FIREWALL_ZONE"
+uci set firewall.blazepwifi_admin.proto='tcp'
+uci set firewall.blazepwifi_admin.dest_port="$ADMIN_PORT"
+uci set firewall.blazepwifi_admin.target='ACCEPT'
+uci commit firewall
+
+/etc/init.d/firewall reload 2>/dev/null || true
 /etc/init.d/uhttpd restart
 /etc/init.d/blazepwifi enable
 /etc/init.d/blazepwifi restart

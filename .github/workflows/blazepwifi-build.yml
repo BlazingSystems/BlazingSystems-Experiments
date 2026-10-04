@@ -17,10 +17,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
-      - name: Accounting integration test
-        run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
-      - name: Persistence and replay stress test
-        run: sh experiment/openwrt/BlazePwifi/tests/stress.sh
+      - name: Accounting integration test x3
+        run: |
+          for i in 1 2 3; do
+            echo "Integration pass $i"
+            sh experiment/openwrt/BlazePwifi/tests/integration.sh
+          done
+      - name: Persistence and replay stress test x3
+        run: |
+          for i in 1 2 3; do
+            echo "Stress pass $i"
+            sh experiment/openwrt/BlazePwifi/tests/stress.sh
+          done
       - name: Build release bundle
         run: |
           VERSION=$(cat experiment/openwrt/BlazePwifi/VERSION)
@@ -65,6 +73,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y zstd
       - name: Build OpenWrt image
         run: sh experiment/openwrt/BlazePwifi/build/build-openwrt-image.sh ${{ matrix.target }}
+      - name: Verify firmware checksums
+        run: |
+          cd experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}
+          sha256sum -c SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: BlazePwifi-${{ matrix.target }}-firmware
