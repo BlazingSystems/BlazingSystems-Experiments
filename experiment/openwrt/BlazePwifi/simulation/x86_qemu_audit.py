@@ -9,7 +9,7 @@ p.add_argument('--ovmf',default='')
 a=p.parse_args()
 os.makedirs(a.out,exist_ok=True)
 
-cmd=['qemu-system-x86_64','-m','512','-smp','2','-drive',f'file={a.image},format=raw,if=virtio','-nic','user,model=virtio-net-pci','-nographic','-no-reboot']
+cmd=['qemu-system-x86_64','-m','512','-smp','2','-drive',f'file={a.image},format=raw,if=virtio','-nic','user,model=virtio-net-pci','-display','none','-serial','stdio','-monitor','none','-no-reboot']
 if a.mode=='uefi':
     if not a.ovmf:
         raise SystemExit('UEFI firmware path required')
