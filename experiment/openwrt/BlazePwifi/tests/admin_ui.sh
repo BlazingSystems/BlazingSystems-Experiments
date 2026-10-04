@@ -28,3 +28,9 @@ grep -q 'x86_64)' "$BUILD"
 grep -q 'FILES="$FILES_DIR"' "$BUILD"
 
 echo "BlazePwifi v0.3 admin UI checks passed"
+
+grep -q 'Rental phones' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
+grep -q 'Coinslot controllers' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
+grep -q 'rental_policy_set' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
+grep -q 'rental_admin_password_set' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
+grep -q 'controller_set' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
