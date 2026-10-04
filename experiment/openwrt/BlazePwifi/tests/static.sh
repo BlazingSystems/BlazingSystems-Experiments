@@ -2,7 +2,7 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
-for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
+for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'admin-login' -o -name 'admin-session' -o -name 'admin-logout' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
   sh -n "$f"
 done
 
@@ -33,7 +33,11 @@ for x in \
   openwrt/rootfs/etc/init.d/blazepwifi \
   openwrt/rootfs/etc/uci-defaults/99-blazepwifi \
   openwrt/rootfs/usr/sbin/blazepwifi-core \
+  openwrt/rootfs/usr/lib/blazepwifi/auth.sh \
   openwrt/rootfs/www/blazepwifi/cgi-bin/api \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-session \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-logout \
   openwrt/rootfs/www/blazepwifi/cgi-bin/admin \
   openwrt/rootfs/www/blazepwifi/cgi-bin/vendo
 do
@@ -42,6 +46,11 @@ done
 
 if grep -q 'tmp="$BP_RUN/accounts' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"; then
   echo 'persistent account temp files must stay on the state filesystem' >&2
+  exit 1
+fi
+
+if grep -Rqs 'HTTP_X_BLAZE_ADMIN' "$ROOT/openwrt/rootfs"; then
+  echo 'legacy admin-key header must not remain in v0.3 runtime' >&2
   exit 1
 fi
 
