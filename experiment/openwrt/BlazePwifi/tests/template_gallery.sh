@@ -1,4 +1,5 @@
 #!/bin/sh
+# gallery RED verification
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/portal-templates"
