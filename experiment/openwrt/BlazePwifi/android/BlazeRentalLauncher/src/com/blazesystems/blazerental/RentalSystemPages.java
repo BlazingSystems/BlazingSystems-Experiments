@@ -15,6 +15,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.os.Handler;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -67,8 +68,27 @@ public final class RentalSystemPages {
         attachFullPage(notifications, createNotificationsPage(launcher), 0x740403);
         workspace.setCurrentPage(0);
 
+        reassertRestrictedChrome(launcher);
+        workspace.post(new Runnable() {
+            @Override public void run() { reassertRestrictedChrome(launcher); }
+        });
+        workspace.postDelayed(new Runnable() {
+            @Override public void run() { reassertRestrictedChrome(launcher); }
+        }, 750L);
+    }
+
+    public static void reassertRestrictedChrome(final Launcher launcher) {
+        if (launcher == null || !LauncherAccessController.isRentalRestricted(launcher)) return;
         Hotseat hotseat = launcher.getHotseat();
-        if (hotseat != null) hotseat.setVisibility(View.GONE);
+        if (hotseat != null) {
+            hotseat.setVisibility(View.GONE);
+            hotseat.setEnabled(false);
+        }
+        View hotseatView = launcher.findViewById(com.android.launcher3.R.id.hotseat);
+        if (hotseatView != null) {
+            hotseatView.setVisibility(View.GONE);
+            hotseatView.setEnabled(false);
+        }
     }
 
     private static void attachFullPage(CellLayout page, View view, int id) {
@@ -142,9 +162,9 @@ public final class RentalSystemPages {
                 boolean paid = remaining > 0L;
                 if (paid) FloatingTimerService.ensure(launcher);
                 else FloatingTimerService.stop(launcher);
-                timer.setText(formatDuration(remaining));
-                detail.setText(paid ? "RENTAL ACTIVE" : "TIME FINISHED");
-                coin.setText(paid ? "ADD MORE TIME" : "INSERT COIN");
+                setTextIfChanged(timer, formatDuration(remaining));
+                setTextIfChanged(detail, paid ? "RENTAL ACTIVE" : "TIME FINISHED");
+                setTextIfChanged(coin, paid ? "ADD MORE TIME" : "INSERT COIN");
                 if (root.getWindowToken() != null) root.postDelayed(this, 1000L);
             }
         };
@@ -270,11 +290,24 @@ public final class RentalSystemPages {
         root.addView(list, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        final String[] renderedSignature = new String[] { null };
         final Runnable refresh = new Runnable() {
             @Override public void run() {
-                list.removeAllViews();
                 List<RentalNotificationService.Entry> entries =
                         RentalNotificationService.snapshot();
+                StringBuilder signature = new StringBuilder();
+                for (RentalNotificationService.Entry entry : entries) {
+                    signature.append(entry.key).append('|')
+                            .append(entry.title).append('|')
+                            .append(entry.text).append(';');
+                }
+                String nextSignature = signature.toString();
+                if (TextUtils.equals(renderedSignature[0], nextSignature)) {
+                    if (root.getWindowToken() != null) root.postDelayed(this, 2000L);
+                    return;
+                }
+                renderedSignature[0] = nextSignature;
+                list.removeAllViews();
                 if (entries.isEmpty()) {
                     list.addView(infoCard(launcher,
                             "No mirrored notifications yet. Notification access is granted during managed setup."));
@@ -400,6 +433,10 @@ public final class RentalSystemPages {
 
     private static LinearLayout.LayoutParams weight() {
         return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    }
+
+    private static void setTextIfChanged(TextView view, CharSequence value) {
+        if (!TextUtils.equals(view.getText(), value)) view.setText(value);
     }
 
     private static String batteryStatus(Context c) {

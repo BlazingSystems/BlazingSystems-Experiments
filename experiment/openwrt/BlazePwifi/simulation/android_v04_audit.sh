@@ -17,9 +17,20 @@ fail() {
 }
 
 dump_ui() {
-  local name="$1"
-  adb exec-out uiautomator dump /dev/tty > "$OUT/$name.xml" 2>/dev/null || true
+  local name="$1" ok=0 attempt
+  : > "$OUT/$name.xml"
+  for attempt in 1 2 3 4 5; do
+    if adb shell uiautomator dump --compressed /sdcard/blaze-window.xml >"$OUT/$name-uiautomator.txt" 2>&1; then
+      adb exec-out cat /sdcard/blaze-window.xml > "$OUT/$name.xml" 2>/dev/null || true
+      if grep -q '<?xml' "$OUT/$name.xml"; then
+        ok=1
+        break
+      fi
+    fi
+    sleep 1
+  done
   adb exec-out screencap -p > "$OUT/$name.png" 2>/dev/null || true
+  [ "$ok" -eq 1 ] || fail "could not capture Android UI hierarchy for $name"
 }
 
 assert_ui() {

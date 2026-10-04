@@ -1064,6 +1064,8 @@ public class Launcher extends BaseActivity
             mLauncherCallbacks.onResume();
         }
 
+        RentalSystemPages.reassertRestrictedChrome(this);
+
         long currentBlazeRevision = AndroidRentalPolicyRepository.revision(this);
         if (mBlazePolicyRevision != Long.MIN_VALUE
                 && currentBlazeRevision != mBlazePolicyRevision) {
