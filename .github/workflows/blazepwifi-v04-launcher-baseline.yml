@@ -72,7 +72,7 @@ jobs:
       - name: Verify imported baseline provenance
         run: sh "$BASE/tests/v04_launcher_baseline.sh"
 
-      - name: Install Android SDK 27
+      - name: Install Android SDK 27 and isolate legacy SDK root
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +80,11 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-27" "build-tools;27.0.3"
+          rm -rf /tmp/android-sdk-27
+          mkdir -p /tmp/android-sdk-27/platforms /tmp/android-sdk-27/build-tools
+          cp -a "${ANDROID_SDK_ROOT}/platforms/android-27" /tmp/android-sdk-27/platforms/
+          cp -a "${ANDROID_SDK_ROOT}/build-tools/27.0.3" /tmp/android-sdk-27/build-tools/
+          printf 'sdk.dir=/tmp/android-sdk-27\n' > "$TARGET/local.properties"
 
       - name: Set up JDK 8 for historical AGP
         uses: actions/setup-java@v5
@@ -100,7 +105,7 @@ jobs:
         working-directory: experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher
         run: |
           set -euo pipefail
-          gradle --no-daemon --stacktrace assembleAospDebug
+          ANDROID_HOME=/tmp/android-sdk-27 ANDROID_SDK_ROOT=/tmp/android-sdk-27 gradle --no-daemon --stacktrace assembleAospDebug
 
       - name: Re-run provenance test after compile
         run: sh "$BASE/tests/v04_launcher_baseline.sh"
