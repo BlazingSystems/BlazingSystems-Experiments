@@ -22,7 +22,8 @@ case "$action" in
     vendos="$(awk -F '\t' -v n="$now" '$2>(n-30) {c++} END{print c+0}' "$BP_VENDOS")"
     free_kb="$(awk '/MemAvailable:/ {print $2; found=1} END{if(!found) print 0}' /proc/meminfo)"
     load="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"; uptime="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
-    bp_json "{"ok":true,"username":"$(bp_json_escape "$BP_AUTH_USER")","role":"$(bp_json_escape "$BP_AUTH_ROLE")","must_change":${BP_AUTH_MUST_CHANGE:-0},"active_sessions":$sessions,"paused_sessions":$paused,"online_vendos":$vendos,"mem_available_kb":${free_kb:-0},"load1":"${load:-0}","uptime_seconds":${uptime:-0}}"
+    body="$(printf '{"ok":true,"username":"%s","role":"%s","must_change":%s,"active_sessions":%s,"paused_sessions":%s,"online_vendos":%s,"mem_available_kb":%s,"load1":"%s","uptime_seconds":%s}' "$(bp_json_escape "$BP_AUTH_USER")" "$(bp_json_escape "$BP_AUTH_ROLE")" "${BP_AUTH_MUST_CHANGE:-0}" "$sessions" "$paused" "$vendos" "${free_kb:-0}" "${load:-0}" "${uptime:-0}")"
+    bp_json "$body"
     ;;
   voucher_create)
     require_role operator
@@ -46,7 +47,8 @@ case "$action" in
     bp_durable_sync
     bp_auth_audit voucher_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$cents"
     bp_unlock
-    bp_json "{"ok":true,"code":"$code","cents":$cents}"
+    body="$(printf '{"ok":true,"code":"%s","cents":%s}' "$(bp_json_escape "$code")" "$cents")"
+    bp_json "$body"
     ;;
   password_change)
     require_role viewer
