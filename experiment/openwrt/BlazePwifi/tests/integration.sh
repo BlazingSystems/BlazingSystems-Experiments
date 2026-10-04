@@ -158,18 +158,27 @@ echo "integration: voucher replay ok"
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 LOGIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login"
 export BP_AUTH_NOW=2000000000 SERVER_PORT=8443
+echo "integration: auth provision"
 sh "$AUTH" --set-password admin admin 'Integration-Admin-123!'
 LOUT="$(printf '%s' 'username=admin&password=Integration-Admin-123%21' | REQUEST_METHOD=POST sh "$LOGIN")"
+LERR="$(printf '%s' "$LOUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+LUSER="$(printf '%s' "$LOUT" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')"
+echo "integration: auth login => ${LERR:-ok} user=${LUSER:-missing}"
 COOKIE="$(printf '%s\n' "$LOUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
 CSRF="$(printf '%s' "$LOUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
+echo "integration: auth material cookie=${COOKIE:+present} csrf=${CSRF:+present}"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ]
 
 export SERVER_PORT=8080 HTTP_COOKIE="$COOKIE" HTTP_X_BLAZE_CSRF="$CSRF"
 OUT="$(printf 'action=status' | sh "$ADMIN")"
+HERR="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+echo "integration: http gate => ${HERR:-unclassified}"
 echo "$OUT" | grep -q 'requires HTTPS'
 
 export SERVER_PORT=8443
 OUT="$(printf 'action=status' | sh "$ADMIN")"
+AERR="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+echo "integration: authenticated status => ${AERR:-ok}"
 echo "$OUT" | grep -q '"ok":true'
 
 echo "integration: admin session ok"
