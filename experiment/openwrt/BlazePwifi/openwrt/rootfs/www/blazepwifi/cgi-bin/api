@@ -36,6 +36,7 @@ bp_unlock
 
 case "$action" in
   pause|resume|disconnect)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     [ -n "$(bp_account_line "$device")" ] || bp_fail "no active account/session"
     ;;
 esac
@@ -43,12 +44,18 @@ esac
 case "$action" in
   me)
     credit="$(bp_get_credit "$device")"
-    remaining="$(bp_remaining "$device")"
     paused="$(bp_account_field "$device" 5)"; [ -n "$paused" ] || paused=0
-    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused}"
+    now="$(bp_now)"
+    if bp_time_sane "$now"; then
+      remaining="$(bp_remaining "$device")"; time_sync=true
+    else
+      remaining=0; time_sync=false
+    fi
+    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync}"
     ;;
 
   coin_start)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     vendo="$(bp_param vendo)"
     if [ -z "$vendo" ]; then
       vendo="$(bp_choose_vendo 2>/dev/null || true)"
@@ -122,6 +129,7 @@ case "$action" in
     ;;
 
   pause)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     bp_lock || bp_fail "accounting busy"
     line="$(bp_account_line "$device")"
     credit="$(printf '%s' "$line" | cut -f2)"
@@ -143,6 +151,7 @@ case "$action" in
     ;;
 
   resume)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     bp_lock || bp_fail "accounting busy"
     line="$(bp_account_line "$device")"
     credit="$(printf '%s' "$line" | cut -f2)"
