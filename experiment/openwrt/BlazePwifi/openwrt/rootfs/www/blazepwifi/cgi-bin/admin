@@ -8,8 +8,9 @@ action="$(bp_param action)"; now="$(bp_now)"
 
 require_role() {
 	need="$1"
-	if bp_auth_require_role "$need"; then return 0; fi
+	bp_auth_require_role "$need"
 	rc=$?
+	[ "$rc" -eq 0 ] && return 0
 	[ "$rc" -eq 2 ] && bp_fail "insufficient role"
 	bp_fail "unauthorized"
 }
