@@ -228,17 +228,7 @@ jobs:
           (
             cd release-out
             sha256sum * | grep -v ' SHA256SUMS$' > SHA256SUMS
-            python3 - <<'PY'
-import hashlib,json,pathlib
-root=pathlib.Path(".")
-items=[]
-for p in sorted(root.iterdir()):
-    if p.name in {"manifest.json"} or not p.is_file():
-        continue
-    h=hashlib.sha256(p.read_bytes()).hexdigest()
-    items.append({"name":p.name,"size":p.stat().st_size,"sha256":h})
-pathlib.Path("manifest.json").write_text(json.dumps({"version":"0.3.0-rc.1","assets":items},indent=2)+"\n")
-PY
+            python3 -c 'import hashlib,json,pathlib; r=pathlib.Path("."); a=[{"name":p.name,"size":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(r.iterdir()) if p.is_file() and p.name!="manifest.json"]; pathlib.Path("manifest.json").write_text(json.dumps({"version":"0.3.0-rc.1","assets":a},indent=2)+"\\n")'
           )
       - name: Create or update GitHub prerelease
         run: |
