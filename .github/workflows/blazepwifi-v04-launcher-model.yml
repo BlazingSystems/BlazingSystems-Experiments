@@ -6,6 +6,7 @@ on:
     paths:
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/build.gradle'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/**'
+      - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/google/android/apps/nexuslauncher/NexusLauncherActivity.java'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/tests/unit/**'
       - 'experiment/openwrt/BlazePwifi/tests/v04_android_source.sh'
       - '.github/workflows/blazepwifi-v04-launcher-model.yml'
