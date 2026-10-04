@@ -72,14 +72,30 @@ sync_walled() {
 	done
 }
 
+cleanup_targets() {
+	now="$(bp_now)"
+	for target_file in "$BP_TARGET_DIR"/*.tsv; do
+		[ -f "$target_file" ] || continue
+		IFS="$(printf '\t')" read -r device mac nonce expires vendo < "$target_file"
+		case "$expires" in ''|*[!0-9]*) rm -f "$target_file"; continue;; esac
+		[ "$expires" -gt "$now" ] 2>/dev/null || rm -f "$target_file"
+	done
+}
+
 bp_init_dirs
+cleanup_targets
 setup_nft || exit 1
 sync_walled
 trap 'nft delete table inet blazepwifi 2>/dev/null || true; exit 0' TERM INT
 last_walled=0
+last_target_cleanup=0
 while :; do
 	sync_accounts
 	now="$(bp_now)"
+	if [ $((now-last_target_cleanup)) -ge 30 ]; then
+		cleanup_targets
+		last_target_cleanup="$now"
+	fi
 	refresh="$(bp_cfg walled_refresh_seconds)"; [ -n "$refresh" ] || refresh=120
 	if [ $((now-last_walled)) -ge "$refresh" ]; then
 		sync_walled
