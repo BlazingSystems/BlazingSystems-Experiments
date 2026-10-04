@@ -1,8 +1,13 @@
 #!/bin/sh
+# v0.3 security/bootstrap verification retrigger
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+if grep -Fq '"$" | sha256sum' "$ROOT/openwrt/rootfs/etc/uci-defaults/99-blazepwifi"; then
+  echo 'uci-default entropy fallback must mix the process id' >&2
+  exit 1
+fi
 
-for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
+for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'admin-login' -o -name 'admin-session' -o -name 'admin-logout' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
   sh -n "$f"
 done
 
@@ -33,7 +38,11 @@ for x in \
   openwrt/rootfs/etc/init.d/blazepwifi \
   openwrt/rootfs/etc/uci-defaults/99-blazepwifi \
   openwrt/rootfs/usr/sbin/blazepwifi-core \
+  openwrt/rootfs/usr/lib/blazepwifi/auth.sh \
   openwrt/rootfs/www/blazepwifi/cgi-bin/api \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-session \
+  openwrt/rootfs/www/blazepwifi/cgi-bin/admin-logout \
   openwrt/rootfs/www/blazepwifi/cgi-bin/admin \
   openwrt/rootfs/www/blazepwifi/cgi-bin/vendo
 do
@@ -45,9 +54,19 @@ if grep -q 'tmp="$BP_RUN/accounts' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/comm
   exit 1
 fi
 
+if grep -Rqs 'HTTP_X_BLAZE_ADMIN' "$ROOT/openwrt/rootfs"; then
+  echo 'legacy admin-key header must not remain in v0.3 runtime' >&2
+  exit 1
+fi
+
+if grep -Fq '"$" | sha256sum' "$ROOT/installer/install.sh"; then
+  echo 'installer entropy fallback must mix the process id, not a literal dollar sign' >&2
+  exit 1
+fi
+
 if grep -q '0.0.0.0:8443' "$ROOT/installer/install.sh"; then
   echo 'admin listener must not bind WAN wildcard' >&2
   exit 1
 fi
 
-echo 'BlazePwifi v0.2 static checks passed'
+echo 'BlazePwifi static checks passed'

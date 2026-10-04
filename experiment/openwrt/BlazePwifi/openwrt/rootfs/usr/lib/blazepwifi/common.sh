@@ -67,10 +67,29 @@ bp_mac_for_ip() {
 	ip neigh show "$ipaddr" dev "$lan_if" 2>/dev/null | awk '/lladdr/ {print $5; exit}' | tr 'A-F' 'a-f'
 }
 
+bp_url_decode() {
+	printf '%s' "$1" | awk '
+	function hx(c, p) { c=toupper(c); p=index("0123456789ABCDEF",c); return p ? p-1 : -1 }
+	{
+		s=$0; out=""
+		for(i=1;i<=length(s);i++){
+			c=substr(s,i,1)
+			if(c=="%" && i+2<=length(s)){
+				a=hx(substr(s,i+1,1)); b=hx(substr(s,i+2,1))
+				if(a>=0 && b>=0){ out=out sprintf("%c",a*16+b); i+=2; continue }
+			}
+			if(c=="+") c=" "
+			out=out c
+		}
+		printf "%s",out
+	}'
+}
+
 bp_param() {
 	key="$1"; data="${QUERY_STRING:-}"
 	[ "${REQUEST_METHOD:-GET}" = POST ] && data="$BP_POST_BODY"
-	printf '%s' "$data" | tr '&' '\n' | awk -F= -v k="$key" '$1==k {sub(/^[^=]*=/,""); gsub(/\+/," "); print; exit}'
+	raw="$(printf '%s' "$data" | tr '&' '\n' | awk -F= -v k="$key" '$1==k {sub(/^[^=]*=/,""); print; exit}')"
+	bp_url_decode "$raw"
 }
 
 bp_account_line() {
@@ -250,8 +269,6 @@ bp_choose_vendo() {
 	[ "$count" -eq 1 ] || return 1
 	printf '%s' "$chosen"
 }
-
-bp_check_admin() { [ "${HTTP_X_BLAZE_ADMIN:-$(bp_param key)}" = "$(bp_cfg admin_key)" ]; }
 
 bp_vendo_sig_expected() {
 	action="$1"; id="$2"; nonce="$3"; pulses="$4"; target="$5"; secret="$(bp_cfg vendo_key)"

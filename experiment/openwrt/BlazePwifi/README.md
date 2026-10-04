@@ -1,83 +1,112 @@
 # BlazePwifi
 
-BlazePwifi is a clean-room, open-source PisoWiFi/captive-portal platform for OpenWrt. It uses an OpenWrt router or x86 controller plus one or more ESP8266 coin/vendo controllers.
+BlazePwifi is an open-source prepaid Wi-Fi, captive-portal, coin-controller and managed rental-device platform for OpenWrt, Orange Pi, x86 PCs, ESP8266/ESP32 and Android.
 
-Target base: OpenWrt 25.12.x
-Release candidate: 0.2.0-rc.2
-Primary build target: OpenWrt 25.12.5
+Current release candidate: **0.3.0-rc.1**  
+OpenWrt build baseline: **25.12.5**
 
-## Hardware targets
+## Capability tiers
 
-- Ruijie RG-EW1200G Pro v1.1 — ramips/mt7621, 128 MB RAM, 16 MB flash
-- x86_64 OpenWrt — generic PC/thin-client deployment
-- ESP8266 / NodeMCU — external coin-slot controller
+- **Lite** — constrained OpenWrt routers: hardened accounting, sessions/vouchers, compact admin and portal editor, network/VLAN controls and ESP controller support.
+- **Standard** — Orange Pi/SBC: Lite features plus richer administration, libgpiod controller agent and Android-rental services.
+- **Full** — x86_64: Standard features plus the full admin/portal experience, larger retention and fleet-oriented rental management.
 
-## What v0.2 adds
+Heavy features are not forced onto small routers.
 
-- Browser-backed device identity that survives Android/iOS private-MAC changes.
-- Persistent credit and timed sessions.
-- Pause/resume.
-- One-time vouchers.
-- Multiple Vendos with online discovery.
-- Target-bound signed coin events with idempotent retry protection and ESP8266 LittleFS brownout journal.
-- WPA2-protected ESP setup AP.
-- Dynamic walled garden for e-payment/login providers.
-- nftables enforcement that remains subordinate to normal firewall4 policy.
-- HTTPS-only local admin interface.
-- v0.1 state migration.
-- Repeated CI validation, ESP8266 compilation, and Ruijie/x86 firmware ImageBuilder jobs.
+## Build-validated targets
 
-## Quick install
+The CI matrix builds and checksum-verifies:
+- Ruijie RG-EW1200G Pro v1.1
+- x86_64 legacy BIOS and UEFI
+- Orange Pi Zero 3
+- Orange Pi One
+- Orange Pi PC
+- ESP8266
+- ESP32
+- BlazeRental Android APK
 
-Copy the project to an OpenWrt 25.12.x system and run installer/install.sh as root.
+Additional Orange Pi targets are attempted independently and are published only when their build succeeds.
 
-The installer prints the generated admin and Vendo keys once.
+## Security and user handling
 
-Typical local endpoints:
+BlazePwifi includes:
+- browser-backed user identity that survives normal private/random MAC changes;
+- durable balances and timed sessions;
+- pause/resume and one-time vouchers;
+- target-bound signed/idempotent coin events and replay protection;
+- persistent pending-event recovery;
+- HTTPS-only local administration by default;
+- generated first-boot admin credential, not a universal password;
+- per-IP/per-account brute-force lockouts with escalation;
+- secure HttpOnly SameSite admin sessions;
+- CSRF checks and Admin/Operator/Viewer roles;
+- audited money, configuration and rental operations;
+- fail-closed behavior when router time is not synchronized.
 
-- Portal: http://10.0.0.1:8080/
-- Admin: https://10.0.0.1:8443/admin.html
-- ESP API: http://10.0.0.1:4455/cgi-bin/vendo
+## Portal and admin
 
-The exact address follows the OpenWrt LAN configuration. The admin certificate is locally generated, so the browser may show a self-signed certificate warning.
+Lite targets keep a compact native shell. Standard/Full targets use a capability-gated Tabler core admin shell; optional heavy chart/plugin bundles are excluded.
 
-## Build flashable images
+The customer portal keeps the first view simple: remaining time, Insert Coin, voucher and rates. Non-sensitive device/network details are below the primary actions.
 
-Run build/build-openwrt-image.sh ruijie or build/build-openwrt-image.sh x86_64.
+Static previews live in [portal-templates](portal-templates/).
 
-Outputs and SHA-256 files are written below dist/<target>/. The Ruijie target emits the upstream-style `initramfs-kernel.bin` install image plus `squashfs-sysupgrade.bin`; x86_64 emits BIOS and EFI `.img.gz` disk images.
+## Controllers
 
-## Validation status
+ESP8266 and ESP32 use one target-bound accounting protocol. Orange Pi/SBC controllers use libgpiod instead of deprecated sysfs GPIO.
 
-The project has automated checks for:
+Pins, polarity, debounce, pulse grouping, controller identity, ports, VLANs, network interfaces, rates and portal appearance are configuration rather than production source edits.
 
-- shell syntax and hardening invariants;
-- coin → credit → session accounting;
-- lost-ACK duplicate coin retry;
-- wrong-target coin rejection;
-- voucher one-time use;
-- pause/resume;
-- private-MAC rotation;
-- router tmpfs loss, persistent coin-window recovery, and accounting reboot behavior;
-- v0.1 state migration;
-- ESP8266 firmware compilation;
-- Ruijie and x86_64 OpenWrt ImageBuilder output.
+## BlazeRental
 
-Automated builds are not a substitute for physical flash/recovery testing, real coin-acceptor electrical validation, brownout testing, or long-duration load testing.
+Package: **com.blazesystems.blazerental**
+
+BlazeRental supports:
+- factory-reset QR Device Owner provisioning for strongest management on owned/authorized devices;
+- normal APK installation as an explicitly lower-security fallback.
+
+Rental time remains authoritative on the BlazePwifi server. Enrollment tokens are one-time and exchanged for per-device authentication.
+
+## Installation
+
+See [docs/INSTALL.md](docs/INSTALL.md) for:
+- first-login/bootstrap credentials;
+- VLAN/interface examples;
+- ESP8266/ESP32 pin examples and electrical warnings;
+- Orange Pi imaging and GPIO discovery;
+- x86 BIOS/UEFI imaging;
+- Ruijie bootstrap/sysupgrade guidance;
+- Android QR/manual provisioning;
+- checksum verification.
+
+Default local endpoints:
+- Portal: http://LAN_IP:8080/
+- Admin: https://LAN_IP:8443/admin.html
+- Vendo API: http://LAN_IP:4455/cgi-bin/vendo
+
+## Releases
+
+Versioned source indexes live under [releases](releases/). Large generated installers and firmware are attached to the matching GitHub Release instead of being committed into Git history.
+
+The release pipeline keeps direct installable assets such as APK, BIN, IMG.GZ, INO and TAR.GZ files, plus per-target ZIP archives, manifest.json and SHA256SUMS. Failed optional targets are never replaced by placeholders.
+
+## Validation boundary
+
+CI success is build validation. Production deployment still requires physical boot/recovery, electrical, captive-client, brownout and sustained-load testing on the exact hardware revision.
 
 ## Repository map
 
-- openwrt/rootfs/ — runtime overlay
-- installer/ — install/uninstall
-- esp8266/ — Vendo firmware
-- build/ — OpenWrt ImageBuilder automation
-- tests/ — regression and persistence tests
-- docs/ARCHITECTURE.md — system design
-- docs/PROTOCOL.md — Vendo protocol
-- docs/SECURITY.md — deployment/security model
-- docs/RECONCILIATION.md — WiFi5/public-source reconciliation
-- AUDIT.md — production-readiness audit
+- openwrt/rootfs — OpenWrt runtime
+- installer — OpenWrt installer/uninstaller
+- esp8266 and esp32 — controller firmware
+- linux-agent — Orange Pi/SBC GPIO agent and profiles
+- android/BlazeRental — Android DPC/companion
+- portal-templates — static interface previews
+- build — reproducible image/UI preparation
+- tools — provisioning helpers
+- tests — security/accounting/persistence/UI gates
+- releases — versioned release indexes
 
-## Clean-room notice
+## Publication policy
 
-BlazePwifi does not contain the analyzed commercial PisoWiFi application binaries, license mechanisms, private keys, databases, branding, or proprietary portal assets. Publicly documented behavior and MIT-licensed integration material were used only as interoperability/design references.
+The public repository contains original project code and documented/open-source integration patterns. It does not redistribute closed commercial binaries, licensing systems, private keys, confidential databases, proprietary artwork or private controller firmware.

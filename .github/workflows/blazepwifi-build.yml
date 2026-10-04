@@ -17,6 +17,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
+      - name: v0.3 foundation validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v03_foundation.sh
+      - name: Admin security validation
+        run: sh experiment/openwrt/BlazePwifi/tests/security.sh
+      - name: Config API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/config.sh
+      - name: Template gallery validation
+        run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
+      - name: Controller protocol parity
+        run: sh experiment/openwrt/BlazePwifi/tests/controllers.sh
+      - name: Linux GPIO agent validation
+        run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
+      - name: BlazeRental source validation
+        run: sh experiment/openwrt/BlazePwifi/tests/android.sh
+      - name: BlazeRental server validation
+        run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
+      - name: Portal validation
+        run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
+      - name: Admin UI validation
+        run: sh experiment/openwrt/BlazePwifi/tests/admin_ui.sh
       - name: Accounting integration test x3
         run: |
           for i in 1 2 3; do
@@ -56,6 +76,7 @@ jobs:
         run: |
           mkdir -p experiment/openwrt/BlazePwifi/dist/esp8266
           arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 --output-dir experiment/openwrt/BlazePwifi/dist/esp8266 experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo
+          cp experiment/openwrt/BlazePwifi/esp8266/BlazePwifiVendo/BlazePwifiVendo.ino experiment/openwrt/BlazePwifi/dist/esp8266/
           (cd experiment/openwrt/BlazePwifi/dist/esp8266 && sha256sum * > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
@@ -67,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [ruijie, x86_64]
+        target: [ruijie, x86_64, orangepi_zero3, orangepi_one, orangepi_pc]
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y zstd
@@ -81,3 +102,140 @@ jobs:
         with:
           name: BlazePwifi-${{ matrix.target }}-firmware
           path: experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}/
+
+
+  esp32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+      - name: Compile BlazePwifi Vendo ESP32
+        run: |
+          mkdir -p experiment/openwrt/BlazePwifi/dist/esp32
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir experiment/openwrt/BlazePwifi/dist/esp32 experiment/openwrt/BlazePwifi/esp32/BlazePwifiVendo32
+          cp experiment/openwrt/BlazePwifi/esp32/BlazePwifiVendo32/BlazePwifiVendo32.ino experiment/openwrt/BlazePwifi/dist/esp32/
+          (cd experiment/openwrt/BlazePwifi/dist/esp32 && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-esp32-firmware
+          path: experiment/openwrt/BlazePwifi/dist/esp32/
+
+
+  firmware_optional:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [orangepi_pc_plus, orangepi_pc2, orangepi_zero, orangepi_zero2, orangepi_zero2w, orangepi_one_plus]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Build optional OpenWrt image
+        run: sh experiment/openwrt/BlazePwifi/build/build-openwrt-image.sh ${{ matrix.target }}
+      - name: Verify optional firmware checksums
+        run: |
+          cd experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-${{ matrix.target }}-firmware
+          path: experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}/
+
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Build installable BlazeRental APK
+        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRental
+        run: |
+          gradle --no-daemon :app:assembleDebug
+          mkdir -p ../../dist/android
+          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental.apk
+          cp ../../tools/make-provisioning.py ../../dist/android/
+          python3 -m pip install --quiet "qrcode[pil]"
+          python3 ../../tools/make-provisioning.py \
+            --apk ../../dist/android/BlazeRental.apk \
+            --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0-rc.1/BlazeRental.apk" \
+            --server-url "http://192.168.1.1:8080" \
+            --enrollment-token "000000000000.000000000000000000000000000000000000" \
+            --device-name "SAMPLE - generate a real token in admin" \
+            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.json
+          python3 ../../tools/render-qr.py \
+            --json ../../dist/android/BlazeRental-provisioning-SAMPLE.json \
+            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.png
+          cp ../../tools/render-qr.py ../../dist/android/
+          (cd ../../dist/android && sha256sum BlazeRental.apk BlazeRental-provisioning-SAMPLE.json BlazeRental-provisioning-SAMPLE.png > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-android-BlazeRental
+          path: experiment/openwrt/BlazePwifi/dist/android/
+
+
+  publish_prerelease:
+    if: github.ref == 'refs/heads/blazepwifi-v0.3.0-design' && contains(github.event.head_commit.message, '[release]')
+    needs: [validate, esp8266, esp32, android, firmware, firmware_optional]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.3.0-rc.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: BlazePwifi-*
+          path: downloaded
+      - name: Assemble permanent release assets
+        run: |
+          set -eu
+          mkdir -p release-out
+          find downloaded -mindepth 1 -maxdepth 1 -type d | while read d; do
+            n=$(basename "$d")
+            (cd "$d" && zip -qr "../../release-out/${n}.zip" .)
+            find "$d" -type f | while read f; do
+              b=$(basename "$f")
+              case "$b" in
+                *.apk|*.bin|*.img.gz|*.ino|*.tar.gz|*.json|*.png)
+                  if [ ! -e "release-out/$b" ]; then cp "$f" "release-out/$b"; fi
+                  ;;
+              esac
+            done
+          done
+          tar -czf release-out/BlazePwifi-portal-templates.tar.gz -C experiment/openwrt/BlazePwifi portal-templates
+          cp experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md release-out/RELEASE_NOTES.md
+          (
+            cd release-out
+            sha256sum * | grep -v ' SHA256SUMS$' > SHA256SUMS
+            python3 -c 'import hashlib,json,pathlib; r=pathlib.Path("."); a=[{"name":p.name,"size":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(r.iterdir()) if p.is_file() and p.name!="manifest.json"]; pathlib.Path("manifest.json").write_text(json.dumps({"version":"0.3.0-rc.1","assets":a},indent=2)+"\\n")'
+          )
+      - name: Create or update GitHub prerelease
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
+          fi
+          gh release upload "$TAG" release-out/* --clobber

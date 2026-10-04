@@ -1,78 +1,147 @@
 # Installation
 
-## Supported base
+BlazePwifi 0.3.0-rc.1 is built against OpenWrt 25.12.5. Verify the exact device revision and a recovery path before flashing.
 
-BlazePwifi v0.2 targets OpenWrt 25.12.x and is built in CI against OpenWrt 25.12.5.
+## First login
 
-## Existing OpenWrt
+Default account name: admin.
 
-1. Back up the router configuration and confirm a recovery path.
-2. Upload the BlazePwifi project directory.
-3. Run installer/install.sh as root.
-4. Save the printed admin and Vendo secrets.
-5. Open the local HTTPS admin page. A self-signed certificate warning is expected.
-6. Flash/provision the ESP8266 with the Vendo key, server LAN address and GPIO mapping.
-7. Configure rates and any optional walled-garden domains in /etc/config/blazepwifi.
+There is no universal production password. A fresh image generates a random bootstrap password at first boot and stores it root-only at:
 
-The installer preserves an existing BlazePwifi UCI configuration during upgrades and only adds missing v0.2 options. v0.1 MAC-keyed credit/session data is claimed into a browser device-token account on first use.
+    /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 
-## Local endpoints
+Read it locally or over SSH:
 
-Defaults:
+    cat /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 
+Sign in and replace it immediately. The bootstrap file is removed after password replacement.
+
+Default endpoints:
 - Portal: http://LAN_IP:8080/
 - Admin: https://LAN_IP:8443/admin.html
 - Vendo API: http://LAN_IP:4455/cgi-bin/vendo
+- Rental API: http://LAN_IP:8080/cgi-bin/rental
 
-All three listeners are bound to the configured LAN address by the installer.
+Administration is HTTPS-only and local-management-side by default.
 
-## Walled garden
+## Existing OpenWrt 25.12.x
 
-Example:
+1. Back up OpenWrt and confirm recovery access.
+2. Copy the BlazePwifi project directory to the router.
+3. Run installer/install.sh as root.
+4. Save the printed bootstrap admin credential and Vendo key.
+5. Sign in, replace the bootstrap password, then configure network roles, rates and controllers.
 
-    uci add_list blazepwifi.main.walled_domain='payment.example.com'
-    uci add_list blazepwifi.main.walled_ip='203.0.113.10'
-    uci commit blazepwifi
-    /etc/init.d/blazepwifi restart
+## Network roles and VLANs
 
-Use the payment/login provider's current documentation and keep the list minimal.
+Everything below is configurable. Example production layout:
 
-## Custom images
+| Role | Example VLAN | Purpose |
+| --- | ---: | --- |
+| Management | 10 | Admin and SSH |
+| Hotspot | 13 | Captive-portal clients |
+| Controllers | 20 | ESP/Linux Vendos |
+| Rental devices | 30 | Managed Android phones |
+| WAN | upstream | Internet uplink |
 
-Run on Linux with curl, zstd, tar and make:
+Small Lite deployments can leave all VLAN IDs at 0 and use br-lan.
 
-    ./build/build-openwrt-image.sh ruijie
-    ./build/build-openwrt-image.sh x86_64
+Relevant settings include management_if, hotspot_if, controller_if, rental_if and their VLAN IDs. Preserve an alternate management/recovery path before changing a remote management VLAN.
 
-The build script verifies the official OpenWrt ImageBuilder checksum, injects the BlazePwifi overlay, verifies expected output types, and creates per-target SHA256SUMS.
+## ESP8266 controller
 
-### Ruijie RG-EW1200G Pro v1.1 outputs
+Reference defaults:
+- coin input GPIO4
+- relay GPIO5
+- insert/status LED GPIO14
+- coin active-low
 
-- `*-initramfs-kernel.bin` — upstream OpenWrt install image type for this device.
-- `*-squashfs-sysupgrade.bin` — upgrade image once OpenWrt is already installed.
+These are editable. A 12 V coin acceptor must never be wired directly to a 3.3 V GPIO. Use proper isolation/level conditioning and validate voltage, polarity and pulse width on the real acceptor.
 
-Upstream OpenWrt lists U-Boot TFTP as the installation and recovery method and warns that the port is for hardware revision v1.1 only. The stock recovery loader looks for `rgos.bin` from a TFTP server at `192.168.64.1`; follow the upstream device procedure for recovery rather than renaming a sysupgrade image arbitrarily.
+The controller exposes a temporary generated-password setup AP where Wi-Fi, server address, controller ID/key and GPIO mapping can be changed.
 
-### x86_64 outputs
+## ESP32 controller
 
-- `*combined.img.gz` — legacy BIOS disk image.
-- `*combined-efi.img.gz` — UEFI disk image.
+Reference defaults:
+- coin input GPIO27
+- relay GPIO26
+- LED GPIO2
+- coin active-low
+- relay/LED active-high
+- debounce 40 ms
+- pulse group 400 ms
 
-Each target directory includes `BUILD-MANIFEST.txt` and `SHA256SUMS`.
+ESP32 uses Preferences/NVS for settings and LittleFS for its unacknowledged coin journal. All listed GPIO/timing/polarity values are configurable.
 
-## First-boot secrets
+## Orange Pi
 
-For custom images:
+Release-gating images:
+- Orange Pi Zero 3
+- Orange Pi One
+- Orange Pi PC
 
-    uci -q get blazepwifi.main.admin_key
-    uci -q get blazepwifi.main.vendo_key
+Successful optional builds can include PC Plus, PC2, Zero, Zero2, Zero2W and One Plus.
 
-Store them securely.
+Write the matching sdcard.img.gz image to microSD with Raspberry Pi Imager, Etcher, Rufus, or decompressed dd. Never flash an image for another board.
 
-## Recovery
+Standard images include the libgpiod controller agent, but it is not auto-enabled because physical header pin numbers are not gpiochip offsets. On the exact board:
+1. run gpioinfo;
+2. identify safe lines;
+3. configure gpiochip + line offsets in BlazePwifi;
+4. verify logic levels without the acceptor attached;
+5. connect isolated hardware and enable the agent.
 
-For the Ruijie RG-EW1200G Pro v1.1, verify U-Boot/TFTP recovery before field deployment. Upstream currently documents the recovery loader at `192.168.64.1` requesting `rgos.bin`. Never flash the v1.1 image onto a different hardware revision without matching upstream OpenWrt support.
+Orange Pi Zero 3 should use Ethernet or a verified supported external adapter unless the exact upstream build documents onboard wireless support.
 
-## Before taking money
+## x86_64 PC
 
-Bench-test the actual acceptor's voltage interface, pulse polarity, pulse width, debounce, ESP GPIO levels, relay/LED wiring, reboot/brownout behavior and repeated insertions.
+The release contains both legacy BIOS and UEFI images, with ext4 and squashfs variants when generated.
+
+- combined.img.gz: legacy BIOS
+- combined-efi.img.gz: UEFI
+
+Write an image using Rufus, Etcher, or:
+
+    gunzip -c IMAGE.img.gz | sudo dd of=/dev/DEVICE bs=4M conv=fsync status=progress
+
+BlazePwifi does not rely on a fixed eth0 name. Assign actual detected interfaces to WAN, management and hotspot roles.
+
+## Ruijie RG-EW1200G Pro v1.1
+
+The release contains an official OpenWrt checksum-verified initramfs bootstrap and a BlazePwifi squashfs sysupgrade. The bootstrap does not contain the persistent BlazePwifi installation. Confirm the exact v1.1 hardware and serial/TFTP recovery before flashing.
+
+## BlazeRental Android
+
+### Strong QR / Device Owner mode
+
+Use only an owned or explicitly authorized rental phone. Factory-reset it and enter Android QR provisioning during Setup Wizard. A real provisioning QR contains:
+- BlazeRental DPC component;
+- APK download URL;
+- SHA-256 APK checksum;
+- BlazePwifi server URL;
+- one-time enrollment token;
+- device label.
+
+On supported Android/OEM builds, this provisions BlazeRental as Device Owner. Managed policy can apply the dedicated launcher, lock-task allowlist and supported restrictions. Rental time is server-authoritative; after reboot cached lease state fails closed until the server is reached.
+
+### Manual APK mode
+
+BlazeRental.apk can also be installed normally. On first launch, enter the BlazePwifi server URL and a one-time rental enrollment token generated by the administrator. The app then exchanges that token for its per-device identity and uses the same server-authoritative lease system.
+
+Manual installation remains intentionally lower-security because normal installation cannot reliably prevent uninstall, settings access or safe-mode bypass.
+
+Neither mode claims resistance to bootloader/recovery reflashing, privileged exploits or OEM service tools.
+
+## Portal previews
+
+Open portal-templates/index.html locally to browse static previews for first-run setup, admin, captive portal, rate selection, insert coin, voucher, active/pause states, Vendo/controller setup and rental enrollment/lock screens.
+
+## Release verification
+
+GitHub Release assets include a release-wide SHA256SUMS and manifest.json. Verify checksums before flashing or installing.
+
+## Before accepting payment
+
+Physically test exact-device boot/recovery, DHCP/DNS/captive behavior, VLAN isolation, controller voltage/polarity/pulse timing, GPIO isolation, brownouts during writes, duplicate/retry events, rental reboot/network-loss behavior, and sustained multi-client load.
+
+CI-green means build-validated; it does not automatically mean field-proven.

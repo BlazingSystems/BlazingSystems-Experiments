@@ -1,0 +1,39 @@
+#!/bin/sh
+. "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
+. "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
+. "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
+bp_rental_init
+
+action="$(bp_param action)"; nonce="$(bp_param nonce)"; sig="$(bp_param sig)"
+device="$(bp_param device)"; now="$(bp_now)"
+[ -n "$nonce" ] && [ -n "$sig" ] || bp_fail "missing authentication"
+
+case "$action" in
+  enroll)
+    eid="$(bp_param enroll_id)"
+    printf '%s' "$eid" | grep -Eq '^[0-9a-f]{12}$' || bp_fail "invalid enrollment id"
+    line="$(bp_rental_enroll_lookup "$eid")"; [ -n "$line" ] || bp_fail "enrollment invalid or used"
+    secret="$(printf '%s' "$line" | cut -f2)"; expiry="$(printf '%s' "$line" | cut -f3)"; label="$(printf '%s' "$line" | cut -f4-)"
+    [ "$expiry" -ge "$now" ] 2>/dev/null || { bp_rental_enroll_consume "$eid"; bp_fail "enrollment expired"; }
+    token="$eid.$secret"
+    expected="$(bp_rental_hmac "$token" "enroll|$nonce|$token")" || bp_fail "rental crypto unavailable"
+    [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    did="$(bp_rental_hex 12)"; dsecret="$(bp_rental_hex 24)"
+    bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
+    bp_rental_enroll_consume "$eid"
+    body="$(printf '{"ok":true,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
+    bp_json "$body"
+    ;;
+  status)
+    did="$(bp_param device_id)"
+    printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}$' || bp_fail "invalid device id"
+    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown device"
+    secret="$(printf '%s' "$line" | cut -f2)"; lease="$(printf '%s' "$line" | cut -f3)"; label="$(printf '%s' "$line" | cut -f4)"; 
+    expected="$(bp_rental_hmac "$secret" "status|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"
+    body="$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$((now*1000))" "$((${lease:-0}*1000))")"
+    bp_json "$body"
+    ;;
+  *) bp_fail "unknown rental action" ;;
+esac
