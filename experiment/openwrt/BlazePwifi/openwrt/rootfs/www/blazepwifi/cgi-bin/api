@@ -47,16 +47,27 @@ case "$action" in
     now="$(bp_now)"; window="$(bp_cfg coin_window)"; [ -n "$window" ] || window=120
     expires=$((now+window))
     target_nonce="$(hexdump -n 8 -e '8/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$now")"
+    target_file="$BP_TARGET_DIR/$vendo.tsv"
     bp_lock || bp_fail "accounting busy"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$BP_TARGET"
-    chmod 600 "$BP_TARGET"
+    if [ -f "$target_file" ]; then
+      IFS="$(printf '\t')" read -r old_device old_mac old_nonce old_expires old_vendo < "$target_file"
+      if [ "$old_expires" -gt "$now" ] 2>/dev/null && [ "$old_device" != "$device" ]; then
+        bp_unlock
+        bp_fail "selected vendo is busy"
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_file"
+    chmod 600 "$target_file"
     bp_unlock
     bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"expires\":$expires}"
     ;;
 
   coin_stop)
     bp_lock || bp_fail "accounting busy"
-    if [ -f "$BP_TARGET" ] && [ "$(cut -f1 "$BP_TARGET")" = "$device" ]; then rm -f "$BP_TARGET"; fi
+    for target_file in "$BP_TARGET_DIR"/*.tsv; do
+      [ -f "$target_file" ] || continue
+      [ "$(cut -f1 "$target_file")" = "$device" ] && rm -f "$target_file"
+    done
     bp_unlock
     bp_json '{"ok":true}'
     ;;
