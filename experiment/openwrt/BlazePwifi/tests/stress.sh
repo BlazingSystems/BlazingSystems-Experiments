@@ -32,11 +32,13 @@ bp_lock
 [ "$(cat "$BP_RUN/lock/pid")" = "$(bp_self_pid)" ]
 bp_unlock
 [ ! -d "$BP_RUN/lock" ]
+echo 'stress: stale lock recovery ok'
 
 # A read-only portal visit must not create a durable account row.
 D0=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 bp_bind_device "$D0" 02:00:00:00:00:ee 10.0.0.2 0
 ! grep -q "^$D0	" "$BP_ACCOUNTS"
+echo 'stress: zero-account suppression ok'
 
 D=cccccccccccccccccccccccccccccccc
 MAC1=02:00:00:00:00:01
@@ -63,6 +65,7 @@ bp_events_has "$events" "$VOUCHER_EVENT"
 COINS="$(printf '%s' "$events" | tr ',' '\n' | grep -c '^c:' || true)"
 [ "$COINS" -le 8 ]
 [ "$(printf '%s' "$events" | tr ',' '\n' | grep -c '^v:' || true)" -eq 1 ]
+echo 'stress: replay history retention ok'
 
 # Runtime loss/reboot must not erase paid account state.
 rm -rf "$T/run"; mkdir -p "$T/run"; chmod 700 "$T/run"
@@ -70,6 +73,7 @@ BP_RUN="$T/run"; export BP_RUN
 bp_init_dirs
 [ "$(bp_get_credit "$D")" -eq 500 ]
 [ "$(bp_remaining "$D")" -gt 3000 ]
+echo 'stress: persistent account reload ok'
 
 # Private-MAC rotation rebinds the same account instead of duplicating it.
 bp_lock
@@ -78,6 +82,7 @@ bp_unlock
 [ "$(bp_account_field "$D" 7)" = "$MAC2" ]
 [ "$(bp_get_credit "$D")" -eq 500 ]
 [ "$(awk -F '\t' -v d="$D" '$1==d {n++} END{print n+0}' "$BP_ACCOUNTS")" -eq 1 ]
+echo 'stress: MAC rebind ok'
 
 # v0.1 MAC-keyed state is claimed exactly once during upgrade.
 LEGACY_MAC=02:00:00:00:00:99
@@ -91,6 +96,7 @@ bp_unlock
 [ "$(bp_remaining "$D2")" -gt 3000 ]
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_CREDITS"
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
+echo 'stress: legacy migration ok'
 
 # Simulate a crash after the new account reached disk but before old legacy
 # files were cleaned; the same MAC must never be claimable twice.
@@ -101,6 +107,7 @@ bp_lock
 bp_bind_device "$D3" "$LEGACY_MAC" 10.0.0.99 1
 bp_unlock
 [ "$(bp_get_credit "$D3")" -eq 0 ]
+echo 'stress: migration replay blocked'
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_CREDITS"
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
 
@@ -126,6 +133,7 @@ while [ "$i" -le 12 ]; do
   [ "$(bp_get_credit "$d")" -eq "$i" ]
   i=$((i+1))
 done
+echo 'stress: concurrent writers ok'
 
 echo 'BlazePwifi persistence/replay stress checks passed'
 
