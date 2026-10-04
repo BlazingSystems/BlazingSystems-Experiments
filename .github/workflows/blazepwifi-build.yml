@@ -10,6 +10,10 @@ on:
       - 'experiment/openwrt/BlazePwifi/**'
       - '.github/workflows/blazepwifi-build.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -27,6 +31,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
       - name: Controller protocol parity
         run: sh experiment/openwrt/BlazePwifi/tests/controllers.sh
+      - name: BlazePwifi v0.4 controller compatibility
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_controller_compat.sh
       - name: Linux GPIO agent validation
         run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: BlazeRental source validation
