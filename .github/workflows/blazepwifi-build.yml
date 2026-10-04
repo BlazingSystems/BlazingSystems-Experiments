@@ -207,7 +207,9 @@ jobs:
           mkdir -p release-out
           find downloaded -mindepth 1 -maxdepth 1 -type d | while read d; do
             n=$(basename "$d")
-            (cd "$d" && zip -qr "../../release-out/${n}.zip" .)
+            if [ "$n" != "BlazePwifi-android-BlazeRental" ]; then
+              (cd "$d" && zip -qr "../../release-out/${n}.zip" .)
+            fi
             find "$d" -type f | while read f; do
               b=$(basename "$f")
               case "$b" in
@@ -291,6 +293,13 @@ jobs:
           python3 experiment/openwrt/BlazePwifi/tools/render-qr.py \
             --json release-out/BlazeRental-provisioning-SAMPLE.json \
             --out release-out/BlazeRental-provisioning-SAMPLE.png
+          (
+            cd release-out
+            zip -q BlazePwifi-android-BlazeRental.zip \
+              BlazeRental.apk BlazeRental-QR-Setup.html \
+              BlazeRental-provisioning-SAMPLE.json BlazeRental-provisioning-SAMPLE.png \
+              BlazeRental-signing-cert.pem BlazeRental-signing-fingerprint.txt
+          )
           tar -czf release-out/BlazePwifi-portal-templates.tar.gz -C experiment/openwrt/BlazePwifi portal-templates
           (
             cd release-out
