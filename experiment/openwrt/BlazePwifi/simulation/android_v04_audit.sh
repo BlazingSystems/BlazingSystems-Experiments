@@ -86,8 +86,21 @@ if ! adb shell dpm set-device-owner "$ADMIN" >"$OUT/device-owner.txt" 2>&1; then
 fi
 grep -Eqi 'Success|Active admin set' "$OUT/device-owner.txt" || fail "Device Owner command did not report success"
 
-adb shell am start -W -n "$LAUNCHER_COMPONENT" >"$OUT/home-launch.txt" 2>&1 || fail "HOME launch failed"
+set +e
+timeout 20 adb shell am start -n "$LAUNCHER_COMPONENT" >"$OUT/home-launch.txt" 2>&1
+HOME_RC=$?
+set -e
+# Old Android launchers can leave `am start -W` waiting indefinitely even after
+# HOME is visible. Treat timeout as acceptable only if the activity really becomes active.
+if [ "$HOME_RC" -ne 0 ] && [ "$HOME_RC" -ne 124 ]; then
+  cat "$OUT/home-launch.txt" >&2 || true
+  fail "HOME launch command failed"
+fi
 sleep 4
+adb shell dumpsys activity activities > "$OUT/activity-after-home.txt" 2>/dev/null || true
+grep -Fq "$LAUNCHER_COMPONENT" "$OUT/activity-after-home.txt" \
+  || grep -Fq "com.google.android.apps.nexuslauncher.NexusLauncherActivity" "$OUT/activity-after-home.txt" \
+  || fail "Launcher3 HOME activity did not become active"
 
 dump_ui "01-rental-page"
 assert_ui "$OUT/01-rental-page.xml" "BLAZERENTAL"

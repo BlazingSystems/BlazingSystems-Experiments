@@ -266,6 +266,14 @@ jobs:
           if [ -e /dev/kvm ]; then
             sudo chmod 666 /dev/kvm
           fi
+      - name: Enable Android emulator KVM acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+            test -r /dev/kvm -a -w /dev/kvm
+          fi
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 27
@@ -273,7 +281,7 @@ jobs:
           target: default
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics -no-snapshot -no-metrics
           script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
       - uses: actions/upload-artifact@v4
         if: always()
