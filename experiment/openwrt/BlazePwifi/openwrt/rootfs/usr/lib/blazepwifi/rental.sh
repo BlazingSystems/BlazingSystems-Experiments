@@ -9,6 +9,9 @@ bp_rental_init() {
   bp_init_dirs
   touch "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
   chmod 600 "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
+  if [ -n "${BP_RENTAL_POLICY_V2:-}" ]; then
+    touch "$BP_RENTAL_POLICY_V2"; chmod 600 "$BP_RENTAL_POLICY_V2"
+  fi
 }
 
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }

@@ -4,11 +4,10 @@ import android.content.Context;
 import org.json.JSONObject;
 
 public final class RentalPolicyClient {
+    private static final String KEEP = "@keep";
     private RentalPolicyClient() {}
 
-    public static boolean sync(Context context) {
-        return LeaseClient.sync(context);
-    }
+    public static boolean sync(Context context) { return LeaseClient.sync(context); }
 
     public static JSONObject policyPatch(Context context, long expectedRevision, String patchJson) {
         try {
@@ -16,17 +15,46 @@ public final class RentalPolicyClient {
             String secret = RentalLeaseStore.deviceSecret(context);
             String deviceId = RentalLeaseStore.deviceId(context);
             if (base.length() == 0 || secret.length() == 0 || deviceId.length() == 0) return null;
+
+            JSONObject patch = new JSONObject(patchJson);
+            String mode = value(patch, "launcher_mode");
+            String allowed = value(patch, "allowed_packages");
+            String hidden = value(patch, "hidden_packages");
+            String preferred = value(patch, "preferred_vendo");
+            String timer = value(patch, "timer_user_toggle");
+            String notifications = value(patch, "notifications_enabled");
+            String quick = value(patch, "quick_controls");
+            String gesture = value(patch, "admin_gesture_value");
+            String adminPassword = value(patch, "admin_password");
+
             String nonce = Hmac.nonce();
             String canonical = "policy_patch|" + nonce + "|" + deviceId + "|"
-                    + expectedRevision + "|" + patchJson;
+                    + expectedRevision + "|" + mode + "|" + allowed + "|" + hidden + "|"
+                    + preferred + "|" + timer + "|" + notifications + "|" + quick + "|"
+                    + gesture + "|" + adminPassword;
             String body = "action=policy_patch&nonce=" + LeaseClient.enc(nonce)
                     + "&device_id=" + LeaseClient.enc(deviceId)
                     + "&expected_revision=" + expectedRevision
-                    + "&patch=" + LeaseClient.enc(patchJson)
+                    + "&launcher_mode=" + LeaseClient.enc(mode)
+                    + "&allowed_packages=" + LeaseClient.enc(allowed)
+                    + "&hidden_packages=" + LeaseClient.enc(hidden)
+                    + "&preferred_vendo=" + LeaseClient.enc(preferred)
+                    + "&timer_user_toggle=" + LeaseClient.enc(timer)
+                    + "&notifications_enabled=" + LeaseClient.enc(notifications)
+                    + "&quick_controls=" + LeaseClient.enc(quick)
+                    + "&admin_gesture_value=" + LeaseClient.enc(gesture)
+                    + "&admin_password=" + LeaseClient.enc(adminPassword)
                     + "&sig=" + LeaseClient.enc(Hmac.sha256Hex(secret, canonical));
             return LeaseClient.post(base, body);
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static String value(JSONObject patch, String key) {
+        if (!patch.has(key)) return KEEP;
+        Object value = patch.opt(key);
+        if (value == null || value == JSONObject.NULL) return "";
+        return String.valueOf(value);
     }
 }

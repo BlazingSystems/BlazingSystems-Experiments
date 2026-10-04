@@ -66,18 +66,28 @@ public final class LeaseClient {
                 String preferred = response.optString("preferred_vendo", "");
                 int secondsPerPulse = response.optInt("rental_seconds_per_pulse", 600);
                 String policySignature = response.optString("policy_sig", "");
+                String policySignatureV2 = response.optString("policy_sig_v2", "");
 
                 String legacyCanonical = deviceId + "|" + nonce + "|" + serverNow + "|"
                         + leaseUntil + "|" + allowed + "|" + salt + "|" + hash + "|"
                         + rounds + "|" + preferred + "|" + secondsPerPulse;
-                if (policySignature.length() == 0
-                        || !policySignature.equals(Hmac.sha256Hex(newSecret, legacyCanonical))) {
-                    return false;
-                }
-
                 long revision = response.has("policy_revision")
                         ? response.optLong("policy_revision", 0L)
                         : Math.max(0L, AndroidRentalPolicyRepository.revision(context) + 1L);
+
+                if (response.has("policy_revision")) {
+                    String v2Canonical = "v2|" + deviceId + "|" + nonce + "|" + serverNow + "|"
+                            + leaseUntil + "|" + revision + "|" + mode + "|" + allowed + "|"
+                            + hidden + "|" + salt + "|" + hash + "|" + rounds + "|"
+                            + preferred + "|" + secondsPerPulse;
+                    if (policySignatureV2.length() == 0
+                            || !policySignatureV2.equals(Hmac.sha256Hex(newSecret, v2Canonical))) {
+                        return false;
+                    }
+                } else if (policySignature.length() == 0
+                        || !policySignature.equals(Hmac.sha256Hex(newSecret, legacyCanonical))) {
+                    return false;
+                }
 
                 String effectiveAllowed = allowed;
                 if ("*".equals(allowed)) effectiveAllowed = inventoryCsv(context);
