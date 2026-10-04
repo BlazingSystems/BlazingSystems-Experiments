@@ -1,0 +1,88 @@
+name: BlazePwifi v0.3.0 Core Environment Simulation
+on:
+  push:
+    branches: [blazepwifi-v0.3.0-simulation]
+    paths:
+      - '.github/workflows/blazepwifi-simulation-core.yml'
+      - 'experiment/openwrt/BlazePwifi/simulation/browser_audit.py'
+      - 'experiment/openwrt/BlazePwifi/simulation/x86_qemu_audit.py'
+      - 'experiment/openwrt/BlazePwifi/simulation/orangepi_userspace_audit.sh'
+      - 'experiment/openwrt/BlazePwifi/simulation/esp_audit.sh'
+      - 'experiment/openwrt/BlazePwifi/simulation/ruijie_audit.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install selenium
+      - run: |
+          mkdir -p simulation-results
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/blaze-key.pem -out /tmp/blaze-cert.pem -days 1 -subj '/CN=127.0.0.1'
+          python3 experiment/openwrt/BlazePwifi/simulation/browser_audit.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-browser
+          path: simulation-results/browser/
+
+  x86-qemu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf python3-pip
+      - run: python3 -m pip install pexpect
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p downloads simulation-results/x86
+          gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p 'openwrt-25.12.5-x86-64-generic-ext4-combined.img.gz' -p 'openwrt-25.12.5-x86-64-generic-ext4-combined-efi.img.gz' -D downloads --clobber
+          gzip -dkf downloads/openwrt-25.12.5-x86-64-generic-ext4-combined.img.gz
+          gzip -dkf downloads/openwrt-25.12.5-x86-64-generic-ext4-combined-efi.img.gz
+          python3 experiment/openwrt/BlazePwifi/simulation/x86_qemu_audit.py --image downloads/openwrt-25.12.5-x86-64-generic-ext4-combined.img --mode bios --out simulation-results/x86
+          OVMF=$(find /usr/share/OVMF -type f -name 'OVMF_CODE*.fd' | head -n1)
+          python3 experiment/openwrt/BlazePwifi/simulation/x86_qemu_audit.py --image downloads/openwrt-25.12.5-x86-64-generic-ext4-combined-efi.img --mode uefi --ovmf "$OVMF" --out simulation-results/x86
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-x86
+          path: simulation-results/x86/
+
+  orangepi-userspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support e2fsprogs util-linux
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash experiment/openwrt/BlazePwifi/simulation/orangepi_userspace_audit.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-orangepi
+          path: simulation-results/orangepi/
+
+  esp-simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install esptool
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash experiment/openwrt/BlazePwifi/simulation/esp_audit.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-esp
+          path: simulation-results/esp/
+
+  ruijie-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y binwalk squashfs-tools
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash experiment/openwrt/BlazePwifi/simulation/ruijie_audit.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-sim-ruijie
+          path: simulation-results/ruijie/
