@@ -30,8 +30,7 @@ public class FloatingTimerService extends Service {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             long remaining = RentalLeaseStore.remainingMs(FloatingTimerService.this);
-            boolean enabled = getSharedPreferences("blaze_rental_ui", MODE_PRIVATE)
-                    .getBoolean("floating_timer", true);
+            boolean enabled = RentalUiPolicy.floatingTimerEnabled(FloatingTimerService.this);
             if (remaining <= 0L || !enabled) {
                 ManagedPolicyController.apply(FloatingTimerService.this);
                 if (remaining <= 0L
@@ -47,11 +46,11 @@ public class FloatingTimerService extends Service {
     };
 
     public static void ensure(Context context) {
-        boolean enabled = context.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
-                .getBoolean("floating_timer", true);
+        boolean enabled = RentalUiPolicy.floatingTimerEnabled(context);
+        boolean operatorAllowed = RentalUiPolicy.floatingTimerOperatorAllowed(context);
         boolean overlay = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context);
         if (!FloatingTimerPolicy.shouldShow(
-                RentalLeaseStore.isLeaseValid(context), enabled, true, overlay)) {
+                RentalLeaseStore.isLeaseValid(context), enabled, operatorAllowed, overlay)) {
             stop(context);
             return;
         }

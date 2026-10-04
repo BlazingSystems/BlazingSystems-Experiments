@@ -65,8 +65,16 @@ public final class LeaseClient {
                 int rounds = response.optInt("admin_rounds", 4096);
                 String preferred = response.optString("preferred_vendo", "");
                 int secondsPerPulse = response.optInt("rental_seconds_per_pulse", 600);
+                String timerMode = response.optString("timer_mode", "overlay");
+                boolean timerUserToggle = response.optInt("timer_user_toggle", 1) != 0;
+                String quickControls = response.optString("quick_controls", "");
+                boolean notificationsEnabled = response.optInt("notifications_enabled", 1) != 0;
+                String gestureType = response.optString("admin_gesture_type", "hold");
+                long gestureValue = response.optLong("admin_gesture_value", 4000L);
+                long offlineGrace = response.optLong("offline_grace", 0L);
                 String policySignature = response.optString("policy_sig", "");
                 String policySignatureV2 = response.optString("policy_sig_v2", "");
+                String policySignatureV3 = response.optString("policy_sig_v3", "");
 
                 String legacyCanonical = deviceId + "|" + nonce + "|" + serverNow + "|"
                         + leaseUntil + "|" + allowed + "|" + salt + "|" + hash + "|"
@@ -75,14 +83,35 @@ public final class LeaseClient {
                         ? response.optLong("policy_revision", 0L)
                         : Math.max(0L, AndroidRentalPolicyRepository.revision(context) + 1L);
 
+                String acceptedCanonical = legacyCanonical;
+                String acceptedSignature = policySignature;
+                boolean fullPolicyVerified = false;
                 if (response.has("policy_revision")) {
                     String v2Canonical = "v2|" + deviceId + "|" + nonce + "|" + serverNow + "|"
                             + leaseUntil + "|" + revision + "|" + mode + "|" + allowed + "|"
                             + hidden + "|" + salt + "|" + hash + "|" + rounds + "|"
                             + preferred + "|" + secondsPerPulse;
-                    if (policySignatureV2.length() == 0
-                            || !policySignatureV2.equals(Hmac.sha256Hex(newSecret, v2Canonical))) {
-                        return false;
+                    String v3Canonical = "v3|" + deviceId + "|" + nonce + "|" + serverNow + "|"
+                            + leaseUntil + "|" + revision + "|" + mode + "|" + allowed + "|"
+                            + hidden + "|" + salt + "|" + hash + "|" + rounds + "|"
+                            + preferred + "|" + secondsPerPulse + "|" + timerMode + "|"
+                            + (timerUserToggle ? "1" : "0") + "|" + quickControls + "|"
+                            + (notificationsEnabled ? "1" : "0") + "|" + gestureType + "|"
+                            + gestureValue + "|" + offlineGrace;
+                    if (policySignatureV3.length() > 0) {
+                        if (!policySignatureV3.equals(Hmac.sha256Hex(newSecret, v3Canonical))) {
+                            return false;
+                        }
+                        acceptedCanonical = v3Canonical;
+                        acceptedSignature = policySignatureV3;
+                        fullPolicyVerified = true;
+                    } else {
+                        if (policySignatureV2.length() == 0
+                                || !policySignatureV2.equals(Hmac.sha256Hex(newSecret, v2Canonical))) {
+                            return false;
+                        }
+                        acceptedCanonical = v2Canonical;
+                        acceptedSignature = policySignatureV2;
                     }
                 } else if (policySignature.length() == 0
                         || !policySignature.equals(Hmac.sha256Hex(newSecret, legacyCanonical))) {
@@ -93,8 +122,12 @@ public final class LeaseClient {
                 if ("*".equals(allowed)) effectiveAllowed = inventoryCsv(context);
 
                 AndroidRentalPolicyRepository.applyVerified(context, revision, mode,
-                        effectiveAllowed, hidden, "", legacyCanonical,
-                        policySignatureV2.length() > 0 ? policySignatureV2 : policySignature);
+                        effectiveAllowed, hidden, "", acceptedCanonical, acceptedSignature);
+                if (fullPolicyVerified) {
+                    RentalUiPolicy.applyVerified(context, timerMode, timerUserToggle,
+                            quickControls, notificationsEnabled, gestureType,
+                            gestureValue, offlineGrace);
+                }
                 if (salt.length() > 0 && hash.length() > 0) {
                     RentalLeaseStore.recordAdminVerifier(context, salt, hash, rounds);
                 }
@@ -135,7 +168,7 @@ public final class LeaseClient {
     }
 
     static String inventoryCsv(Context context) {
-        List<String> packages = ManagedPolicyController.safeLaunchablePackages(context);
+        List<String> packages = ManagedPolicyController.installedLaunchablePackages(context);
         StringBuilder out = new StringBuilder();
         for (String pkg : packages) {
             if (out.length() > 0) out.append(',');

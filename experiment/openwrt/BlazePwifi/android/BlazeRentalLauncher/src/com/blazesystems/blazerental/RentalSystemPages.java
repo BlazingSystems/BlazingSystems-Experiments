@@ -12,6 +12,8 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
 import android.os.SystemClock;
 import android.os.Handler;
 import android.view.ViewGroup;
@@ -82,8 +84,7 @@ public final class RentalSystemPages {
         final TextView timer = headline(launcher, "00:00:00");
         timer.setTextSize(42f);
         final Handler adminHandler = new Handler();
-        final long holdMs = launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
-                .getLong("admin_hold_ms", 4000L);
+        final long holdMs = RentalUiPolicy.adminHoldMs(launcher);
         final AdminGestureController adminGesture = new AdminGestureController(holdMs);
         final Runnable openAdmin = new Runnable() {
             @Override public void run() {
@@ -156,70 +157,95 @@ public final class RentalSystemPages {
         root.addView(headline(launcher, "QUICK CONTROLS"));
 
         final AudioManager audio = (AudioManager) launcher.getSystemService(Context.AUDIO_SERVICE);
-        LinearLayout volume = horizontal(launcher);
-        Button down = smallButton(launcher, "VOLUME −");
-        Button up = smallButton(launcher, "VOLUME +");
-        volume.addView(down, weight());
-        volume.addView(up, weight());
-        root.addView(volume, rowMargins(launcher));
-
-        down.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_LOWER);
+        if (RentalUiPolicy.quickControlAllowed(launcher, "volume_down")
+                || RentalUiPolicy.quickControlAllowed(launcher, "volume_up")) {
+            LinearLayout volume = horizontal(launcher);
+            Button down = smallButton(launcher, "VOLUME −");
+            Button up = smallButton(launcher, "VOLUME +");
+            if (RentalUiPolicy.quickControlAllowed(launcher, "volume_down")) {
+                volume.addView(down, weight());
+                down.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_LOWER);
+                    }
+                });
             }
-        });
-        up.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_RAISE);
+            if (RentalUiPolicy.quickControlAllowed(launcher, "volume_up")) {
+                volume.addView(up, weight());
+                up.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_RAISE);
+                    }
+                });
             }
-        });
+            root.addView(volume, rowMargins(launcher));
+        }
 
-        final Button bluetoothToggle = smallButton(launcher,
-                QuickControlController.isBluetoothEnabled() ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
-        root.addView(bluetoothToggle, rowMargins(launcher));
-        bluetoothToggle.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                boolean next = !QuickControlController.isBluetoothEnabled();
-                boolean requested = QuickControlController.setBluetoothEnabled(next);
-                bluetoothToggle.setText(next && requested ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
-                if (!requested) Toast.makeText(launcher,
-                        "Bluetooth control is unavailable on this device", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        final Button torchToggle = smallButton(launcher,
-                QuickControlController.torchEnabled(launcher) ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
-        root.addView(torchToggle, rowMargins(launcher));
-        torchToggle.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                boolean next = !QuickControlController.torchEnabled(launcher);
-                if (QuickControlController.setTorch(launcher, next)) {
-                    torchToggle.setText(next ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
-                } else {
-                    Toast.makeText(launcher, "Flashlight unavailable", Toast.LENGTH_SHORT).show();
+        if (RentalUiPolicy.quickControlAllowed(launcher, "bluetooth")) {
+            final Button bluetoothToggle = smallButton(launcher,
+                    QuickControlController.isBluetoothEnabled() ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
+            root.addView(bluetoothToggle, rowMargins(launcher));
+            bluetoothToggle.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    boolean next = !QuickControlController.isBluetoothEnabled();
+                    boolean requested = QuickControlController.setBluetoothEnabled(next);
+                    bluetoothToggle.setText(next && requested ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
+                    if (!requested) Toast.makeText(launcher,
+                            "Bluetooth control is unavailable on this device", Toast.LENGTH_SHORT).show();
                 }
+            });
+    
             }
-        });
 
-        root.addView(infoCard(launcher, networkStatus(launcher)));
-
-        final Button timerToggle = smallButton(launcher,
-                launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
-                        .getBoolean("floating_timer", true)
-                        ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
-        root.addView(timerToggle, rowMargins(launcher));
-        timerToggle.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                boolean current = launcher.getSharedPreferences(
-                        "blaze_rental_ui", Context.MODE_PRIVATE)
-                        .getBoolean("floating_timer", true);
-                boolean next = !current;
-                QuickControlController.setFloatingTimer(launcher, next);
-                timerToggle.setText(next ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
-                Toast.makeText(launcher, next ? "Floating timer enabled" :
-                        "Floating timer disabled", Toast.LENGTH_SHORT).show();
+        if (RentalUiPolicy.quickControlAllowed(launcher, "flashlight")) {
+            final Button torchToggle = smallButton(launcher,
+                    QuickControlController.torchEnabled(launcher) ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
+            root.addView(torchToggle, rowMargins(launcher));
+            torchToggle.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    boolean next = !QuickControlController.torchEnabled(launcher);
+                    if (QuickControlController.setTorch(launcher, next)) {
+                        torchToggle.setText(next ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
+                    } else {
+                        Toast.makeText(launcher, "Flashlight unavailable", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+    
             }
-        });
+
+        if (RentalUiPolicy.quickControlAllowed(launcher, "network_status")) {
+            root.addView(infoCard(launcher, networkStatus(launcher)));
+        }
+        if (RentalUiPolicy.quickControlAllowed(launcher, "battery_status")) {
+            root.addView(infoCard(launcher, batteryStatus(launcher)));
+        }
+
+
+        if (RentalUiPolicy.floatingTimerUserToggleAllowed(launcher)) {
+            final Button timerToggle = smallButton(launcher,
+                    launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
+                            .getBoolean("floating_timer", true)
+                            ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
+            root.addView(timerToggle, rowMargins(launcher));
+            timerToggle.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    boolean current = launcher.getSharedPreferences(
+                            "blaze_rental_ui", Context.MODE_PRIVATE)
+                            .getBoolean("floating_timer", true);
+                    boolean next = !current;
+                    QuickControlController.setFloatingTimer(launcher, next);
+                    timerToggle.setText(next ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
+                    Toast.makeText(launcher, next ? "Floating timer enabled" :
+                            "Floating timer disabled", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else if (RentalUiPolicy.quickControlAllowed(launcher, "floating_timer")) {
+            root.addView(infoCard(launcher,
+                    RentalUiPolicy.floatingTimerForcedOn(launcher)
+                            ? "Floating timer: always on (operator policy)"
+                            : "Floating timer: off (operator policy)"));
+        }
 
         root.addView(body(launcher,
                 "Safe controls only. Android Settings and the system notification shade stay locked in Rental Mode."));
@@ -232,6 +258,13 @@ public final class RentalSystemPages {
     private static View createNotificationsPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
         root.addView(headline(launcher, "NOTIFICATIONS"));
+        if (!RentalUiPolicy.notificationsEnabled(launcher)) {
+            root.addView(infoCard(launcher, "Notification page disabled by operator policy."));
+            ScrollView disabled = new ScrollView(launcher);
+            disabled.setFillViewport(true);
+            disabled.addView(root);
+            return disabled;
+        }
         final LinearLayout list = new LinearLayout(launcher);
         list.setOrientation(LinearLayout.VERTICAL);
         root.addView(list, new LinearLayout.LayoutParams(
@@ -367,6 +400,19 @@ public final class RentalSystemPages {
 
     private static LinearLayout.LayoutParams weight() {
         return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    }
+
+    private static String batteryStatus(Context c) {
+        try {
+            Intent state = c.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (state == null) return "Battery: unavailable";
+            int level = state.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = state.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+            int percent = level < 0 ? -1 : Math.round(level * 100f / Math.max(1, scale));
+            return percent < 0 ? "Battery: unavailable" : "Battery: " + percent + "%";
+        } catch (Exception ignored) {
+            return "Battery: unavailable";
+        }
     }
 
     private static String networkStatus(Context c) {

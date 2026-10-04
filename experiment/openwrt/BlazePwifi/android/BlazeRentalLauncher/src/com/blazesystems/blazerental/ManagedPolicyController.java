@@ -49,17 +49,25 @@ public final class ManagedPolicyController {
         } catch (Exception ignored) {}
     }
 
-    public static List<String> safeLaunchablePackages(Context context) {
+    public static List<String> installedLaunchablePackages(Context context) {
         Intent query = new Intent(Intent.ACTION_MAIN);
         query.addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> found = context.getPackageManager()
                 .queryIntentActivities(query, PackageManager.MATCH_ALL);
         LinkedHashSet<String> out = new LinkedHashSet<String>();
-        RentalPolicy policy = AndroidRentalPolicyRepository.load(context);
         for (ResolveInfo resolve : found) {
             if (resolve.activityInfo == null) continue;
             String pkg = resolve.activityInfo.packageName;
             if (pkg == null || pkg.equals(context.getPackageName())) continue;
+            out.add(pkg);
+        }
+        return new ArrayList<String>(out);
+    }
+
+    public static List<String> safeLaunchablePackages(Context context) {
+        LinkedHashSet<String> out = new LinkedHashSet<String>();
+        RentalPolicy policy = AndroidRentalPolicyRepository.load(context);
+        for (String pkg : installedLaunchablePackages(context)) {
             if (policy.isUnrestricted() || policy.isPackageAllowed(pkg)) out.add(pkg);
         }
         return new ArrayList<String>(out);

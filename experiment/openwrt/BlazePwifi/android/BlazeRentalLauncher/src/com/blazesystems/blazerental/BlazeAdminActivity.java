@@ -428,10 +428,14 @@ public class BlazeAdminActivity extends Activity {
                 .setItems(values, new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int which) {
                         long value = which == 0 ? 3000L : which == 1 ? 5000L : 7000L;
-                        getSharedPreferences("blaze_rental_ui", MODE_PRIVATE)
-                                .edit().putLong("admin_hold_ms", value).apply();
-                        Toast.makeText(BlazeAdminActivity.this,
-                                "Admin hold set to " + values[which], Toast.LENGTH_SHORT).show();
+                        try {
+                            JSONObject patch = new JSONObject();
+                            patch.put("admin_gesture_value", String.valueOf(value));
+                            sendPatch(patch.toString());
+                        } catch (Exception ignored) {
+                            Toast.makeText(BlazeAdminActivity.this,
+                                    "Unable to update admin gesture", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 }).show();
     }
