@@ -17,6 +17,28 @@ require_role() {
 }
 
 case "$action" in
+  portal_get)
+    require_role viewer
+    . "${BP_PORTAL_LIB:-/usr/lib/blazepwifi/portal.sh}"
+    key="$(bp_param key)"
+    bp_portal_key_allowed "$key" || bp_fail "invalid portal key"
+    value="$(bp_portal_get "$key")"
+    body="$(printf '{\"ok\":true,\"key\":\"%s\",\"value\":\"%s\"}' "$(bp_json_escape "$key")" "$(bp_json_escape "$value")")"
+    bp_json "$body"
+    ;;
+  portal_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    . "${BP_PORTAL_LIB:-/usr/lib/blazepwifi/portal.sh}"
+    key="$(bp_param key)"; value="$(bp_param value)"
+    bp_portal_key_allowed "$key" || bp_fail "invalid portal key"
+    bp_portal_validate "$key" "$value" || bp_fail "invalid portal value"
+    bp_portal_set "$key" "$value" || bp_fail "portal update failed"
+    bp_auth_audit portal_change "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$key"
+    body="$(printf '{\"ok\":true,\"key\":\"%s\",\"value\":\"%s\"}' "$(bp_json_escape "$key")" "$(bp_json_escape "$value")")"
+    bp_json "$body"
+    ;;
   config_get)
     require_role viewer
     key="$(bp_param key)"

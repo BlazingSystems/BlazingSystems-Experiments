@@ -24,6 +24,7 @@ if [ -f /etc/config/blazepwifi ]; then
   EXISTING_CONFIG=1
 fi
 cp -a /etc/blazepwifi "$BACKUP/" 2>/dev/null || true
+PRESERVED_PORTAL="$BACKUP/blazepwifi/portal/portal.json"
 
 echo "Installing BlazePwifi files..."
 cp -a "$BASE/openwrt/rootfs/." /
@@ -31,9 +32,14 @@ rm -f /etc/uci-defaults/99-blazepwifi
 if [ "$EXISTING_CONFIG" = 1 ]; then
   cp -a "$BACKUP/blazepwifi.config" /etc/config/blazepwifi
 fi
+if [ -s "$PRESERVED_PORTAL" ]; then
+  mkdir -p /etc/blazepwifi/portal
+  cp -a "$PRESERVED_PORTAL" /etc/blazepwifi/portal/portal.json
+fi
 chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
-mkdir -p /etc/blazepwifi/state /tmp/blazepwifi
-chmod 700 /etc/blazepwifi /etc/blazepwifi/state /tmp/blazepwifi
+mkdir -p /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
+chmod 700 /etc/blazepwifi /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
+[ ! -f /etc/blazepwifi/portal/portal.json ] || chmod 600 /etc/blazepwifi/portal/portal.json
 
 ensure_opt(){ key="$1"; value="$2"; uci -q get "blazepwifi.main.$key" >/dev/null 2>&1 || uci set "blazepwifi.main.$key=$value"; }
 ensure_opt portal_port 8080

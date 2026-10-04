@@ -9,6 +9,10 @@ mac="$(bp_mac_for_ip "$ipaddr")"
 mac="$(bp_mac_norm "$mac" 2>/dev/null || true)"
 
 case "$action" in
+  portal_config)
+    . "${BP_PORTAL_LIB:-/usr/lib/blazepwifi/portal.sh}"
+    bp_json "{\"ok\":true,\"portal\":$(bp_portal_json)}"; exit 0
+    ;;
   rates)
     bp_json "{\"ok\":true,\"rates\":$(bp_rates_json)}"; exit 0
     ;;
