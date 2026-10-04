@@ -1188,6 +1188,14 @@ public class Workspace extends PagedView
             mXDown = ev.getX();
             mYDown = ev.getY();
             mTouchDownTime = System.currentTimeMillis();
+            if (LauncherAccessController.isRentalRestricted(mLauncher)) {
+                // onInterceptTouchEvent always sees the initial DOWN even when
+                // PagedView begins intercepting only after horizontal motion.
+                // Preserve it for the fixed-page rental navigation fallback.
+                mBlazeRentalTouchDownX = ev.getX();
+                mBlazeRentalTouchDownY = ev.getY();
+                mBlazeRentalTouchDownPage = getCurrentPage();
+            }
             break;
         case MotionEvent.ACTION_POINTER_UP:
         case MotionEvent.ACTION_UP:
