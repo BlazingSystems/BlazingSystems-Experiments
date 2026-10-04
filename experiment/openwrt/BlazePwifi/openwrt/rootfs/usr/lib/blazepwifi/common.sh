@@ -29,44 +29,21 @@ bp_init_dirs() {
 	chmod 600 "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 }
 
-bp_capture_pid() {
-	IFS=' ' read -r BP_SELF_PID BP_SELF_REST < /proc/self/stat
-}
 bp_tmp_suffix() {
 	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || date +%s
 }
 
 bp_lock() {
-	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER BP_LOCK_TRIES
-	BP_LOCK_PATH="$BP_RUN/lock"
-	bp_capture_pid
-	BP_LOCK_SELF="$BP_SELF_PID"
-	BP_LOCK_TRIES=0
-	while ! mkdir "$BP_LOCK_PATH" 2>/dev/null; do
-		BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
-		if [ -n "$BP_LOCK_OWNER" ] && ! kill -0 "$BP_LOCK_OWNER" 2>/dev/null; then
-			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
-			continue
-		fi
-		BP_LOCK_TRIES=$((BP_LOCK_TRIES+1))
-		if [ -z "$BP_LOCK_OWNER" ] && [ "$BP_LOCK_TRIES" -ge 4 ]; then
-			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
-			BP_LOCK_TRIES=0
-			continue
-		fi
-		[ "$BP_LOCK_TRIES" -gt 80 ] && return 1
-		usleep 50000 2>/dev/null || sleep 1
-	done
-	printf '%s\n' "$BP_LOCK_SELF" > "$BP_LOCK_PATH/pid"
+	mkdir -p "$BP_RUN"
+	exec 9>"$BP_RUN/account.lock"
+	if ! flock -w 10 9; then
+		exec 9>&-
+		return 1
+	fi
 }
 bp_unlock() {
-	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER
-	BP_LOCK_PATH="$BP_RUN/lock"
-	bp_capture_pid
-	BP_LOCK_SELF="$BP_SELF_PID"
-	BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
-	[ -z "$BP_LOCK_OWNER" ] || [ "$BP_LOCK_OWNER" = "$BP_LOCK_SELF" ] || return 0
-	rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
+	flock -u 9 2>/dev/null || true
+	exec 9>&-
 }
 
 bp_durable_sync() {
