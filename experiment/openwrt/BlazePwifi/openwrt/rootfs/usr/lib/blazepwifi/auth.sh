@@ -223,7 +223,10 @@ bp_auth_require_role() {
 	need="$1"; ip="${REMOTE_ADDR:-unknown}"; token="${HTTP_X_BLAZE_SESSION:-$(bp_auth_cookie_token)}"
 	[ -n "$token" ] || return 1
 	bp_auth_init
-	line="$(bp_auth_session_lookup "$token" "$ip")" || return 1
+	bp_auth_lock || return 1
+	if line="$(bp_auth_session_lookup "$token" "$ip")"; then rc=0; else rc=1; fi
+	bp_auth_unlock
+	[ "$rc" -eq 0 ] || return 1
 	user="$(printf '%s' "$line" | cut -f2)"; role="$(printf '%s' "$line" | cut -f3)"; csrf="$(printf '%s' "$line" | cut -f4)"; must_change="$(printf '%s' "$line" | cut -f9)"
 	[ "$(bp_auth_role_rank "$role")" -ge "$(bp_auth_role_rank "$need")" ] || return 2
 	BP_AUTH_TOKEN="$token"; BP_AUTH_USER="$user"; BP_AUTH_ROLE="$role"; BP_AUTH_CSRF="$csrf"; BP_AUTH_MUST_CHANGE="${must_change:-0}"
@@ -234,6 +237,13 @@ bp_auth_require_role() {
 bp_auth_csrf_ok() {
 	got="${HTTP_X_BLAZE_CSRF:-$(bp_param csrf)}"
 	[ -n "${BP_AUTH_CSRF:-}" ] && [ "$got" = "$BP_AUTH_CSRF" ]
+}
+
+
+bp_auth_invalidate_user_sessions() {
+	user="$1"; tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
+	awk -F '\t' -v u="$user" '$2!=u {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
+	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
 }
 
 bp_auth_logout() {
