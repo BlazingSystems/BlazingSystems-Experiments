@@ -17,23 +17,23 @@ if a.mode=='uefi':
 
 log=open(os.path.join(a.out,f'x86-{a.mode}-serial.log'),'wb')
 child=pexpect.spawn(cmd[0],cmd[1:],encoding=None,timeout=240,logfile=log)
-prompt=b'root@[^\\r\\n]+:[^\\r\\n]*#'
-idx=child.expect([b'Please press Enter to activate this console',prompt,b'login:'],timeout=240)
-if idx==0:
-    ready=False
-    for _ in range(12):
-        child.send(b'\\r\\n')
-        try:
-            child.expect([prompt,b'# '],timeout=15)
-            ready=True
-            break
-        except pexpect.TIMEOUT:
-            pass
-    if not ready:
-        raise RuntimeError('OpenWrt serial console did not activate')
-elif idx==2:
-    child.send(b'root\\r\\n')
-    child.expect([prompt,b'# '],timeout=60)
+# Do not depend on a particular hostname/prompt string. The console activation
+# banner can appear before late network messages finish, so probe with a marker.
+idx=child.expect([b'Please press Enter to activate this console',b'login:',b'__BLAZE_READY__'],timeout=240)
+if idx==1:
+    child.send(b'root\\r')
+ready=False
+for _ in range(24):
+    child.send(b'\\r')
+    child.send(b'echo __BLAZE_READY__\\r')
+    try:
+        child.expect(b'__BLAZE_READY__',timeout=5)
+        ready=True
+        break
+    except pexpect.TIMEOUT:
+        pass
+if not ready:
+    raise RuntimeError('OpenWrt booted but serial shell readiness probe failed')
 
 def run(command,timeout=60):
     marker='__BLAZE_RC__'
