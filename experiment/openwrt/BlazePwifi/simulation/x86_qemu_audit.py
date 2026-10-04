@@ -17,13 +17,14 @@ if a.mode=='uefi':
 
 log=open(os.path.join(a.out,f'x86-{a.mode}-serial.log'),'wb')
 child=pexpect.spawn(cmd[0],cmd[1:],encoding=None,timeout=240,logfile=log)
-idx=child.expect([b'Please press Enter to activate this console',b'root@OpenWrt',b'root@Blaze',b'login:'])
+prompt=b'root@[^\\r\\n]+:[^\\r\\n]*#'
+idx=child.expect([b'Please press Enter to activate this console',prompt,b'login:'],timeout=240)
 if idx==0:
-    child.sendline(b'')
-    child.expect([b'root@OpenWrt',b'root@Blaze'],timeout=60)
-elif idx==3:
-    child.sendline(b'root')
-    child.expect([b'root@OpenWrt',b'root@Blaze'],timeout=30)
+    child.send(b'\\r')
+    child.expect(prompt,timeout=180)
+elif idx==2:
+    child.send(b'root\\r')
+    child.expect(prompt,timeout=60)
 
 def run(command,timeout=60):
     marker='__BLAZE_RC__'
