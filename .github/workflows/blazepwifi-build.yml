@@ -235,10 +235,10 @@ jobs:
             -storepass "$PASS" | sed -n '/SHA256:/p' > "$OUT/BlazeRental-signing-fingerprint.txt"
           cp "$OUT/BlazeRental-production.p12" "$SECRET/"
           printf '%s\n' "$PASS" > "$SECRET/keystore-password.txt"
-          cat > "$SECRET/README.txt" <<'TXT'
-BlazeRental production signing key backup.
-Keep this archive private and offline. Future APK updates must use this exact signing identity.
-TXT
+          printf '%s\n' \
+            'BlazeRental production signing key backup.' \
+            'Keep this archive private and offline. Future APK updates must use this exact signing identity.' \
+            > "$SECRET/README.txt"
           tar -czf "$RUNNER_TEMP/BlazeRental-signing-backup.tar.gz" -C "$SECRET" .
           openssl rand 32 > "$RUNNER_TEMP/aes.key"
           openssl rand 16 > "$RUNNER_TEMP/aes.iv"
