@@ -32,6 +32,10 @@ NFT
 
 sync_accounts() {
 	now="$(bp_now)"
+	if ! bp_time_sane "$now"; then
+		nft flush set inet blazepwifi auth_macs 2>/dev/null || true
+		return 0
+	fi
 	while IFS="$(printf '\t')" read -r device credit expiry remaining paused pause_started mac ipaddr events; do
 		[ -n "$device" ] || continue
 		if [ "$paused" = 1 ]; then
