@@ -82,6 +82,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Toast;
 
 import com.android.launcher3.DropTarget.DragObject;
+import com.blazesystems.blazerental.AndroidRentalPolicyRepository;
 import com.blazesystems.blazerental.LauncherAccessController;
 import com.blazesystems.blazerental.RentalSystemPages;
 import com.android.launcher3.LauncherSettings.Favorites;
@@ -283,6 +284,7 @@ public class Launcher extends BaseActivity
     private LauncherAccessibilityDelegate mAccessibilityDelegate;
     private final Handler mHandler = new Handler();
     private boolean mHasFocus = false;
+    private long mBlazePolicyRevision = Long.MIN_VALUE;
 
     private ObjectAnimator mScrimAnimator;
     private boolean mShouldFadeInScrim;
@@ -477,6 +479,7 @@ public class Launcher extends BaseActivity
         setOrientation();
 
         setContentView(mLauncherView);
+        mBlazePolicyRevision = AndroidRentalPolicyRepository.revision(this);
 
         // Listen for broadcasts
         IntentFilter filter = new IntentFilter();
@@ -1059,6 +1062,15 @@ public class Launcher extends BaseActivity
         }
         if (mLauncherCallbacks != null) {
             mLauncherCallbacks.onResume();
+        }
+
+        long currentBlazeRevision = AndroidRentalPolicyRepository.revision(this);
+        if (mBlazePolicyRevision != Long.MIN_VALUE
+                && currentBlazeRevision != mBlazePolicyRevision) {
+            mBlazePolicyRevision = currentBlazeRevision;
+            mModel.forceReload();
+        } else {
+            mBlazePolicyRevision = currentBlazeRevision;
         }
 
     }
@@ -2686,6 +2698,11 @@ public class Launcher extends BaseActivity
     }
 
     public boolean startActivitySafely(View v, Intent intent, ItemInfo item) {
+        if (!LauncherAccessController.canLaunchIntent(this, intent)) {
+            Toast.makeText(this, "Insert coin or ask the operator to allow this app",
+                    Toast.LENGTH_SHORT).show();
+            return false;
+        }
         if (mIsSafeModeEnabled && !Utilities.isSystemApp(this, intent)) {
             Toast.makeText(this, R.string.safemode_shortcut_error, Toast.LENGTH_SHORT).show();
             return false;

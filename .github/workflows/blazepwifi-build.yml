@@ -260,12 +260,6 @@ jobs:
           echo "APK=$APK" >> "$GITHUB_ENV"
           mkdir -p simulation-out/android
           sha256sum "$APK" > simulation-out/android/AUDITED_APK_SHA256
-      - name: Enable Android emulator KVM access
-        shell: bash
-        run: |
-          if [ -e /dev/kvm ]; then
-            sudo chmod 666 /dev/kvm
-          fi
       - name: Enable Android emulator KVM acceleration
         shell: bash
         run: |
@@ -281,7 +275,7 @@ jobs:
           target: default
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics -no-snapshot -no-metrics
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
       - uses: actions/upload-artifact@v4
         if: always()
