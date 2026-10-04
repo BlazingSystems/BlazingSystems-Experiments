@@ -92,4 +92,40 @@ bp_unlock
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_CREDITS"
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
 
+# Simulate a crash after the new account reached disk but before old legacy
+# files were cleaned; the same MAC must never be claimable twice.
+printf '%s\t700\n' "$LEGACY_MAC" > "$BP_LEGACY_CREDITS"
+printf '%s\t%s\t10.0.0.99\n' "$LEGACY_MAC" "$EXP" > "$BP_LEGACY_SESSIONS"
+D3=ffffffffffffffffffffffffffffffff
+bp_lock
+bp_bind_device "$D3" "$LEGACY_MAC" 10.0.0.99 1
+bp_unlock
+[ "$(bp_get_credit "$D3")" -eq 0 ]
+! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_CREDITS"
+! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
+
+# Concurrent writers must serialize without losing rows or sharing temp paths.
+i=1
+while [ "$i" -le 12 ]; do
+  (
+    . "$BP_LIB"
+    bp_init_dirs
+    d="$(printf '%032x' "$i")"
+    m="$(printf '02:00:00:00:01:%02x' "$i")"
+    bp_lock
+    bp_account_write "$d" "$i" 0 0 0 0 "$m" "10.0.1.$i" ""
+    bp_unlock
+  ) &
+  i=$((i+1))
+done
+wait
+
+i=1
+while [ "$i" -le 12 ]; do
+  d="$(printf '%032x' "$i")"
+  [ "$(bp_get_credit "$d")" -eq "$i" ]
+  i=$((i+1))
+done
+
 echo 'BlazePwifi persistence/replay stress checks passed'
+
