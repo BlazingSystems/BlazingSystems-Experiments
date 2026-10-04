@@ -25,8 +25,14 @@ bp_init_dirs() {
 	chmod 600 "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 }
 
+bp_self_pid() { sh -c 'printf %s "$PPID"'; }
+bp_tmp_suffix() {
+	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$(date +%s)-$RANDOM"
+}
+
 bp_lock() {
 	lock="$BP_RUN/lock"
+	self="$(bp_self_pid)"
 	i=0
 	while ! mkdir "$lock" 2>/dev/null; do
 		owner="$(cat "$lock/pid" 2>/dev/null || true)"
@@ -43,12 +49,13 @@ bp_lock() {
 		[ "$i" -gt 80 ] && return 1
 		usleep 50000 2>/dev/null || sleep 1
 	done
-	printf '%s\n' "$" > "$lock/pid"
+	printf '%s\n' "$self" > "$lock/pid"
 }
 bp_unlock() {
 	lock="$BP_RUN/lock"
+	self="$(bp_self_pid)"
 	owner="$(cat "$lock/pid" 2>/dev/null || true)"
-	[ -z "$owner" ] || [ "$owner" = "$" ] || return 0
+	[ -z "$owner" ] || [ "$owner" = "$self" ] || return 0
 	rm -rf "$lock" 2>/dev/null || true
 }
 
@@ -90,7 +97,7 @@ bp_account_field() {
 
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
-	tmp="$BP_STATE/.accounts.$"
+	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
 	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
 		BEGIN{f=0}
 		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
@@ -104,10 +111,10 @@ bp_account_write() {
 bp_remove_legacy_mac() {
 	mac="$1"
 	if [ -f "$BP_LEGACY_CREDITS" ]; then
-		tmp="$BP_STATE/.legacy-credits.$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
+		tmp="$BP_STATE/.legacy-credits.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
 	fi
 	if [ -f "$BP_LEGACY_SESSIONS" ]; then
-		tmp="$BP_STATE/.legacy-sessions.$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
+		tmp="$BP_STATE/.legacy-sessions.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
 	fi
 }
 
