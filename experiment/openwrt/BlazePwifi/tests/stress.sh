@@ -10,6 +10,7 @@ case "$*" in
   *'get blazepwifi.main.lan_if') echo br-lan;;
   *'get blazepwifi.main.event_history') echo 8;;
   *'get blazepwifi.main.pause_max_seconds') echo 0;;
+  *'get blazepwifi.main.durable_sync') echo 0;;
   *) exit 1;;
 esac
 UCI
@@ -23,6 +24,19 @@ export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run"
 export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 . "$BP_LIB"
 bp_init_dirs
+
+# A dead CGI owner must not leave the accounting lock wedged.
+mkdir -p "$BP_RUN/lock"
+printf '99999999\n' > "$BP_RUN/lock/pid"
+bp_lock
+[ "$(cat "$BP_RUN/lock/pid")" = "$(bp_self_pid)" ]
+bp_unlock
+[ ! -d "$BP_RUN/lock" ]
+
+# A read-only portal visit must not create a durable account row.
+D0=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+bp_bind_device "$D0" 02:00:00:00:00:ee 10.0.0.2 0
+! grep -q "^$D0	" "$BP_ACCOUNTS"
 
 D=cccccccccccccccccccccccccccccccc
 MAC1=02:00:00:00:00:01
