@@ -43,6 +43,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_admin.sh
       - name: BlazePwifi v0.4 admin UI validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_admin_ui.sh
+      - name: BlazePwifi v0.4 build matrix validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
