@@ -1,0 +1,23 @@
+(function(){
+'use strict';
+const q=s=>document.querySelector(s), qa=s=>Array.from(document.querySelectorAll(s));
+let csrf='', sessionData=null, statusData=null;
+async function jf(url,opt){try{const r=await fetch(url,Object.assign({credentials:'same-origin'},opt||{}));return await r.json()}catch(e){return {ok:false,error:'Connection failed'}}}
+async function api(action,data){const body=new URLSearchParams(Object.assign({action},data||{}));return jf('/cgi-bin/admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-CSRF':csrf},body})}
+function toast(msg,bad){const h=q('#toastHost'),n=document.createElement('div');n.className='toast'+(bad?' danger':'');n.textContent=msg;h.appendChild(n);setTimeout(()=>n.remove(),3200)}
+function authView(on){q('#loginView').classList.toggle('hidden',!on);q('#appView').classList.toggle('hidden',on)}
+function applySession(x){sessionData=x;csrf=x.csrf||csrf;q('#sideUser').textContent=x.username||'';q('#topUser').textContent=x.username||'';q('#sideRole').textContent=x.role||'';q('#topRole').textContent=x.role||'';q('#systemRole').textContent=x.role||'';q('#passwordChange').classList.toggle('hidden',!(+x.must_change));authView(false)}
+async function login(){q('#loginButton').disabled=true;const body=new URLSearchParams({username:q('#loginUser').value,password:q('#loginPass').value});const x=await jf('/cgi-bin/admin-login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});q('#loginButton').disabled=false;if(!x.ok){q('#loginMessage').textContent=x.error||'Sign in failed';q('#loginMessage').classList.remove('hidden');return}q('#loginPass').value='';applySession(x);await refreshAll()}
+async function session(){const x=await jf('/cgi-bin/admin-session');if(!x.ok){authView(true);return}applySession(x);await refreshAll()}
+async function logout(){await jf('/cgi-bin/admin-logout',{method:'POST',headers:{'X-Blaze-CSRF':csrf}});location.reload()}
+async function status(){const x=await api('status');if(!x.ok){if(x.error==='unauthorized'){authView(true);return}toast(x.error||'Status failed',true);return}statusData=x;q('#metricSessions').textContent=x.active_sessions;q('#metricControllers').textContent=x.online_vendos;q('#metricMemory').textContent=Math.round((+x.mem_available_kb||0)/1024)+' MB';q('#metricLoad').textContent='Load '+(x.load1||'—');q('#systemUptime').textContent=formatDuration((+x.uptime_seconds||0)*1000);q('#passwordChange').classList.toggle('hidden',!(+x.must_change))}
+async function refreshAll(){await status();if(window.BlazeRental)await BlazeRental.load(false);if(window.BlazeControllers)await BlazeControllers.load(false)}
+function openPage(name){qa('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.page===name));qa('.section').forEach(s=>s.classList.remove('active'));const p=q('#page-'+name);if(p)p.classList.add('active');q('#crumb').textContent=({dashboard:'Dashboard',rentals:'Rental Devices',controllers:'Coin Controllers',portal:'Captive Portal',system:'System & Security'})[name]||name;q('#sidebar').classList.remove('open');if(name==='rentals'&&window.BlazeRental)BlazeRental.load();if(name==='controllers'&&window.BlazeControllers)BlazeControllers.load()}
+function formatDuration(ms){let s=Math.max(0,Math.floor(ms/1000)),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return d?d+'d '+h+'h':h?h+'h '+m+'m':m+'m'}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+async function voucher(){const x=await api('voucher_create',{cents:q('#voucherCents').value});q('#voucherResult').textContent=x.ok?('Voucher '+x.code+' • '+x.cents+' centavos'):(x.error||'Failed');if(!x.ok)toast(x.error||'Voucher failed',true)}
+async function changePassword(){const v=q('#newPassword').value;if(v.length<12){toast('Use at least 12 characters',true);return}const x=await api('password_change',{new_password:v});if(!x.ok){toast(x.error||'Password change failed',true);return}toast('Password changed. Sign in again.');setTimeout(()=>location.reload(),500)}
+q('#loginButton').addEventListener('click',login);q('#loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')login()});q('#logoutBtn').addEventListener('click',logout);q('#menuBtn').addEventListener('click',()=>q('#sidebar').classList.toggle('open'));q('#voucherBtn').addEventListener('click',voucher);q('#changePasswordBtn').addEventListener('click',changePassword);qa('.nav-btn').forEach(b=>b.addEventListener('click',()=>openPage(b.dataset.page)));
+window.BlazeCore={api,toast,openPage,refreshAll,esc,formatDuration,get csrf(){return csrf},get session(){return sessionData},get status(){return statusData}};
+session();
+})();

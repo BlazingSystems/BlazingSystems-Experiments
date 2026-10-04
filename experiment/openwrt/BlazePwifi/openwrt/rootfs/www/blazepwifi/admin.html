@@ -1,129 +1,80 @@
 <!doctype html>
-<html data-tabler="optional"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BlazePwifi Admin</title>
-<style>
-:root{color-scheme:dark;--blaze-bg:#080d16;--blaze-card:#111927;--blaze-border:#26364d;--blaze-muted:#9fb0c6;--blaze-blue:#2477ff}*{box-sizing:border-box}body{margin:0;font:15px system-ui,-apple-system,Segoe UI,sans-serif;background:var(--blaze-bg);color:#e8eef8}.page{min-height:100vh}.navbar{border-bottom:1px solid var(--blaze-border);background:#0d1421}.container-xl{width:min(100%,1100px);margin:auto;padding:0 20px}.nav-inner{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px}.navbar-brand{font-weight:850;font-size:1.15rem}.page-body{padding:22px 0 48px}.card{background:var(--blaze-card);border:1px solid var(--blaze-border);border-radius:16px;margin-bottom:14px;box-shadow:0 12px 36px #0004}.card-body{padding:18px}.card-title{font-size:1rem;margin:0 0 10px}.text-secondary{color:var(--blaze-muted)}.alert{border:1px solid #725b22;background:#3a2d0d66;color:#ffdc86;border-radius:12px;padding:10px 12px;margin-bottom:12px}.form-control{width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #31425b;background:#0a111d;color:#fff;margin:6px 0}.btn{font:inherit;display:inline-flex;justify-content:center;align-items:center;min-height:42px;padding:9px 13px;border-radius:10px;border:1px solid #31425b;background:#172235;color:white;font-weight:750;cursor:pointer;text-decoration:none}.btn-primary{background:var(--blaze-blue);border-color:var(--blaze-blue)}.btn-ghost-secondary{background:#172235}.row{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.col-sm-6,.col-lg-3{grid-column:span 3}.metric{min-height:92px}.metric-label{color:var(--blaze-muted);font-size:.78rem}.metric-value{font-size:1.55rem;font-weight:850;margin-top:5px}.d-none{display:none!important}.d-flex{display:flex}.gap-2{gap:8px}.justify-between{justify-content:space-between}.align-center{align-items:center}.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#17345f;font-size:12px}.form-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.form-row>*{flex:1}.form-row .btn{flex:0 0 auto}.mt-3{margin-top:12px}pre{white-space:pre-wrap}.framework-note{font-size:.75rem;color:#71869f}.stack{display:grid;gap:10px}.device{border:1px solid var(--blaze-border);border-radius:12px;padding:12px;background:#0c1421}.device-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.device-grid label{font-size:.78rem;color:var(--blaze-muted)}.device-grid .full{grid-column:1/-1}.small{font-size:.82rem}.success{color:#8ff0b3}.danger{color:#ff9a9a}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}@media(max-width:780px){.col-sm-6,.col-lg-3{grid-column:span 6}}@media(max-width:520px){.container-xl{padding:0 12px}.col-sm-6,.col-lg-3{grid-column:span 12}}
-</style></head>
-<body><div class="page"><header class="navbar"><div class="container-xl"><div class="nav-inner"><div><div class="navbar-brand">BlazePwifi</div><div class="framework-note" id="uiMode">Compact admin UI</div></div><a class="btn btn-ghost-secondary" href="/">Portal</a></div></div></header>
-<div class="page-body"><div class="container-xl">
-<div id="loginCard" class="card"><div class="card-body"><h2 class="card-title">Sign in</h2><div class="alert">Use the HTTPS management address. Repeated failed sign-ins are automatically locked.</div><input class="form-control" id="username" autocomplete="username" value="admin" placeholder="Username"><input class="form-control" id="password" type="password" autocomplete="current-password" placeholder="Password"><button class="btn btn-primary mt-3" onclick="login()">Sign in</button><div id="loginMsg" class="text-secondary mt-3"></div></div></div>
-<div id="changeCard" class="card d-none"><div class="card-body"><h2 class="card-title">Replace bootstrap password</h2><div class="alert">Set a new password before administrative changes.</div><input class="form-control" id="newPassword" type="password" autocomplete="new-password" placeholder="New password (12+ characters)"><button class="btn btn-primary mt-3" onclick="changePassword()">Change password</button><div id="changeMsg" class="mt-3"></div></div></div>
-<div id="app" class="d-none"><div class="card"><div class="card-body d-flex justify-between align-center"><div><b id="who">—</b> <span id="role" class="badge">—</span></div><button class="btn btn-ghost-secondary" onclick="logout()">Sign out</button></div></div>
-<div class="row"><div class="col-sm-6 col-lg-3"><div class="card metric"><div class="card-body"><div class="metric-label">Active sessions</div><div class="metric-value" id="sessions">—</div></div></div></div><div class="col-sm-6 col-lg-3"><div class="card metric"><div class="card-body"><div class="metric-label">Paused sessions</div><div class="metric-value" id="paused">—</div></div></div></div><div class="col-sm-6 col-lg-3"><div class="card metric"><div class="card-body"><div class="metric-label">Controllers online</div><div class="metric-value" id="vendos">—</div></div></div></div><div class="col-sm-6 col-lg-3"><div class="card metric"><div class="card-body"><div class="metric-label">Free memory</div><div class="metric-value" id="mem">—</div></div></div></div></div>
-<div class="card"><div class="card-body"><h2 class="card-title">Portal builder</h2><p class="text-secondary">Branding, labels, colors and safe customer-facing sections with a live preview.</p><a class="btn btn-primary" href="/portal-editor.html">Open portal editor</a></div></div>
-<div class="card"><div class="card-body"><h2 class="card-title">Create voucher</h2><div class="form-row"><input class="form-control" id="cents" type="number" min="1" value="100"><button class="btn btn-primary" onclick="voucher()">Create</button></div><pre id="out"></pre></div></div>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BlazePwifi Control Center</title>
+<link rel="stylesheet" href="/vendor/tailadmin/blaze-tailadmin.css">
+</head><body>
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi</span></div>
+    <h1>Control Center</h1><p>Secure management for hotspot, rental phones and coin controllers.</p>
+    <label class="field-label">Username</label><input id="loginUser" class="field" value="admin" autocomplete="username">
+    <label class="field-label" style="margin-top:12px">Password</label><input id="loginPass" class="field" type="password" autocomplete="current-password">
+    <button id="loginButton" class="btn primary" style="width:100%;margin-top:16px">Sign in</button>
+    <div id="loginMessage" class="notice hidden"></div>
+  </div>
+</div>
 
-<div class="card"><div class="card-body">
-<h2 class="card-title">Rental phones</h2>
-<p class="text-secondary">Create a one-time enrollment token, then use the production PC QR Setup tool or manually install BlazeRental.apk. Managed QR mode is recommended.</p>
-<div class="form-row"><input class="form-control" id="rentalLabel" value="Rental phone" placeholder="Phone label"><button class="btn btn-primary" onclick="newRentalEnrollment()">Create enrollment</button></div>
-<div class="form-row"><input class="form-control" id="rentalPulseSeconds" type="number" min="1" max="86400" value="600" placeholder="Seconds per coin pulse"><button class="btn btn-ghost-secondary" onclick="saveRentalPulseSeconds()">Save seconds per pulse</button></div>
-<div id="rentalEnrollResult" class="small mono"></div>
-<div class="toolbar mt-3"><a class="btn btn-ghost-secondary" href="https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0/BlazeRental-QR-Setup.html" target="_blank" rel="noopener">Open PC QR Setup tool</a><button class="btn btn-ghost-secondary" onclick="loadRentals()">Refresh phones</button></div>
-<div id="rentalList" class="stack mt-3"></div>
-</div></div>
+<div id="appView" class="app hidden">
+<aside id="sidebar" class="sidebar">
+  <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.4</small></span></div>
+  <div class="nav-label">OVERVIEW</div>
+  <button class="nav-btn active" data-page="dashboard"><span class="nav-dot"></span>Dashboard</button>
+  <div class="nav-label">OPERATIONS</div>
+  <button class="nav-btn" data-page="rentals"><span class="nav-dot"></span>Rental Devices</button>
+  <button class="nav-btn" data-page="controllers"><span class="nav-dot"></span>Coin Controllers</button>
+  <button class="nav-btn" data-page="portal"><span class="nav-dot"></span>Captive Portal</button>
+  <div class="nav-label">SYSTEM</div>
+  <button class="nav-btn" data-page="system"><span class="nav-dot"></span>System & Security</button>
+  <div class="sidebar-foot"><div id="sideUser">—</div><div id="sideRole" class="small">—</div></div>
+</aside>
+<main class="main">
+  <header class="topbar">
+    <div class="toolbar"><button id="menuBtn" class="btn ghost mobile-menu">☰</button><span id="crumb" class="crumb">Dashboard</span></div>
+    <div class="user-chip"><div><div id="topUser">—</div><div id="topRole" class="small muted">—</div></div><span class="avatar">A</span><button id="logoutBtn" class="btn ghost sm">Sign out</button></div>
+  </header>
+  <div class="content">
+    <div id="passwordChange" class="notice warn hidden"><b>Bootstrap password must be replaced.</b><div class="toolbar" style="margin-top:8px"><input id="newPassword" class="field" type="password" placeholder="New password (12+ characters)" style="max-width:360px"><button id="changePasswordBtn" class="btn primary">Change password</button></div></div>
 
-<div class="card"><div class="card-body">
-<h2 class="card-title">Coinslot controllers</h2>
-<p class="text-secondary">ESP8266/ESP32 controllers keep their locally verified setup as fallback. Settings below are runtime policy from this server.</p>
-<div class="toolbar"><button class="btn btn-ghost-secondary" onclick="loadControllers()">Refresh controllers</button></div>
-<div id="controllerList" class="stack mt-3"></div>
-</div></div>
+    <section id="page-dashboard" class="section active">
+      <div class="page-head"><div><h2>Dashboard</h2><p>Live health and customer-service overview.</p></div><button class="btn" onclick="BlazeCore.refreshAll()">Refresh</button></div>
+      <div class="grid metrics">
+        <div class="card"><div class="card-body"><div class="metric-label">Active sessions</div><div id="metricSessions" class="metric-value">—</div><div class="metric-sub">Hotspot users online</div></div></div>
+        <div class="card"><div class="card-body"><div class="metric-label">Rental phones</div><div id="metricRentals" class="metric-value">—</div><div id="metricPaidRentals" class="metric-sub">—</div></div></div>
+        <div class="card"><div class="card-body"><div class="metric-label">Controllers online</div><div id="metricControllers" class="metric-value">—</div><div class="metric-sub">Last 30 seconds</div></div></div>
+        <div class="card"><div class="card-body"><div class="metric-label">Memory available</div><div id="metricMemory" class="metric-value">—</div><div id="metricLoad" class="metric-sub">Load —</div></div></div>
+      </div>
+      <div class="grid two" style="margin-top:16px">
+        <div class="card"><div class="card-body"><div class="card-title">Quick actions</div><p class="muted">Common operator tasks without digging through menus.</p><div class="toolbar"><button class="btn primary" onclick="BlazeCore.openPage('rentals');BlazeRental.openAdd()">Add rental phone</button><button class="btn" onclick="BlazeCore.openPage('controllers')">Controllers</button><a class="btn" href="/portal-editor.html">Portal editor</a></div></div></div>
+        <div class="card"><div class="card-body"><div class="card-title">Create voucher</div><div class="toolbar"><input id="voucherCents" class="field" type="number" min="1" value="100" style="max-width:180px"><button id="voucherBtn" class="btn primary">Create voucher</button></div><div id="voucherResult" class="small mono muted" style="margin-top:9px"></div></div></div>
+      </div>
+    </section>
 
-<div class="card"><div class="card-body"><div class="metric-label">System load</div><b id="load">—</b></div></div></div></div></div></div>
-<script>
-if(location.protocol!=='https:'){fetch('/cgi-bin/api',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=config'}).then(r=>r.json()).then(x=>location.replace('https://'+location.hostname+':'+(x.admin_port||8443)+'/admin.html')).catch(()=>location.replace('https://'+location.hostname+':8443/admin.html'))}
-let csrf='',mustChange=0;const q=id=>document.getElementById(id),show=(id,on)=>q(id).classList.toggle('d-none',!on);
-async function loadOptionalTabler(){try{let r=await fetch('/vendor/tabler/tabler.min.css',{method:'HEAD',cache:'no-store'});if(!r.ok)return;let l=document.createElement('link');l.rel='stylesheet';l.href='/vendor/tabler/tabler.min.css';l.dataset.tabler='1.6.1';document.head.appendChild(l);document.documentElement.dataset.adminUi='tabler';q('uiMode').textContent='Tabler core UI · Standard/Full'}catch(e){}}
-async function jsonFetch(url,opt){try{let r=await fetch(url,Object.assign({credentials:'same-origin'},opt||{}));return await r.json()}catch(e){return {ok:false,error:'Connection failed'}}}
-async function login(){q('loginMsg').textContent='Signing in…';let body=new URLSearchParams({username:q('username').value,password:q('password').value});let x=await jsonFetch('/cgi-bin/admin-login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});if(!x.ok){q('loginMsg').textContent=x.error||'Sign in failed';return}q('password').value='';csrf=x.csrf||'';mustChange=+x.must_change||0;applySession(x);await status()}
-function applySession(x){show('loginCard',false);show('app',true);show('changeCard',!!(+x.must_change));q('who').textContent=x.username||'';q('role').textContent=x.role||''}
-async function session(){let x=await jsonFetch('/cgi-bin/admin-session');if(!x.ok){show('loginCard',true);show('app',false);show('changeCard',false);return}csrf=x.csrf||'';mustChange=+x.must_change||0;applySession(x);await status()}
-async function a(action,data){let body=new URLSearchParams(Object.assign({action:action},data||{}));return jsonFetch('/cgi-bin/admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-CSRF':csrf},body})}
-async function status(){let x=await a('status');if(!x.ok){if(x.error==='unauthorized')return session();q('out').textContent=x.error||'Status failed';return}q('sessions').textContent=x.active_sessions;q('paused').textContent=x.paused_sessions;q('vendos').textContent=x.online_vendos;q('mem').textContent=x.mem_available_kb+' KB';q('load').textContent=x.load1;mustChange=+x.must_change||0;show('changeCard',!!mustChange);if(!mustChange){loadRentalPulseSeconds();loadRentals();loadControllers()}}
-async function voucher(){let x=await a('voucher_create',{cents:q('cents').value});q('out').textContent=x.ok?('Voucher: '+x.code+' ('+x.cents+' centavos)'):(x.error||'Failed')}
-async function changePassword(){let p=q('newPassword').value;if(p.length<12){q('changeMsg').textContent='Use at least 12 characters.';return}let x=await a('password_change',{new_password:p});q('newPassword').value='';if(!x.ok){q('changeMsg').textContent=x.error||'Failed';return}q('changeMsg').textContent='Password changed. Sign in again.';setTimeout(()=>location.reload(),700)}
+    <section id="page-rentals" class="section">
+      <div class="page-head"><div><h2>Rental Devices</h2><p>Enroll phones, control allowed apps, rental mode, time and security.</p></div><div class="toolbar"><button class="btn" onclick="BlazeRental.load()">Refresh</button><button class="btn primary" onclick="BlazeRental.openAdd()">+ Add device</button></div></div>
+      <div class="card"><div class="card-body"><div class="form-grid"><label><span class="field-label">Seconds per coin pulse</span><input id="pulseSeconds" class="field" type="number" min="1" max="86400" value="600"></label><div style="align-self:end"><button class="btn" onclick="BlazeRental.savePulse()">Save coin rate</button></div></div></div></div>
+      <div id="rentalCards" class="grid two" style="margin-top:16px"><div class="card empty">Loading rental devices…</div></div>
+    </section>
 
-function escHtml(v){return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-async function loadRentalPulseSeconds(){let x=await a('config_get',{key:'rental_seconds_per_pulse'});if(x.ok)q('rentalPulseSeconds').value=x.value||600}
-async function saveRentalPulseSeconds(){let x=await a('config_set',{key:'rental_seconds_per_pulse',value:q('rentalPulseSeconds').value});q('rentalEnrollResult').textContent=x.ok?'Rental seconds-per-pulse saved.':(x.error||'Failed')}
-async function newRentalEnrollment(){
-  let x=await a('rental_enroll_create',{label:q('rentalLabel').value||'Rental phone'}),e=q('rentalEnrollResult');
-  if(!x.ok){e.textContent=x.error||'Enrollment failed';return}
-  e.innerHTML='<span class="success">Enrollment token created (valid 10 minutes):</span><br><b>'+escHtml(x.enrollment_token)+'</b><br>Paste this token into BlazeRental QR Setup on the PC.';
-}
-async function loadRentals(){
-  if(!csrf||mustChange)return;
-  let x=await a('rental_list'); if(!x.ok)return;
-  let host=q('rentalList'),items=x.devices||[]; host.innerHTML='';
-  if(!items.length){host.innerHTML='<div class="text-secondary">No enrolled rental phones yet.</div>';return}
-  for(const d of items){
-    let id=String(d.device_id||''),box=document.createElement('div');box.className='device';
-    let remaining=Math.max(0,(+d.lease_until||0)-Math.floor(Date.now()/1000));
-    box.innerHTML='<div class="d-flex justify-between align-center"><b>'+escHtml(d.label||'Rental phone')+'</b><span class="badge">'+(remaining>0?'PAID '+Math.ceil(remaining/60)+'m':'LOCKED')+'</span></div>'+
-      '<div class="small mono">'+escHtml(id)+'</div>'+
-      '<div class="device-grid mt-3">'+
-      '<label class="full">Installed apps reported by phone<input class="form-control" value="'+escHtml(d.inventory||'')+'" readonly></label>'+
-      '<label class="full">Allowed package IDs (* = all launchable apps)<input class="form-control" id="allow_'+id+'" value="'+escHtml(d.allowed_packages||'*')+'"></label>'+
-      '<label>Preferred controller<input class="form-control" id="vendo_'+id+'" value="'+escHtml(d.preferred_vendo||'')+'" placeholder="blank = auto select"></label>'+
-      '<label>Add/set paid seconds<input class="form-control" id="lease_'+id+'" type="number" min="0" value="3600"></label>'+
-      '<label class="full">Phone administrator password<input class="form-control" id="phonepass_'+id+'" type="password" placeholder="'+(d.admin_password_set?'Already set · enter a new one to replace':'Set 8+ character phone admin password')+'"></label>'+
-      '</div>'+
-      '<div class="toolbar"><button class="btn btn-primary" data-act="policy">Save phone policy</button><button class="btn btn-ghost-secondary" data-act="lease">Set time from now</button><button class="btn btn-ghost-secondary" data-act="pass">Set phone admin password</button></div>'+
-      '<div class="small" id="msg_'+id+'"></div>';
-    box.querySelector('[data-act=policy]').onclick=()=>saveRentalPolicy(id);
-    box.querySelector('[data-act=lease]').onclick=()=>setRentalLease(id);
-    box.querySelector('[data-act=pass]').onclick=()=>setRentalPassword(id);
-    host.appendChild(box);
-  }
-}
-async function saveRentalPolicy(id){
-  let x=await a('rental_policy_set',{device_id:id,allowed_packages:q('allow_'+id).value||'*',preferred_vendo:q('vendo_'+id).value||''});
-  q('msg_'+id).textContent=x.ok?'Phone policy saved. It will sync automatically.':(x.error||'Failed');
-}
-async function setRentalLease(id){
-  let sec=q('lease_'+id).value||'0',x=await a('rental_lease_set',{device_id:id,seconds:sec});
-  q('msg_'+id).textContent=x.ok?'Rental time updated.':(x.error||'Failed'); if(x.ok)loadRentals();
-}
-async function setRentalPassword(id){
-  let p=q('phonepass_'+id).value,x=await a('rental_admin_password_set',{device_id:id,admin_password:p});
-  q('phonepass_'+id).value='';q('msg_'+id).textContent=x.ok?'Phone administrator password updated.':(x.error||'Failed');
-}
-function checked(v){return +v===1?'checked':''}
-async function loadControllers(){
-  if(!csrf||mustChange)return;
-  let x=await a('controller_list');if(!x.ok)return;
-  let host=q('controllerList'),items=x.controllers||[];host.innerHTML='';
-  if(!items.length){host.innerHTML='<div class="text-secondary">No ESP8266/ESP32 controller has registered yet.</div>';return}
-  for(const d of items){
-    let id=String(d.id||''),box=document.createElement('div');box.className='device';
-    box.innerHTML='<div class="d-flex justify-between align-center"><b>'+escHtml(id)+'</b><span class="badge">'+((Date.now()/1000-(+d.last_seen||0)<30)?'ONLINE':'OFFLINE')+'</span></div>'+
-    '<div class="small">'+escHtml(d.ip||'')+' · policy revision '+escHtml(d.config_revision||0)+'</div>'+
-    '<div class="device-grid mt-3">'+
-    '<label><input type="checkbox" id="en_'+id+'" '+checked(d.enabled)+'> Controller enabled</label>'+
-    '<label><input type="checkbox" id="coinEn_'+id+'" '+checked(d.coin_enabled)+'> Coin input enabled</label>'+
-    '<label><input type="checkbox" id="relayEn_'+id+'" '+checked(d.relay_enabled)+'> Relay enabled</label>'+
-    '<label><input type="checkbox" id="ledEn_'+id+'" '+checked(d.led_enabled)+'> LED enabled</label>'+
-    '<label>Coin GPIO (-1 = local)<input class="form-control" id="cp_'+id+'" type="number" value="'+d.coin_pin+'"></label>'+
-    '<label>Relay GPIO (-1 = local)<input class="form-control" id="rp_'+id+'" type="number" value="'+d.relay_pin+'"></label>'+
-    '<label>LED GPIO (-1 = local)<input class="form-control" id="lp_'+id+'" type="number" value="'+d.led_pin+'"></label>'+
-    '<label>Reconnect failures before setup fallback<input class="form-control" id="retry_'+id+'" type="number" min="1" max="60" value="'+d.max_wifi_retries+'"></label>'+
-    '<label>Debounce ms<input class="form-control" id="db_'+id+'" type="number" value="'+d.coin_debounce_ms+'"></label>'+
-    '<label>Pulse group ms<input class="form-control" id="pg_'+id+'" type="number" value="'+d.pulse_group_ms+'"></label>'+
-    '<label><input type="checkbox" id="cl_'+id+'" '+checked(d.coin_active_low)+'> Coin active low</label>'+
-    '<label><input type="checkbox" id="rh_'+id+'" '+checked(d.relay_active_high)+'> Relay active high</label>'+
-    '<label><input type="checkbox" id="lh_'+id+'" '+checked(d.led_active_high)+'> LED active high</label>'+
-    '</div><button class="btn btn-primary" data-save>Apply controller policy</button><div class="small" id="cmsg_'+id+'"></div>';
-    box.querySelector('[data-save]').onclick=()=>saveController(id);host.appendChild(box);
-  }
-}
-async function saveController(id){
-  let v=x=>q(x+'_'+id),b=x=>v(x).checked?'1':'0';
-  let x=await a('controller_set',{id,enabled:b('en'),coin_enabled:b('coinEn'),relay_enabled:b('relayEn'),led_enabled:b('ledEn'),
-    coin_pin:v('cp').value,relay_pin:v('rp').value,led_pin:v('lp').value,coin_active_low:b('cl'),relay_active_high:b('rh'),led_active_high:b('lh'),
-    coin_debounce_ms:v('db').value,pulse_group_ms:v('pg').value,max_wifi_retries:v('retry').value});
-  q('cmsg_'+id).textContent=x.ok?'Controller policy saved.':(x.error||'Failed');if(x.ok)setTimeout(loadControllers,500);
-}
+    <section id="page-controllers" class="section">
+      <div class="page-head"><div><h2>Coin Controllers</h2><p>ESP8266/ESP32 runtime policy and connection state.</p></div><button class="btn" onclick="BlazeControllers.load()">Refresh</button></div>
+      <div id="controllerCards" class="grid two"><div class="card empty">Loading controllers…</div></div>
+    </section>
 
-async function logout(){await jsonFetch('/cgi-bin/admin-logout',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-CSRF':csrf},body:new URLSearchParams({csrf:csrf})});csrf='';location.reload()}
-loadOptionalTabler();session();setInterval(()=>{if(!q('app').classList.contains('d-none'))status()},5000)
-</script></body></html>
+    <section id="page-portal" class="section">
+      <div class="page-head"><div><h2>Captive Portal</h2><p>Customer-facing insert-coin and Wi-Fi purchase experience.</p></div><a class="btn primary" href="/portal-editor.html">Open visual editor</a></div>
+      <div class="grid two"><div class="card"><div class="card-body"><div class="card-title">Portal builder</div><p class="muted">Edit branding, colors, rate labels and safe device information. Changes remain local to BlazePwifi.</p><a class="btn primary" href="/portal-editor.html">Launch portal editor</a></div></div><div class="card"><div class="card-body"><div class="card-title">Customer portal</div><p class="muted">Preview the same portal customers see after joining the hotspot.</p><a class="btn" href="/">Open portal</a></div></div></div>
+    </section>
+
+    <section id="page-system" class="section">
+      <div class="page-head"><div><h2>System & Security</h2><p>Management status and account security.</p></div></div>
+      <div class="grid two"><div class="card"><div class="card-body"><div class="card-title">Runtime</div><div class="switch-row"><span>Admin transport</span><span class="badge good">HTTPS</span></div><div class="switch-row"><span>Current role</span><span id="systemRole" class="badge">—</span></div><div class="switch-row"><span>Uptime</span><span id="systemUptime">—</span></div></div></div><div class="card"><div class="card-body"><div class="card-title">License attribution</div><p class="muted">BlazePwifi’s v0.4 dashboard uses a trimmed local visual system based on TailAdmin Community Edition concepts. No TailAdmin runtime or CDN is required.</p><a class="btn" href="/vendor/tailadmin/LICENSE" target="_blank">TailAdmin MIT license</a></div></div></div>
+    </section>
+  </div>
+</main>
+</div>
+
+<div id="addRentalModal" class="modal-backdrop hidden"><div class="modal"><div class="modal-head"><b>Add Rental Device</b><button class="btn ghost sm" onclick="BlazeRental.closeAdd()">✕</button></div><div class="modal-body"><label class="field-label">Phone label</label><input id="addRentalLabel" class="field" value="Rental phone"><label class="field-label" style="margin-top:12px">BlazePwifi server URL</label><input id="addRentalServer" class="field" placeholder="https://192.168.1.1:8443"><button class="btn primary" style="width:100%;margin-top:14px" onclick="BlazeRental.generateQr()">Generate enrollment QR</button><div id="qrResult" class="hidden"><div id="qrBox" class="qr-box"></div><div class="notice">Scan this QR from BlazeRental Admin → Binding. It is one-time and expires after 10 minutes.</div><div id="qrToken" class="code-box mono small"></div></div></div></div></div>
+<div id="toastHost"></div>
+<script src="/vendor/qrcode/qrcode.js"></script>
+<script src="/admin/core.js"></script><script src="/admin/rental.js"></script><script src="/admin/controllers.js"></script>
+</body></html>
