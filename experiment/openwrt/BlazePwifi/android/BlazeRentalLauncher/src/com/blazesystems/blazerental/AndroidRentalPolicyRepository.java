@@ -45,6 +45,10 @@ public final class AndroidRentalPolicyRepository {
         return true;
     }
 
+    public static void clear(Context context) {
+        prefs(context).edit().clear().apply();
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
