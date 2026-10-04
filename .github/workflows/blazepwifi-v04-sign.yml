@@ -12,21 +12,16 @@ on:
         required: true
         type: string
       candidate_sha:
-        description: "Exact commit SHA used by the build run"
+        description: "Exact candidate commit SHA used by the build run"
         required: true
         type: string
-      publish:
-        description: "Commit the verified signed APK/certificate metadata to releases/0.4.0"
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
   group: blazerental-v04-production-sign
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 jobs:
@@ -48,19 +43,36 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_RUN_ID: ${{ inputs.run_id }}
           INPUT_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-          INPUT_PUBLISH: ${{ inputs.publish }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = workflow_dispatch ]; then
             RUN_ID="$INPUT_RUN_ID"
             CANDIDATE_SHA="$INPUT_CANDIDATE_SHA"
-            PUBLISH="$INPUT_PUBLISH"
           else
             RUN_ID="$(jq -r '.run_id // empty' .github/blazepwifi-v04-sign-request.json)"
             CANDIDATE_SHA="$(jq -r '.candidate_sha // empty' .github/blazepwifi-v04-sign-request.json)"
-            PUBLISH="$(jq -r '.publish // false' .github/blazepwifi-v04-sign-request.json)"
           fi
-          printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+
+          printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+$'
+          printf '%s' "$CANDIDATE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Verify successful exact candidate run
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.request.outputs.run_id }}
+          CANDIDATE_SHA: ${{ steps.request.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          B="$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID")"
+          test "$(printf '%s' "$B" | jq -r .conclusion)" = success
+          test "$(printf '%s' "$B" | jq -r .head_sha)" = "$CANDIDATE_SHA"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.candidate_sha }}
+
+      - name: Require preserved production signing identity
         shell: bash
         run: |
           set -euo pipefail
@@ -71,10 +83,12 @@ jobs:
 
       - name: Download exact unsigned v0.4 candidate
         shell: bash
+        env:
+          RUN_ID: ${{ steps.request.outputs.run_id }}
         run: |
           set -euo pipefail
           mkdir -p candidate
-          gh run download "${{ steps.request.outputs.run_id }}" --repo "${{ github.repository }}"             --name BlazePwifi-android-BlazeRental-v0.4 --dir candidate
+          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name BlazePwifi-android-BlazeRental-v0.4 --dir candidate
           UNSIGNED="$(find candidate -type f -name 'BlazeRental-v0.4.0-release-unsigned.apk' -print -quit)"
           test -n "$UNSIGNED" -a -s "$UNSIGNED"
           echo "UNSIGNED=$UNSIGNED" >> "$GITHUB_ENV"
@@ -102,9 +116,10 @@ jobs:
         run: |
           set -euo pipefail
           ALIAS="${KEY_ALIAS_SECRET:-blazerental}"
-          keytool -list -v -keystore "$RUNNER_TEMP/BlazeRental-production.p12"             -storetype PKCS12 -storepass "$STORE_PASS" -alias "$ALIAS" > "$RUNNER_TEMP/key.txt"
+          keytool -list -v             -keystore "$RUNNER_TEMP/BlazeRental-production.p12"             -storetype PKCS12 -storepass "$STORE_PASS" -alias "$ALIAS"             > "$RUNNER_TEMP/key.txt"
           ACTUAL="$(sed -n 's/^[[:space:]]*SHA256: //p' "$RUNNER_TEMP/key.txt" | head -n1 | tr -d ':' | tr 'A-F' 'a-f')"
-          EXPECTED="$(tr -cd 'A-Fa-f0-9' < experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt | tr 'A-F' 'a-f' | tail -c 65 | tr -d '\n')"
+          EXPECTED="$(grep -Eo '([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}'             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt             | head -n1 | tr -d ':' | tr 'A-F' 'a-f')"
+          test -n "$ACTUAL" -a -n "$EXPECTED"
           test "$ACTUAL" = "$EXPECTED" || {
             echo "Configured keystore is not the v0.3 BlazeRental production identity"
             echo "expected $EXPECTED"
@@ -112,8 +127,11 @@ jobs:
             exit 1
           }
 
-      - name: Sign v0.4 APK using preserved identity
+      - name: Sign and verify v0.4 APK
         shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.request.outputs.candidate_sha }}
+          BUILD_RUN_ID: ${{ steps.request.outputs.run_id }}
         run: |
           set -euo pipefail
           OUT="$RUNNER_TEMP/blazerental-v04"
@@ -124,10 +142,14 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs "$OUT/BlazeRental.apk"             > "$OUT/BlazeRental-apksigner-verify.txt"
           keytool -exportcert -rfc -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" -file "$OUT/BlazeRental-signing-cert.pem"
           keytool -list -v -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" | sed -n '/SHA256:/p'             > "$OUT/BlazeRental-signing-fingerprint.txt"
+
           APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh             "$OUT/BlazeRental.apk"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
-          sha256sum "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-cert.pem"             > "$OUT/SHA256SUMS"
-          jq -n             --arg release "0.4.0"             --arg candidate_sha "${{ steps.request.outputs.candidate_sha }}"             --arg build_run_id "${{ steps.request.outputs.run_id }}"             --arg unsigned_sha256 "$(sha256sum "$UNSIGNED" | awk '{print $1}')"             --arg signed_sha256 "$(sha256sum "$OUT/BlazeRental.apk" | awk '{print $1}')"             '{release:$release,candidate_sha:$candidate_sha,build_run_id:$build_run_id,unsigned_sha256:$unsigned_sha256,signed_sha256:$signed_sha256,certificate_lineage:"v0.3"}'             > "$OUT/SIGNING-MANIFEST.json"
-          rm -f "$OUT/BlazeRental-aligned.apk"
+
+          UNSIGNED_SHA="$(sha256sum "$UNSIGNED" | awk '{print $1}')"
+          SIGNED_SHA="$(sha256sum "$OUT/BlazeRental.apk" | awk '{print $1}')"
+          jq -n             --arg release "0.4.0"             --arg candidate_sha "$CANDIDATE_SHA"             --arg build_run_id "$BUILD_RUN_ID"             --arg unsigned_sha256 "$UNSIGNED_SHA"             --arg signed_sha256 "$SIGNED_SHA"             '{release:$release,candidate_sha:$candidate_sha,build_run_id:$build_run_id,unsigned_sha256:$unsigned_sha256,signed_sha256:$signed_sha256,certificate_lineage:"v0.3"}'             > "$OUT/SIGNING-MANIFEST.json"
+          sha256sum "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-cert.pem"             "$OUT/SIGNING-MANIFEST.json" > "$OUT/SHA256SUMS"
+          rm -f "$OUT/BlazeRental-aligned.apk" "$RUNNER_TEMP/BlazeRental-production.p12"
 
       - name: Upload verified signed v0.4 APK
         uses: actions/upload-artifact@v4
