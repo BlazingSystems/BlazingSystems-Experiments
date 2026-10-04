@@ -14,19 +14,23 @@ openwrt-25.12.5-sunxi-cortexa53-xunlong_orangepi-zero2w-ext4-sdcard.img.gz
 openwrt-25.12.5-sunxi-cortexa53-xunlong_orangepi-zero3-ext4-sdcard.img.gz
 )
 for asset in "${ASSETS[@]}"; do
+  echo "=== AUDIT $asset ==="
   gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p "$asset" -D downloads --clobber
   img="downloads/${asset%.gz}"
   gzip -dkf "downloads/$asset"
   size=$(stat -c%s "$img")
   rem=$((size % 512))
   [ "$rem" -eq 0 ] || truncate -s $((size + 512 - rem)) "$img"
-  loop=$(sudo losetup --find --show --partscan "$img")
+  fdisk -l "$img" | tee "$OUT/$(basename "$asset" .img.gz)-partitions.txt"
+  rootline=$(partx -g -o START,SECTORS,NR "$img" | tail -n1)
+  read -r start sectors nr <<< "$rootline"
+  test -n "$start"
+  offset=$((start*512))
+  sizelimit=$((sectors*512))
   mnt=$(mktemp -d)
-  rootdev=$(lsblk -lnpo NAME,FSTYPE "$loop" | awk '$2=="ext4"{print $1}' | tail -n1)
-  test -n "$rootdev"
-  sudo mount "$rootdev" "$mnt"
-  for f in etc/openwrt_release etc/config/blazepwifi usr/sbin/blazepwifi-core www/blazepwifi/index.html www/blazepwifi/admin.html; do
-    sudo test -e "$mnt/$f"
+  sudo mount -o loop,offset="$offset",sizelimit="$sizelimit" "$img" "$mnt"
+  for required in etc/openwrt_release etc/config/blazepwifi usr/sbin/blazepwifi-core www/blazepwifi/index.html www/blazepwifi/admin.html; do
+    sudo test -e "$mnt/$required"
   done
   if [[ "$asset" == *cortexa7* ]]; then qemu=$(command -v qemu-arm-static); else qemu=$(command -v qemu-aarch64-static); fi
   sudo cp "$qemu" "$mnt/usr/bin/$(basename "$qemu")"
@@ -37,10 +41,9 @@ for asset in "${ASSETS[@]}"; do
   sudo rm -f "$mnt/usr/bin/$(basename "$qemu")"
   sync
   sudo umount "$mnt"
-  sudo losetup -d "$loop"
   rmdir "$mnt"
   name=$(basename "$asset" .img.gz)
   gzip -c "$img" > "$OUT/${name}-configured-backup.img.gz"
-  printf '{"asset":"%s","status":"PASS","level":"userspace-image"}\n' "$asset" > "$OUT/${name}-audit.json"
+  printf '{"asset":"%s","status":"PASS","level":"userspace-image","root_partition":%s}\n' "$asset" "$nr" > "$OUT/${name}-audit.json"
   rm -f "$img"
 done
