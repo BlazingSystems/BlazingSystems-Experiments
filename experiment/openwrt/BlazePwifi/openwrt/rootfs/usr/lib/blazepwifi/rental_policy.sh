@@ -42,7 +42,7 @@ bp_rental_policy_migrate() {
   now="$(bp_now)"
   tmp="$BP_STATE/.rental-policy-v2.$(bp_tmp_suffix)"
   awk -F '\t' -v d="$did" '$1!=d {print}' "$BP_RENTAL_POLICY_V2" > "$tmp" || return 1
-  printf '%s\t1\t%s\tmigration\trental\t%s\t-\t%s\toverlay\t1\tvolume_down,volume_up,floating_timer,network_status,bluetooth_status\t1\thold\t4000\t%s\t%s\t%s\t0\t-\n'     "$did" "$now" "$allowed" "$preferred" "$salt" "$hash" "$rounds" >> "$tmp" || return 1
+  printf '%s\t1\t%s\tmigration\trental\t%s\t-\t%s\toverlay\t1\tvolume_down,volume_up,floating_timer,network_status,battery_status,bluetooth_status,flashlight\t1\thold\t4000\t%s\t%s\t%s\t0\t-\n'     "$did" "$now" "$allowed" "$preferred" "$salt" "$hash" "$rounds" >> "$tmp" || return 1
   chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_POLICY_V2" || return 1
   bp_durable_sync
 }

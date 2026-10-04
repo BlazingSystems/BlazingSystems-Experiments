@@ -37,6 +37,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: BlazeRental source validation
         run: sh experiment/openwrt/BlazePwifi/tests/android.sh
+      - name: BlazeRental v0.4 launcher source validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_android_source.sh
       - name: BlazeRental PC QR tool validation
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
       - name: BlazeRental server validation
@@ -258,6 +260,12 @@ jobs:
           echo "APK=$APK" >> "$GITHUB_ENV"
           mkdir -p simulation-out/android
           sha256sum "$APK" > simulation-out/android/AUDITED_APK_SHA256
+      - name: Enable Android emulator KVM access
+        shell: bash
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+          fi
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 27
@@ -265,7 +273,7 @@ jobs:
           target: default
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
       - uses: actions/upload-artifact@v4
         if: always()

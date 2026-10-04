@@ -31,6 +31,10 @@ OUT="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$D" "$N" "$SIG" | RE
 printf '%s' "$OUT" | grep -q '"policy_revision":1'
 printf '%s' "$OUT" | grep -q '"policy_sig":"[0-9a-f]'
 printf '%s' "$OUT" | grep -q '"policy_sig_v2":"[0-9a-f]'
+printf '%s' "$OUT" | grep -q '"policy_sig_v3":"[0-9a-f]'
+printf '%s' "$OUT" | grep -q '"timer_mode":"overlay"'
+printf '%s' "$OUT" | grep -q '"notifications_enabled":1'
+printf '%s' "$OUT" | grep -q '"admin_gesture_value":"4000"'
 N2=patch1
 CAN="policy_patch|$N2|$D|1|unrestricted|@keep|@keep|@keep|@keep|@keep|@keep|@keep|@keep"
 SIG2="$(bp_rental_hmac "$S" "$CAN")"
