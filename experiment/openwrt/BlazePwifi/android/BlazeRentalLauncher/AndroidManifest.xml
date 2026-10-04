@@ -55,6 +55,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
@@ -116,6 +117,10 @@
             android:label="Scan BlazePwifi QR"
             android:excludeFromRecents="true"
             android:screenOrientation="portrait" />
+
+        <service
+            android:name="com.blazesystems.blazerental.FloatingTimerService"
+            android:exported="false" />
 
         <service
             android:name="com.blazesystems.blazerental.RentalNotificationService"

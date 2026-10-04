@@ -59,6 +59,7 @@ public class BlazeAdminActivity extends Activity {
             @Override public void onClick(View v) {
                 if (RentalLeaseStore.verifyAdminPassword(BlazeAdminActivity.this,
                         password.getText().toString())) {
+                    ManagedPolicyController.apply(BlazeAdminActivity.this);
                     showDashboard();
                 } else {
                     Toast.makeText(BlazeAdminActivity.this,
@@ -130,6 +131,30 @@ public class BlazeAdminActivity extends Activity {
         addStatus("Notification mirror", hasNotificationAccess() ? "GRANTED" : "MISSING");
         addStatus("Floating overlay",
                 Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this) ? "GRANTED" : "MISSING");
+
+        Button grantNotifications = secondary("GRANT NOTIFICATION ACCESS");
+        content.addView(grantNotifications, full());
+        grantNotifications.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                try { startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")); }
+                catch (Exception e) {
+                    try { startActivity(new Intent("android.settings.NOTIFICATION_LISTENER_SETTINGS")); }
+                    catch (Exception ignored) {}
+                }
+            }
+        });
+
+        Button grantOverlay = secondary("GRANT FLOATING TIMER OVERLAY");
+        content.addView(grantOverlay, full());
+        grantOverlay.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (Build.VERSION.SDK_INT < 23) return;
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName())));
+                } catch (Exception ignored) {}
+            }
+        });
 
         section("Diagnostics");
         addStatus("Package", getPackageName());

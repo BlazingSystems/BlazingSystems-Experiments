@@ -136,6 +136,8 @@ public final class RentalSystemPages {
             @Override public void run() {
                 long remaining = RentalLeaseStore.remainingMs(launcher);
                 boolean paid = remaining > 0L;
+                if (paid) FloatingTimerService.ensure(launcher);
+                else FloatingTimerService.stop(launcher);
                 timer.setText(formatDuration(remaining));
                 detail.setText(paid ? "RENTAL ACTIVE" : "TIME FINISHED");
                 coin.setText(paid ? "ADD MORE TIME" : "INSERT COIN");
@@ -160,14 +162,12 @@ public final class RentalSystemPages {
 
         down.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (audio != null) audio.adjustVolume(AudioManager.ADJUST_LOWER,
-                        AudioManager.FLAG_SHOW_UI);
+                QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_LOWER);
             }
         });
         up.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (audio != null) audio.adjustVolume(AudioManager.ADJUST_RAISE,
-                        AudioManager.FLAG_SHOW_UI);
+                QuickControlController.adjustVolume(launcher, AudioManager.ADJUST_RAISE);
             }
         });
 
@@ -188,8 +188,7 @@ public final class RentalSystemPages {
                         "blaze_rental_ui", Context.MODE_PRIVATE)
                         .getBoolean("floating_timer", true);
                 boolean next = !current;
-                launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
-                        .edit().putBoolean("floating_timer", next).apply();
+                QuickControlController.setFloatingTimer(launcher, next);
                 timerToggle.setText(next ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
                 Toast.makeText(launcher, next ? "Floating timer enabled" :
                         "Floating timer disabled", Toast.LENGTH_SHORT).show();
@@ -223,7 +222,24 @@ public final class RentalSystemPages {
                         RentalNotificationService.Entry e = entries.get(i);
                         String title = e.title.length() == 0 ? e.packageName : e.title;
                         String text = e.text.length() == 0 ? e.packageName : e.text;
-                        list.addView(infoCard(launcher, title + "\n" + text));
+                        final RentalNotificationService.Entry entry = e;
+                        TextView card = infoCard(launcher, title + "\n" + text);
+                        card.setOnClickListener(new View.OnClickListener() {
+                            @Override public void onClick(View v) {
+                                if (!RentalNotificationService.open(launcher, entry.key)) {
+                                    Toast.makeText(launcher,
+                                            "This notification cannot open a blocked app",
+                                            Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        });
+                        card.setOnLongClickListener(new View.OnLongClickListener() {
+                            @Override public boolean onLongClick(View v) {
+                                RentalNotificationService.dismiss(entry.key);
+                                return true;
+                            }
+                        });
+                        list.addView(card);
                     }
                 }
                 if (root.getWindowToken() != null) root.postDelayed(this, 2000L);
