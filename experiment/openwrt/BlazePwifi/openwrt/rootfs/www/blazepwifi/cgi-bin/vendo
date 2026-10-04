@@ -51,7 +51,7 @@ case "$action" in
     [ "$pulses" -ge 1 ] && [ "$pulses" -le 20 ] || bp_fail "pulse count out of range"
     printf '%s' "$target" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid coin target"
 
-    event="$(bp_event_hash "coin|$id|$nonce|$target")"
+    event="c:$(bp_event_hash "coin|$id|$nonce|$target")"
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
