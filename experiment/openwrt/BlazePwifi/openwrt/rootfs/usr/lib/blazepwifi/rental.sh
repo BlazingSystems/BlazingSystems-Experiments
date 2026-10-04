@@ -151,6 +151,78 @@ bp_rental_inventory_get() {
   printf '%s' "$v"
 }
 
+bp_rental_event_log() {
+  kind="$(bp_rental_clean "$1")"; did="$(bp_rental_clean "$2")"; detail="$(bp_rental_clean "$3")"; now="$(bp_now)"
+  event="a:$now:$(bp_tmp_suffix)"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$event" "$did" "$detail" "$now" "$kind" >> "$BP_RENTAL_EVENTS"
+  chmod 600 "$BP_RENTAL_EVENTS"
+  bp_durable_sync
+}
+
+bp_rental_device_rename() {
+  did="$1"; new_label="$(bp_rental_clean "$2")"
+  [ -n "$new_label" ] || return 2
+  [ "$(printf '%s' "$new_label" | wc -c)" -le 80 ] || return 2
+  line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
+  secret="$(printf '%s' "$line" | cut -f2)"; lease="$(printf '%s' "$line" | cut -f3)"; last="$(printf '%s' "$line" | cut -f5)"
+  bp_rental_device_write "$did" "$secret" "$lease" "$new_label" "$last"
+  bp_rental_event_log rename "$did" "$new_label"
+}
+
+bp_rental_lease_add() {
+  did="$1"; seconds="$2"; now="$(bp_now)"
+  case "$seconds" in ''|*[!0-9]*) return 2;; esac
+  [ "$seconds" -le 2592000 ] 2>/dev/null || return 2
+  line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
+  secret="$(printf '%s' "$line" | cut -f2)"; lease="$(printf '%s' "$line" | cut -f3)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
+  base="$lease"; [ "$base" -ge "$now" ] 2>/dev/null || base="$now"
+  newlease=$((base+seconds))
+  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$last"
+  bp_rental_event_log lease_add "$did" "$seconds"
+  printf '%s\n' "$newlease"
+}
+
+bp_rental_lease_expire() {
+  did="$1"; now="$(bp_now)"
+  line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
+  secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
+  bp_rental_device_write "$did" "$secret" "$now" "$label" "$last"
+  bp_rental_event_log expire "$did" "0"
+  printf '%s\n' "$now"
+}
+
+bp_rental_device_revoke() {
+  did="$1"; [ -n "$(bp_rental_device_line "$did")" ] || return 1
+  for file in "$BP_RENTAL_DEVICES" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY"; do
+    tmp="$BP_STATE/.rental-revoke.$(bp_tmp_suffix)"
+    awk -F '\t' -v d="$did" '$1!=d {print}' "$file" > "$tmp" || return 1
+    chmod 600 "$tmp" && mv "$tmp" "$file" || return 1
+  done
+  for target_file in "$BP_TARGET_DIR"/*.tsv; do
+    [ -f "$target_file" ] || continue
+    [ "$(cut -f1 "$target_file")" = "$did" ] && rm -f "$target_file"
+  done
+  bp_rental_event_log revoke "$did" "revoked"
+  bp_durable_sync
+}
+
+bp_rental_events_json() {
+  limit="${1:-64}"
+  case "$limit" in ''|*[!0-9]*) limit=64;; esac
+  [ "$limit" -ge 1 ] 2>/dev/null || limit=1
+  [ "$limit" -le 256 ] 2>/dev/null || limit=256
+  first=1; printf '['
+  tail -n "$limit" "$BP_RENTAL_EVENTS" 2>/dev/null | while IFS="$(printf '\t')" read -r event did detail when kind; do
+    [ -n "$event" ] || continue
+    [ -n "$kind" ] || kind="$(printf '%s' "$event" | sed 's/:.*//')"
+    [ "$first" = 1 ] || printf ','
+    first=0
+    printf '{"event":"%s","device_id":"%s","detail":"%s","time":%s,"kind":"%s"}' \
+      "$(bp_json_escape "$event")" "$(bp_json_escape "$did")" "$(bp_json_escape "$detail")" "${when:-0}" "$(bp_json_escape "$kind")"
+  done
+  printf ']'
+}
+
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"

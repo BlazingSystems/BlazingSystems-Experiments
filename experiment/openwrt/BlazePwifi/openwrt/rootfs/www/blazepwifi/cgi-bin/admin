@@ -72,6 +72,49 @@ case "$action" in
     bp_auth_audit controller_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$id"
     bp_json '{"ok":true}'
     ;;
+  rental_rename)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"; label="$(bp_param label)"
+    bp_rental_device_rename "$did" "$label" || bp_fail "invalid rental device or label"
+    bp_auth_audit rental_rename "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
+    bp_json '{"ok":true}'
+    ;;
+  rental_lease_add)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
+    lease="$(bp_rental_lease_add "$did" "$seconds")" || bp_fail "invalid rental device or duration"
+    bp_auth_audit rental_lease_add "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
+    bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
+    ;;
+  rental_expire)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"
+    lease="$(bp_rental_lease_expire "$did")" || bp_fail "unknown rental device"
+    bp_auth_audit rental_expire "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
+    bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
+    ;;
+  rental_revoke)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"
+    bp_rental_device_revoke "$did" || bp_fail "unknown rental device"
+    bp_auth_audit rental_revoke "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
+    bp_json '{"ok":true}'
+    ;;
+  rental_events)
+    require_role viewer
+    bp_rental_init
+    limit="$(bp_param limit)"; [ -n "$limit" ] || limit=64
+    body="$(bp_rental_events_json "$limit")"
+    bp_json "$(printf '{"ok":true,"events":%s}' "$body")"
+    ;;
   rental_lease_set)
     require_role operator
     bp_auth_csrf_ok || bp_fail "csrf validation failed"

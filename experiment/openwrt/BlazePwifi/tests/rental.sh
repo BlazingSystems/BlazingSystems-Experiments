@@ -76,4 +76,16 @@ L3="$(printf '%s' "$OUT3" | sed -n 's/.*"lease_until_ms":\([0-9]*\).*/\1/p')"
 [ -n "$S3" ] && [ "$L3" = "$S3" ]
 [ "$(printf '%s' "$(bp_rental_device_line "$DID")" | cut -f3)" -eq 1 ]
 
+# Operator helpers used by the R281 rental deployment profile.
+bp_rental_device_rename "$DID" 'Owner Test Phone'
+printf '%s' "$(bp_rental_device_line "$DID")" | grep -q 'Owner Test Phone'
+ADDED="$(bp_rental_lease_add "$DID" 120)"
+[ "$ADDED" -gt "$(bp_now)" ]
+EXPIRED="$(bp_rental_lease_expire "$DID")"
+[ "$EXPIRED" -le "$(bp_now)" ]
+EVENTS="$(bp_rental_events_json 16)"
+printf '%s' "$EVENTS" | grep -q '"kind":"rename"'
+printf '%s' "$EVENTS" | grep -q '"kind":"lease_add"'
+printf '%s' "$EVENTS" | grep -q '"kind":"expire"'
+
 echo "BlazeRental production server checks passed"
