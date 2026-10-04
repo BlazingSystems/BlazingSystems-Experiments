@@ -244,7 +244,7 @@ jobs:
   v04_android_emulator:
     needs: [validate, android]
     runs-on: ubuntu-22.04
-    timeout-minutes: 50
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -276,7 +276,8 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
-          script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
+          emulator-boot-timeout: 300
+          script: timeout 180s bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
       - uses: actions/upload-artifact@v4
         if: always()
         with:
