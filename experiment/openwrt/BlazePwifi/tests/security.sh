@@ -68,7 +68,10 @@ CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ]
 
 echo "security: session lookup"
+awk -F '\t' '{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s\n",$2,$3,$5,$6,$7,$8,$9}' "$T/run/admin-sessions.tsv" || true
 OUT="$(HTTP_COOKIE="$COOKIE" REQUEST_METHOD=GET sh "$SESSION")"
+SCLASS="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+echo "security: session-result => ${SCLASS:-ok-or-unclassified}"
 echo "$OUT" | grep -q '"username":"admin"'
 echo "$OUT" | grep -q '"role":"admin"'
 
