@@ -1,6 +1,6 @@
 # BlazePwifi production-readiness audit
 
-Release candidate: 0.2.0-rc.1
+Release candidate: 0.2.0-rc.2
 
 ## Audit scope
 
