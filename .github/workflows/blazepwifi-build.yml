@@ -25,6 +25,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/config.sh
       - name: Template gallery validation
         run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
+      - name: Controller protocol parity
+        run: sh experiment/openwrt/BlazePwifi/tests/controllers.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
@@ -93,3 +95,26 @@ jobs:
         with:
           name: BlazePwifi-${{ matrix.target }}-firmware
           path: experiment/openwrt/BlazePwifi/dist/${{ matrix.target }}/
+
+
+  esp32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+      - name: Compile BlazePwifi Vendo ESP32
+        run: |
+          mkdir -p experiment/openwrt/BlazePwifi/dist/esp32
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir experiment/openwrt/BlazePwifi/dist/esp32 experiment/openwrt/BlazePwifi/esp32/BlazePwifiVendo32
+          cp experiment/openwrt/BlazePwifi/esp32/BlazePwifiVendo32/BlazePwifiVendo32.ino experiment/openwrt/BlazePwifi/dist/esp32/
+          (cd experiment/openwrt/BlazePwifi/dist/esp32 && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-esp32-firmware
+          path: experiment/openwrt/BlazePwifi/dist/esp32/
