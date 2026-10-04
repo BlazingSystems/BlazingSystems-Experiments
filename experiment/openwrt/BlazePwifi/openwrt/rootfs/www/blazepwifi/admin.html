@@ -16,6 +16,7 @@
 <h2 class="card-title">Rental phones</h2>
 <p class="text-secondary">Create a one-time enrollment token, then use the production PC QR Setup tool or manually install BlazeRental.apk. Managed QR mode is recommended.</p>
 <div class="form-row"><input class="form-control" id="rentalLabel" value="Rental phone" placeholder="Phone label"><button class="btn btn-primary" onclick="newRentalEnrollment()">Create enrollment</button></div>
+<div class="form-row"><input class="form-control" id="rentalPulseSeconds" type="number" min="1" max="86400" value="600" placeholder="Seconds per coin pulse"><button class="btn btn-ghost-secondary" onclick="saveRentalPulseSeconds()">Save seconds per pulse</button></div>
 <div id="rentalEnrollResult" class="small mono"></div>
 <div class="toolbar mt-3"><a class="btn btn-ghost-secondary" href="https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0/BlazeRental-QR-Setup.html" target="_blank" rel="noopener">Open PC QR Setup tool</a><button class="btn btn-ghost-secondary" onclick="loadRentals()">Refresh phones</button></div>
 <div id="rentalList" class="stack mt-3"></div>
@@ -38,11 +39,13 @@ async function login(){q('loginMsg').textContent='Signing in…';let body=new UR
 function applySession(x){show('loginCard',false);show('app',true);show('changeCard',!!(+x.must_change));q('who').textContent=x.username||'';q('role').textContent=x.role||''}
 async function session(){let x=await jsonFetch('/cgi-bin/admin-session');if(!x.ok){show('loginCard',true);show('app',false);show('changeCard',false);return}csrf=x.csrf||'';mustChange=+x.must_change||0;applySession(x);await status()}
 async function a(action,data){let body=new URLSearchParams(Object.assign({action:action},data||{}));return jsonFetch('/cgi-bin/admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-CSRF':csrf},body})}
-async function status(){let x=await a('status');if(!x.ok){if(x.error==='unauthorized')return session();q('out').textContent=x.error||'Status failed';return}q('sessions').textContent=x.active_sessions;q('paused').textContent=x.paused_sessions;q('vendos').textContent=x.online_vendos;q('mem').textContent=x.mem_available_kb+' KB';q('load').textContent=x.load1;mustChange=+x.must_change||0;show('changeCard',!!mustChange);if(!mustChange){loadRentals();loadControllers()}}
+async function status(){let x=await a('status');if(!x.ok){if(x.error==='unauthorized')return session();q('out').textContent=x.error||'Status failed';return}q('sessions').textContent=x.active_sessions;q('paused').textContent=x.paused_sessions;q('vendos').textContent=x.online_vendos;q('mem').textContent=x.mem_available_kb+' KB';q('load').textContent=x.load1;mustChange=+x.must_change||0;show('changeCard',!!mustChange);if(!mustChange){loadRentalPulseSeconds();loadRentals();loadControllers()}}
 async function voucher(){let x=await a('voucher_create',{cents:q('cents').value});q('out').textContent=x.ok?('Voucher: '+x.code+' ('+x.cents+' centavos)'):(x.error||'Failed')}
 async function changePassword(){let p=q('newPassword').value;if(p.length<12){q('changeMsg').textContent='Use at least 12 characters.';return}let x=await a('password_change',{new_password:p});q('newPassword').value='';if(!x.ok){q('changeMsg').textContent=x.error||'Failed';return}q('changeMsg').textContent='Password changed. Sign in again.';setTimeout(()=>location.reload(),700)}
 
 function escHtml(v){return String(v==null?'':v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+async function loadRentalPulseSeconds(){let x=await a('config_get',{key:'rental_seconds_per_pulse'});if(x.ok)q('rentalPulseSeconds').value=x.value||600}
+async function saveRentalPulseSeconds(){let x=await a('config_set',{key:'rental_seconds_per_pulse',value:q('rentalPulseSeconds').value});q('rentalEnrollResult').textContent=x.ok?'Rental seconds-per-pulse saved.':(x.error||'Failed')}
 async function newRentalEnrollment(){
   let x=await a('rental_enroll_create',{label:q('rentalLabel').value||'Rental phone'}),e=q('rentalEnrollResult');
   if(!x.ok){e.textContent=x.error||'Enrollment failed';return}
