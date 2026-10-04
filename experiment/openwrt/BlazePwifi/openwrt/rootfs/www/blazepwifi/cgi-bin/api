@@ -67,18 +67,23 @@ case "$action" in
         bp_fail "selected vendo is busy"
       fi
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_file"
-    chmod 600 "$target_file"
+    target_tmp="$BP_TARGET_DIR/.$vendo.$(bp_tmp_suffix)"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
+    chmod 600 "$target_tmp"
+    mv "$target_tmp" "$target_file"
+    bp_durable_sync
     bp_unlock
     bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"expires\":$expires}"
     ;;
 
   coin_stop)
     bp_lock || bp_fail "accounting busy"
+    removed=0
     for target_file in "$BP_TARGET_DIR"/*.tsv; do
       [ -f "$target_file" ] || continue
-      [ "$(cut -f1 "$target_file")" = "$device" ] && rm -f "$target_file"
+      if [ "$(cut -f1 "$target_file")" = "$device" ]; then rm -f "$target_file"; removed=1; fi
     done
+    [ "$removed" = 1 ] && bp_durable_sync
     bp_unlock
     bp_json '{"ok":true}'
     ;;
