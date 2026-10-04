@@ -1,27 +1,41 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
+. "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
-bp_check_admin || bp_fail "unauthorized admin"
 action="$(bp_param action)"; now="$(bp_now)"
+
+require_role() {
+	need="$1"
+	if bp_auth_require_role "$need"; then return 0; fi
+	rc=$?
+	[ "$rc" -eq 2 ] && bp_fail "insufficient role"
+	bp_fail "unauthorized"
+}
+
 case "$action" in
   status)
+    require_role viewer
     sessions="$(awk -F '\t' -v n="$now" '$5!=1 && $3>n {c++} END{print c+0}' "$BP_ACCOUNTS")"
     paused="$(awk -F '\t' '$5==1 && $4>0 {c++} END{print c+0}' "$BP_ACCOUNTS")"
     vendos="$(awk -F '\t' -v n="$now" '$2>(n-30) {c++} END{print c+0}' "$BP_VENDOS")"
     free_kb="$(awk '/MemAvailable:/ {print $2; found=1} END{if(!found) print 0}' /proc/meminfo)"
     load="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"; uptime="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
-    bp_json "{\"ok\":true,\"active_sessions\":$sessions,\"paused_sessions\":$paused,\"online_vendos\":$vendos,\"mem_available_kb\":${free_kb:-0},\"load1\":\"${load:-0}\",\"uptime_seconds\":${uptime:-0}}"
+    bp_json "{"ok":true,"username":"$(bp_json_escape "$BP_AUTH_USER")","role":"$(bp_json_escape "$BP_AUTH_ROLE")","must_change":${BP_AUTH_MUST_CHANGE:-0},"active_sessions":$sessions,"paused_sessions":$paused,"online_vendos":$vendos,"mem_available_kb":${free_kb:-0},"load1":"${load:-0}","uptime_seconds":${uptime:-0}}"
     ;;
   voucher_create)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     cents="$(bp_param cents)"; case "$cents" in ''|*[!0-9]*) bp_fail "invalid amount";; esac
     [ "$cents" -gt 0 ] 2>/dev/null || bp_fail "invalid amount"
     bp_lock || bp_fail "accounting busy"
     i=0
     while :; do
-      code="$(hexdump -n 5 -e '5/1 "%02X"' /dev/urandom 2>/dev/null || date +%s)"
-      grep -q "^$code	" "$BP_VOUCHERS" 2>/dev/null || break
+      code="$(hexdump -n 5 -e '5/1 "%02X"' /dev/urandom 2>/dev/null || od -An -N5 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' | tr 'a-f' 'A-F')"
+      [ -n "$code" ] || code="$(date +%s)"
+      grep -q "^$code\t" "$BP_VOUCHERS" 2>/dev/null || break
       i=$((i+1)); [ "$i" -lt 10 ] || { bp_unlock; bp_fail "voucher generator unavailable"; }
     done
     tmp="$BP_STATE/.vouchers.$(bp_tmp_suffix)"
@@ -30,8 +44,27 @@ case "$action" in
     chmod 600 "$tmp"
     mv "$tmp" "$BP_VOUCHERS"
     bp_durable_sync
+    bp_auth_audit voucher_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$cents"
     bp_unlock
-    bp_json "{\"ok\":true,\"code\":\"$code\",\"cents\":$cents}"
+    bp_json "{"ok":true,"code":"$code","cents":$cents}"
+    ;;
+  password_change)
+    require_role viewer
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    new_password="$(bp_param new_password)"
+    [ -n "$new_password" ] || bp_fail "missing new password"
+    bp_auth_lock || bp_fail "authentication busy"
+    if bp_auth_set_password "$BP_AUTH_USER" "$BP_AUTH_ROLE" "$new_password" 0; then
+      bp_auth_invalidate_user_sessions "$BP_AUTH_USER"
+      rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null || true
+      bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"
+      bp_auth_unlock
+      bp_json '{"ok":true,"reauth_required":true}'
+    else
+      rc=$?; bp_auth_unlock
+      [ "$rc" -eq 2 ] && bp_fail "password must be at least 12 characters"
+      bp_fail "password change failed"
+    fi
     ;;
   *) bp_fail "unknown admin action" ;;
 esac
