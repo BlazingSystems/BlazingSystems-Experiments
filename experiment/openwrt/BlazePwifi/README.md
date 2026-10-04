@@ -1,59 +1,83 @@
 # BlazePwifi
 
-BlazePwifi is a clean-room, open-source PisoWiFi/captive-portal platform for OpenWrt. It is designed around a small OpenWrt router or x86 OpenWrt server plus one or more ESP8266 coin/vendo controllers.
+BlazePwifi is a clean-room, open-source PisoWiFi/captive-portal platform for OpenWrt. It uses an OpenWrt router or x86 controller plus one or more ESP8266 coin/vendo controllers.
 
-**Target base:** OpenWrt 25.12.x (primary validated design target: 25.12.5)
+Target base: OpenWrt 25.12.x
+Release candidate: 0.2.0-rc.1
+Primary build target: OpenWrt 25.12.5
 
-**Initial hardware targets**
-- Ruijie RG-EW1200G Pro v1.1 — ramips/mt7621, mipsel_24kc, 128 MB RAM, 16 MB flash
+## Hardware targets
+
+- Ruijie RG-EW1200G Pro v1.1 — ramips/mt7621, 128 MB RAM, 16 MB flash
 - x86_64 OpenWrt — generic PC/thin-client deployment
-- ESP8266 — external coin-slot / vendo controller
+- ESP8266 / NodeMCU — external coin-slot controller
 
-## Status
+## What v0.2 adds
 
-`0.1.0-alpha.1` is a production-oriented reconstruction milestone, not a claim of field validation. The repository contains the complete installable OpenWrt overlay, installer/uninstaller, captive portal, nftables enforcement, accounting/session engine, ESP8266 firmware, protocol documentation, and GitHub Actions packaging checks. Real coin acceptor pulse timing, device-specific network naming, and recovery behavior must be hardware-tested before commercial deployment.
+- Browser-backed device identity that survives Android/iOS private-MAC changes.
+- Persistent credit and timed sessions.
+- Pause/resume.
+- One-time vouchers.
+- Multiple Vendos with online discovery.
+- Target-bound signed coin events with idempotent retry protection.
+- WPA2-protected ESP setup AP.
+- Dynamic walled garden for e-payment/login providers.
+- nftables enforcement that remains subordinate to normal firewall4 policy.
+- HTTPS-only local admin interface.
+- v0.1 state migration.
+- Repeated CI validation, ESP8266 compilation, and Ruijie/x86 firmware ImageBuilder jobs.
 
-## Design goals
+## Quick install
 
-- No copied commercial PisoWiFi server binaries, pages, certificates, or proprietary assets.
-- Lightweight enough for 16 MB flash targets.
-- MAC/IP session tracking with nftables authorization.
-- Captive HTTP redirection while unpaid.
-- Configurable time/credit rates.
-- ESP8266 remote vendo over a small authenticated HTTP API.
-- Persistent credit/session state with bounded flash writes.
-- Same protocol on router-class and x86 OpenWrt systems.
-- Recovery-safe install/uninstall paths.
+Copy the project to an OpenWrt 25.12.x system and run installer/install.sh as root.
 
-## Quick install on OpenWrt 25.12.x
+The installer prints the generated admin and Vendo keys once.
 
-Copy this project to the router, then:
+Typical local endpoints:
 
-```sh
-cd BlazePwifi
-sh installer/install.sh
-```
+- Portal: http://10.0.0.1:8080/
+- Admin: https://10.0.0.1:8443/admin.html
+- ESP API: http://10.0.0.1:4455/cgi-bin/vendo
 
-The installer creates random admin and vendo keys and prints them once. Save them securely.
+The exact address follows the OpenWrt LAN configuration. The admin certificate is locally generated, so the browser may show a self-signed certificate warning.
 
-Portal: `http://10.0.0.1:8080/`
+## Build flashable images
 
-Admin: `http://10.0.0.1:8080/admin.html`
+Run build/build-openwrt-image.sh ruijie or build/build-openwrt-image.sh x86_64.
 
-ESP API: `http://10.0.0.1:4455/cgi-bin/vendo`
+Outputs and SHA-256 files are written below dist/<target>/.
 
-The actual gateway address follows your OpenWrt LAN configuration.
+## Validation status
+
+The project has automated checks for:
+
+- shell syntax and hardening invariants;
+- coin → credit → session accounting;
+- lost-ACK duplicate coin retry;
+- wrong-target coin rejection;
+- voucher one-time use;
+- pause/resume;
+- private-MAC rotation;
+- persistence/reboot behavior;
+- v0.1 state migration;
+- ESP8266 firmware compilation;
+- Ruijie and x86_64 OpenWrt ImageBuilder output.
+
+Automated builds are not a substitute for physical flash/recovery testing, real coin-acceptor electrical validation, brownout testing, or long-duration load testing.
 
 ## Repository map
 
-- `openwrt/rootfs/` — files installed onto OpenWrt
-- `installer/` — installer and uninstaller
-- `esp8266/` — external coin/vendo firmware
-- `docs/ARCHITECTURE.md` — server design and traffic flow
-- `docs/PROTOCOL.md` — ESP/server protocol
-- `docs/SECURITY.md` — threat model and deployment guidance
-- `tests/` — static tests
+- openwrt/rootfs/ — runtime overlay
+- installer/ — install/uninstall
+- esp8266/ — Vendo firmware
+- build/ — OpenWrt ImageBuilder automation
+- tests/ — regression and persistence tests
+- docs/ARCHITECTURE.md — system design
+- docs/PROTOCOL.md — Vendo protocol
+- docs/SECURITY.md — deployment/security model
+- docs/RECONCILIATION.md — WiFi5/public-source reconciliation
+- AUDIT.md — production-readiness audit
 
 ## Clean-room notice
 
-BlazePwifi was designed from observed behavior and public OpenWrt interfaces. It intentionally does not include or redistribute the analyzed commercial firmware's application binaries, private keys, artwork, databases, or source code.
+BlazePwifi does not contain the analyzed commercial PisoWiFi application binaries, license mechanisms, private keys, databases, branding, or proprietary portal assets. Publicly documented behavior and MIT-licensed integration material were used only as interoperability/design references.
