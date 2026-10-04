@@ -44,7 +44,21 @@ Run on Linux with curl, zstd, tar and make:
     ./build/build-openwrt-image.sh ruijie
     ./build/build-openwrt-image.sh x86_64
 
-The build script verifies the official OpenWrt ImageBuilder checksum, injects the BlazePwifi overlay, and creates per-target SHA256SUMS.
+The build script verifies the official OpenWrt ImageBuilder checksum, injects the BlazePwifi overlay, verifies expected output types, and creates per-target SHA256SUMS.
+
+### Ruijie RG-EW1200G Pro v1.1 outputs
+
+- `*-initramfs-kernel.bin` — upstream OpenWrt install image type for this device.
+- `*-squashfs-sysupgrade.bin` — upgrade image once OpenWrt is already installed.
+
+Upstream OpenWrt lists U-Boot TFTP as the installation and recovery method and warns that the port is for hardware revision v1.1 only. The stock recovery loader looks for `rgos.bin` from a TFTP server at `192.168.64.1`; follow the upstream device procedure for recovery rather than renaming a sysupgrade image arbitrarily.
+
+### x86_64 outputs
+
+- `*combined.img.gz` — legacy BIOS disk image.
+- `*combined-efi.img.gz` — UEFI disk image.
+
+Each target directory includes `BUILD-MANIFEST.txt` and `SHA256SUMS`.
 
 ## First-boot secrets
 
@@ -57,7 +71,7 @@ Store them securely.
 
 ## Recovery
 
-For the Ruijie RG-EW1200G Pro v1.1, verify U-Boot/TFTP recovery before field deployment. Never flash the v1.1 image onto a different hardware revision without matching upstream OpenWrt support.
+For the Ruijie RG-EW1200G Pro v1.1, verify U-Boot/TFTP recovery before field deployment. Upstream currently documents the recovery loader at `192.168.64.1` requesting `rgos.bin`. Never flash the v1.1 image onto a different hardware revision without matching upstream OpenWrt support.
 
 ## Before taking money
 
