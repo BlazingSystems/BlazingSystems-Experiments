@@ -67,7 +67,10 @@ COOKIE="$(printf '%s\n' "$OUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/
 CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ]
 COOKIE_TOKEN="${COOKIE#blaze_admin=}"
-printf '%s' "$COOKIE_TOKEN" | grep -Eq '^[0-9a-f]{64}
+[ "${#COOKIE_TOKEN}" -eq 64 ]
+[ "${#CSRF}" -eq 48 ]
+printf '%s' "$COOKIE_TOKEN" | grep -Eq '^[0-9a-f]+$'
+printf '%s' "$CSRF" | grep -Eq '^[0-9a-f]+$'
 
 echo "security: session lookup"
 awk -F '\t' 'NF{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s token_len=%s\n",$2,$3,$5,$6,$7,$8,$9,length($1)}' "$T/run/admin-sessions.tsv" || true
