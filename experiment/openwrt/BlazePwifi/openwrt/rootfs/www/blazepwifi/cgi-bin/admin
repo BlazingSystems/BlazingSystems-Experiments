@@ -1,6 +1,7 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 . "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
+. "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -16,6 +17,25 @@ require_role() {
 }
 
 case "$action" in
+  config_get)
+    require_role viewer
+    key="$(bp_param key)"
+    bp_config_key_allowed "$key" || bp_fail "invalid config key"
+    value="$(bp_config_get "$key")"
+    body="$(printf '{"ok":true,"key":"%s","value":"%s"}' "$(bp_json_escape "$key")" "$(bp_json_escape "$value")")"
+    bp_json "$body"
+    ;;
+  config_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    key="$(bp_param key)"; value="$(bp_param value)"
+    bp_config_key_allowed "$key" || bp_fail "invalid config key"
+    bp_config_validate "$key" "$value" || bp_fail "invalid config value"
+    bp_config_set "$key" "$value" || bp_fail "config apply failed and was rolled back"
+    body="$(printf '{"ok":true,"key":"%s","value":"%s"}' "$(bp_json_escape "$key")" "$(bp_json_escape "$value")")"
+    bp_json "$body"
+    ;;
   status)
     require_role viewer
     sessions="$(awk -F '\t' -v n="$now" '$5!=1 && $3>n {c++} END{print c+0}' "$BP_ACCOUNTS")"
