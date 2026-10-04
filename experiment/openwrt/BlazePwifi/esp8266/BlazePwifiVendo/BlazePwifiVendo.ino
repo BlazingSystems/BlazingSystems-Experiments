@@ -4,6 +4,19 @@
 #include <EEPROM.h>
 #include <bearssl/bearssl_hash.h>
 
+struct ConfigV1 {
+  uint32_t magic;
+  char ssid[33];
+  char pass[65];
+  char server[64];
+  char key[65];
+  char id[33];
+  uint8_t coinPin;
+  uint8_t insertLedPin;
+  uint8_t relayPin;
+  uint8_t coinActiveLow;
+};
+
 struct Config {
   uint32_t magic;
   char ssid[33];
@@ -20,6 +33,7 @@ struct Config {
 
 Config cfg;
 ESP8266WebServer web(80);
+const uint32_t MAGIC_V1=0x42505731;
 const uint32_t MAGIC=0x42505732;
 
 bool insertMode=false;
@@ -49,19 +63,46 @@ String esc(const String &s){
   return o;
 }
 
+void makeSetupPassword(){
+  uint32_t a=ESP.random(), b=ESP.random();
+  snprintf(cfg.apPass,sizeof(cfg.apPass),"%08lX%08lX",(unsigned long)a,(unsigned long)b);
+}
+
 void defaults(){
   memset(&cfg,0,sizeof(cfg)); cfg.magic=MAGIC;
   strcpy(cfg.server,"10.0.0.1"); strcpy(cfg.id,"vendo-01");
   cfg.coinPin=4; cfg.insertLedPin=14; cfg.relayPin=5; cfg.coinActiveLow=1;
-  snprintf(cfg.apPass,sizeof(cfg.apPass),"Bz%06X%06X",ESP.getChipId(),micros() & 0xFFFFFF);
-}
-
-void loadCfg(){
-  EEPROM.begin(sizeof(Config)); EEPROM.get(0,cfg);
-  if(cfg.magic!=MAGIC){ defaults(); EEPROM.put(0,cfg); EEPROM.commit(); }
+  makeSetupPassword();
 }
 
 void saveCfg(){ EEPROM.put(0,cfg); EEPROM.commit(); }
+
+void loadCfg(){
+  EEPROM.begin(sizeof(Config));
+  EEPROM.get(0,cfg);
+  if(cfg.magic==MAGIC && strlen(cfg.apPass)>=8) return;
+
+  ConfigV1 oldCfg;
+  EEPROM.get(0,oldCfg);
+  if(oldCfg.magic==MAGIC_V1){
+    defaults();
+    strlcpy(cfg.ssid,oldCfg.ssid,sizeof(cfg.ssid));
+    strlcpy(cfg.pass,oldCfg.pass,sizeof(cfg.pass));
+    strlcpy(cfg.server,oldCfg.server,sizeof(cfg.server));
+    strlcpy(cfg.key,oldCfg.key,sizeof(cfg.key));
+    strlcpy(cfg.id,oldCfg.id,sizeof(cfg.id));
+    cfg.coinPin=oldCfg.coinPin;
+    cfg.insertLedPin=oldCfg.insertLedPin;
+    cfg.relayPin=oldCfg.relayPin;
+    cfg.coinActiveLow=oldCfg.coinActiveLow;
+    saveCfg();
+    Serial.println("Migrated BlazePwifi Vendo v1 configuration.");
+    return;
+  }
+
+  defaults();
+  saveCfg();
+}
 
 String jsonString(const String&r,const String&k){
   String needle="\""+k+"\":\""; int p=r.indexOf(needle); if(p<0)return "";
