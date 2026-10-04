@@ -89,6 +89,16 @@ public final class RentalSystemPages {
             hotseatView.setVisibility(View.GONE);
             hotseatView.setEnabled(false);
         }
+        View pageIndicator = launcher.findViewById(com.android.launcher3.R.id.page_indicator);
+        if (pageIndicator != null) {
+            pageIndicator.setVisibility(View.GONE);
+            pageIndicator.setEnabled(false);
+        }
+        View allAppsHandle = launcher.findViewById(com.android.launcher3.R.id.all_apps_handle);
+        if (allAppsHandle != null) {
+            allAppsHandle.setVisibility(View.GONE);
+            allAppsHandle.setEnabled(false);
+        }
     }
 
     private static void attachFullPage(CellLayout page, View view, int id) {

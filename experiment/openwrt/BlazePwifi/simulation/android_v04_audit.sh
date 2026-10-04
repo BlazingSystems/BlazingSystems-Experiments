@@ -44,13 +44,13 @@ screen_size() {
 
 swipe_page_left() {
   read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w*4/5)) $((h/2)) $((w/5)) $((h/2)) 350
+  adb shell input swipe $((w*9/10)) $((h/2)) $((w/10)) $((h/2)) 180
   sleep 1
 }
 
 swipe_page_right() {
   read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w/5)) $((h/2)) $((w*4/5)) $((h/2)) 350
+  adb shell input swipe $((w/10)) $((h/2)) $((w*9/10)) $((h/2)) 180
   sleep 1
 }
 

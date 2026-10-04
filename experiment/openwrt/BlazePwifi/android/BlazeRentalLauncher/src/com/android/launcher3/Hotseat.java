@@ -40,6 +40,7 @@ import com.android.launcher3.logging.UserEventDispatcher;
 import com.android.launcher3.userevent.nano.LauncherLogProto.ContainerType;
 import com.android.launcher3.userevent.nano.LauncherLogProto.Target;
 import com.android.launcher3.util.Themes;
+import com.blazesystems.blazerental.LauncherAccessController;
 
 public class Hotseat extends FrameLayout
         implements UserEventDispatcher.LogContainerProvider {
@@ -165,7 +166,19 @@ public class Hotseat extends FrameLayout
     }
 
     @Override
+    public void setVisibility(int visibility) {
+        if (mLauncher != null && LauncherAccessController.isRentalRestricted(mLauncher)
+                && visibility != View.GONE) {
+            visibility = View.GONE;
+        }
+        super.setVisibility(visibility);
+    }
+
+    @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
+        if (mLauncher != null && LauncherAccessController.isRentalRestricted(mLauncher)) {
+            return true;
+        }
         // We don't want any clicks to go through to the hotseat unless the workspace is in
         // the normal state or an accessible drag is in progress.
         return !mLauncher.getWorkspace().workspaceIconsCanBeDragged() &&
