@@ -35,6 +35,14 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
       - name: BlazeRental server validation
         run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
+      - name: BlazeRental v0.4 policy validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_policy.sh
+      - name: BlazeRental v0.4 device API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_api.sh
+      - name: BlazeRental v0.4 admin API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_admin.sh
+      - name: BlazePwifi v0.4 admin UI validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_admin_ui.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
@@ -152,39 +160,55 @@ jobs:
 
 
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Install Android SDK components
+      - name: Install Android SDK 27 and isolate legacy SDK root
+        shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - uses: gradle/actions/setup-gradle@v4
+          "$SDKMANAGER" "platforms;android-27" "build-tools;27.0.3" "build-tools;36.0.0"
+          rm -rf /tmp/android-sdk-27
+          mkdir -p /tmp/android-sdk-27/platforms /tmp/android-sdk-27/build-tools
+          cp -a "${ANDROID_SDK_ROOT}/platforms/android-27" /tmp/android-sdk-27/platforms/
+          cp -a "${ANDROID_SDK_ROOT}/build-tools/27.0.3" /tmp/android-sdk-27/build-tools/
+          printf 'sdk.dir=/tmp/android-sdk-27\n' > experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/local.properties
+      - name: Set up JDK 8 for Launcher3
+        uses: actions/setup-java@v5
         with:
-          gradle-version: '9.6.0'
-      - name: Build BlazeRental validation and unsigned release APKs
-        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRental
+          distribution: temurin
+          java-version: '8'
+      - name: Install Gradle 4.4.1
+        shell: bash
         run: |
-          gradle --no-daemon :app:assembleDebug :app:assembleRelease
+          set -euo pipefail
+          curl -fsSL https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo /opt/gradle-4.4.1/bin >> "$GITHUB_PATH"
+      - name: Build BlazeRental Launcher Edition APKs
+        shell: bash
+        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher
+        run: |
+          set -euo pipefail
+          ANDROID_HOME=/tmp/android-sdk-27 ANDROID_SDK_ROOT=/tmp/android-sdk-27 \
+            gradle --no-daemon --stacktrace testAospDebugUnitTest assembleAospDebug assembleAospRelease
           mkdir -p ../../dist/android
-          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental-ci-debug.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk ../../dist/android/BlazeRental-release-unsigned.apk
-          if [ -f ../../releases/0.3.0/BlazeRental.apk ]; then
-            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs ../../releases/0.3.0/BlazeRental.apk
-          fi
-          (cd ../../dist/android && sha256sum BlazeRental-ci-debug.apk BlazeRental-release-unsigned.apk > SHA256SUMS)
+          DEBUG_APK="$(find build/outputs/apk/aosp/debug -type f -name '*.apk' | head -n1)"
+          RELEASE_APK="$(find build/outputs/apk/aosp/release -type f -name '*.apk' | head -n1)"
+          test -n "$DEBUG_APK" -a -f "$DEBUG_APK"
+          test -n "$RELEASE_APK" -a -f "$RELEASE_APK"
+          cp "$DEBUG_APK" ../../dist/android/BlazeRental-v0.4.0-ci.apk
+          cp "$RELEASE_APK" ../../dist/android/BlazeRental-v0.4.0-release-unsigned.apk
+          cp BLAZE_UPSTREAM.md ../../dist/android/Launcher3-UPSTREAM.txt
+          (cd ../../dist/android && sha256sum BlazeRental-v0.4.0-ci.apk BlazeRental-v0.4.0-release-unsigned.apk > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental
+          name: BlazePwifi-android-BlazeRental-v0.4
           path: experiment/openwrt/BlazePwifi/dist/android/
-
-
 
   production_sign_handoff:
     if: github.ref == 'refs/heads/blazepwifi-v0.3.0-production' && contains(github.event.head_commit.message, '[sign]')
