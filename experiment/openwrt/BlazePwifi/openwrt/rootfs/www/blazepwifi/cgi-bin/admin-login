@@ -7,7 +7,9 @@ admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${REQUEST_METHOD:-GET}" = POST ] || bp_fail "POST required"
 user="$(bp_param username)"; pass="$(bp_param password)"
 [ -n "$user" ] && [ -n "$pass" ] || bp_fail "missing credentials"
-if result="$(bp_auth_login "$user" "$pass" "${REMOTE_ADDR:-unknown}")"; then
+result="$(bp_auth_login "$user" "$pass" "${REMOTE_ADDR:-unknown}")"
+rc=$?
+if [ "$rc" -eq 0 ]; then
 	oldifs="$IFS"; IFS="$(printf '\t')"; set -- $result; IFS="$oldifs"
 	token="$1"; csrf="$2"; role="$3"; account="$4"
 	line="$(bp_auth_user_line "$account")"; must_change="$(printf '%s' "$line" | cut -f7)"; [ -n "$must_change" ] || must_change=0
@@ -15,7 +17,6 @@ if result="$(bp_auth_login "$user" "$pass" "${REMOTE_ADDR:-unknown}")"; then
 	printf '{"ok":true,"username":"%s","role":"%s","csrf":"%s","must_change":%s}\n' "$(bp_json_escape "$account")" "$(bp_json_escape "$role")" "$csrf" "$must_change"
 	exit 0
 fi
-rc=$?
 case "$rc" in
 	2) bp_fail "locked" ;;
 	3) bp_fail "authentication busy" ;;
