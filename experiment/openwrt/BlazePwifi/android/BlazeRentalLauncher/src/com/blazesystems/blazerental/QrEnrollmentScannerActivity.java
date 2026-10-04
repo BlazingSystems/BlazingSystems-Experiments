@@ -113,6 +113,7 @@ public class QrEnrollmentScannerActivity extends Activity
             new Thread(new Runnable() {
                 @Override public void run() {
                     final boolean ok = LeaseClient.sync(self);
+                    if (ok) LeaseClient.sync(self);
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
                             if (ok) {
