@@ -94,10 +94,12 @@ echo "$OUT" | grep -q 'SameSite=Strict'
 COOKIE="$(printf '%s\n' "$OUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
 CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 COOKIE_TOKEN="${COOKIE#blaze_admin=}"
-echo "security: post-lock auth-material cookie_len=${#COOKIE_TOKEN} csrf_len=${#CSRF} secure=$(printf '%s' "$OUT" | grep -c 'Secure' || true) httponly=$(printf '%s' "$OUT" | grep -c 'HttpOnly' || true) samesite=$(printf '%s' "$OUT" | grep -c 'SameSite=Strict' || true)"
+COOKIE_BYTES="$(printf '%s' "$COOKIE_TOKEN" | wc -c | tr -d '[:space:]')"
+CSRF_BYTES="$(printf '%s' "$CSRF" | wc -c | tr -d '[:space:]')"
+echo "security: post-lock auth-material cookie_bytes=$COOKIE_BYTES csrf_bytes=$CSRF_BYTES secure=$(printf '%s' "$OUT" | grep -c 'Secure' || true) httponly=$(printf '%s' "$OUT" | grep -c 'HttpOnly' || true) samesite=$(printf '%s' "$OUT" | grep -c 'SameSite=Strict' || true)"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ] || { echo "security: missing post-lock auth material" >&2; exit 1; }
-[ "${#COOKIE_TOKEN}" -ge 48 ] && [ "${#COOKIE_TOKEN}" -le 128 ] || { echo "security: implausible cookie token length ${#COOKIE_TOKEN}" >&2; exit 1; }
-[ "${#CSRF}" -eq 48 ] || { echo "security: unexpected csrf length ${#CSRF}" >&2; exit 1; }
+[ "$COOKIE_BYTES" -eq 64 ] || { echo "security: unexpected cookie token byte length $COOKIE_BYTES" >&2; exit 1; }
+[ "$CSRF_BYTES" -eq 48 ] || { echo "security: unexpected csrf byte length $CSRF_BYTES" >&2; exit 1; }
 case "$COOKIE_TOKEN" in *[!0-9a-f]*) echo "non-hex admin session token" >&2; exit 1;; esac
 case "$CSRF" in *[!0-9a-f]*) echo "non-hex csrf token" >&2; exit 1;; esac
 
