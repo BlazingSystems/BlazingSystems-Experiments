@@ -1,6 +1,8 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 bp_init_dirs
+vendo_port="$(bp_cfg vendo_port)"; [ -n "$vendo_port" ] || vendo_port=4455
+[ "${SERVER_PORT:-}" = "$vendo_port" ] || bp_fail "vendo API requires dedicated port"
 
 action="$(bp_param action)"
 id="$(bp_param id)"
