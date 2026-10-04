@@ -32,6 +32,38 @@ public class MainActivity extends Activity {
         root.addView(sync,new LinearLayout.LayoutParams(-1,-2));
         TextView note=text(14); note.setText("Managed QR mode is the strongest setup. A normal APK install works too, but can be bypassed more easily.");
         root.addView(note);
+
+        boolean owner=Policy.isDeviceOwner(this);
+        if(!owner && (LeaseStore.server(this).isEmpty() || !LeaseStore.isEnrolled(this))){
+            TextView manual=text(18); manual.setText("Manual setup · lower security"); root.addView(manual);
+
+            final EditText server_url=new EditText(this);
+            server_url.setHint("BlazePwifi server URL, e.g. http://192.168.1.1:8080");
+            server_url.setText(LeaseStore.server(this));
+            server_url.setSingleLine(true);
+            root.addView(server_url,new LinearLayout.LayoutParams(-1,-2));
+
+            final EditText enrollment_token=new EditText(this);
+            enrollment_token.setHint("One-time enrollment token");
+            enrollment_token.setSingleLine(true);
+            root.addView(enrollment_token,new LinearLayout.LayoutParams(-1,-2));
+
+            Button saveManual=new Button(this);
+            saveManual.setText("Save manual enrollment");
+            saveManual.setOnClickListener(v->{
+                String server=server_url.getText().toString().trim();
+                String token=enrollment_token.getText().toString().trim();
+                if(server.isEmpty() || token.isEmpty()){
+                    Toast.makeText(this,"Server URL and enrollment token are required",Toast.LENGTH_LONG).show();
+                    return;
+                }
+                LeaseStore.saveManualEnrollment(this,server,token,"Manual rental phone");
+                Toast.makeText(this,"Saved. Checking rental server…",Toast.LENGTH_SHORT).show();
+                new Thread(()->{ LeaseClient.sync(this); runOnUiThread(this::recreate); }).start();
+            });
+            root.addView(saveManual,new LinearLayout.LayoutParams(-1,-2));
+        }
+
         setContentView(root); refresh();
     }
 
