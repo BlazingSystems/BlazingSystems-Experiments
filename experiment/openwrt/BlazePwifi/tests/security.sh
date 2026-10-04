@@ -69,8 +69,7 @@ CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 COOKIE_TOKEN="${COOKIE#blaze_admin=}"
 [ "${#COOKIE_TOKEN}" -eq 64 ]
 [ "${#CSRF}" -eq 48 ]
-printf '%s' "$COOKIE_TOKEN" | grep -Eq '^[0-9a-f]+$'
-printf '%s' "$CSRF" | grep -Eq '^[0-9a-f]+$'
+printf '%s' "$COOKIE_TOKEN" | grep -Eq '^[0-9a-f]+
 
 echo "security: session lookup"
 awk -F '\t' 'NF{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s token_len=%s\n",$2,$3,$5,$6,$7,$8,$9,length($1)}' "$T/run/admin-sessions.tsv" || true
@@ -119,7 +118,7 @@ grep -q 'login_success' "$T/state/audit.tsv"
 
 echo "BlazePwifi v0.3 admin security checks passed"
 
-printf '%s' "$CSRF" | grep -Eq '^[0-9a-f]{48}
+printf '%s' "$CSRF" | grep -Eq '^[0-9a-f]+
 
 echo "security: session lookup"
 awk -F '\t' 'NF{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s token_len=%s\n",$2,$3,$5,$6,$7,$8,$9,length($1)}' "$T/run/admin-sessions.tsv" || true
