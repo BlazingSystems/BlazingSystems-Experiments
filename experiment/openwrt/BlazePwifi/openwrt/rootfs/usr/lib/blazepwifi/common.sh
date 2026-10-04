@@ -26,41 +26,43 @@ bp_init_dirs() {
 }
 
 bp_capture_pid() {
-	IFS=' ' read -r BP_SELF_PID _ < /proc/self/stat
+	IFS=' ' read -r BP_SELF_PID BP_SELF_REST < /proc/self/stat
 }
 bp_tmp_suffix() {
 	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || date +%s
 }
 
 bp_lock() {
-	lock="$BP_RUN/lock"
+	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER BP_LOCK_TRIES
+	BP_LOCK_PATH="$BP_RUN/lock"
 	bp_capture_pid
-	self="$BP_SELF_PID"
-	i=0
-	while ! mkdir "$lock" 2>/dev/null; do
-		owner="$(cat "$lock/pid" 2>/dev/null || true)"
-		if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
-			rm -rf "$lock" 2>/dev/null || true
+	BP_LOCK_SELF="$BP_SELF_PID"
+	BP_LOCK_TRIES=0
+	while ! mkdir "$BP_LOCK_PATH" 2>/dev/null; do
+		BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
+		if [ -n "$BP_LOCK_OWNER" ] && ! kill -0 "$BP_LOCK_OWNER" 2>/dev/null; then
+			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
 			continue
 		fi
-		i=$((i+1))
-		if [ -z "$owner" ] && [ "$i" -ge 4 ]; then
-			rm -rf "$lock" 2>/dev/null || true
-			i=0
+		BP_LOCK_TRIES=$((BP_LOCK_TRIES+1))
+		if [ -z "$BP_LOCK_OWNER" ] && [ "$BP_LOCK_TRIES" -ge 4 ]; then
+			rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
+			BP_LOCK_TRIES=0
 			continue
 		fi
-		[ "$i" -gt 80 ] && return 1
+		[ "$BP_LOCK_TRIES" -gt 80 ] && return 1
 		usleep 50000 2>/dev/null || sleep 1
 	done
-	printf '%s\n' "$self" > "$lock/pid"
+	printf '%s\n' "$BP_LOCK_SELF" > "$BP_LOCK_PATH/pid"
 }
 bp_unlock() {
-	lock="$BP_RUN/lock"
+	local BP_LOCK_PATH BP_LOCK_SELF BP_LOCK_OWNER
+	BP_LOCK_PATH="$BP_RUN/lock"
 	bp_capture_pid
-	self="$BP_SELF_PID"
-	owner="$(cat "$lock/pid" 2>/dev/null || true)"
-	[ -z "$owner" ] || [ "$owner" = "$self" ] || return 0
-	rm -rf "$lock" 2>/dev/null || true
+	BP_LOCK_SELF="$BP_SELF_PID"
+	BP_LOCK_OWNER="$(cat "$BP_LOCK_PATH/pid" 2>/dev/null || true)"
+	[ -z "$BP_LOCK_OWNER" ] || [ "$BP_LOCK_OWNER" = "$BP_LOCK_SELF" ] || return 0
+	rm -rf "$BP_LOCK_PATH" 2>/dev/null || true
 }
 
 bp_durable_sync() {
