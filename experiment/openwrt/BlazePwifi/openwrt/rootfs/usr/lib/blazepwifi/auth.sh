@@ -42,7 +42,7 @@ bp_auth_random_hex() {
 	if [ "${#out}" -lt $((bytes*2)) ]; then
 		out="$(printf '%s|%s|%s' "$(date +%s 2>/dev/null)" "$$" "$bytes" | bp_sha256)"
 	fi
-	printf '%s' "$out" | cut -c1-$((bytes*2))
+	printf '%s' "$out" | tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' | cut -c1-$((bytes*2))
 }
 
 bp_auth_clean_field() {
