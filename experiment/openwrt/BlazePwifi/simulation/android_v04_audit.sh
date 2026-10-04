@@ -5,7 +5,7 @@ APK="${1:?usage: android_v04_audit.sh /path/to/BlazeRental-v0.4.0-ci.apk [output
 OUT="${2:-android-v04-audit}"
 PKG="com.blazesystems.blazerental.debug"
 ADMIN="$PKG/com.blazesystems.blazerental.BlazeDeviceAdminReceiver"
-HOME="$PKG/com.google.android.apps.nexuslauncher.NexusLauncherActivity"
+LAUNCHER_COMPONENT="$PKG/com.google.android.apps.nexuslauncher.NexusLauncherActivity"
 
 mkdir -p "$OUT"
 ADB=(adb)
@@ -86,7 +86,7 @@ if ! adb shell dpm set-device-owner "$ADMIN" >"$OUT/device-owner.txt" 2>&1; then
 fi
 grep -Eqi 'Success|Active admin set' "$OUT/device-owner.txt" || fail "Device Owner command did not report success"
 
-adb shell am start -W -n "$HOME" >"$OUT/home-launch.txt" 2>&1 || fail "HOME launch failed"
+adb shell am start -W -n "$LAUNCHER_COMPONENT" >"$OUT/home-launch.txt" 2>&1 || fail "HOME launch failed"
 sleep 4
 
 dump_ui "01-rental-page"

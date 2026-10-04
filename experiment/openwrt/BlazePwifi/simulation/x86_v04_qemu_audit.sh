@@ -23,13 +23,19 @@ boot_one(){
   local mode="$1" img="$2" log="$3"
   local extra=()
   if [ "$mode" = uefi ]; then
-    local ovmf
-    ovmf="$(find /usr/share/OVMF /usr/share/ovmf -type f -name 'OVMF_CODE*.fd' 2>/dev/null | head -n1)"
-    test -n "$ovmf"
-    extra=(-bios "$ovmf")
+    local code vars
+    code="$(find /usr/share/OVMF /usr/share/ovmf -type f \( -name 'OVMF_CODE.fd' -o -name 'OVMF_CODE_4M.fd' \) 2>/dev/null | head -n1)"
+    test -n "$code"
+    case "$(basename "$code")" in
+      *4M*) vars="$(dirname "$code")/OVMF_VARS_4M.fd" ;;
+      *) vars="$(dirname "$code")/OVMF_VARS.fd" ;;
+    esac
+    test -f "$vars"
+    cp "$vars" "$OUT/ovmf-vars.fd"
+    extra=(-drive "if=pflash,format=raw,readonly=on,file=$code" -drive "if=pflash,format=raw,file=$OUT/ovmf-vars.fd")
   fi
   set +e
-  timeout 100 qemu-system-x86_64 -m 512 -smp 1     -drive "file=$img,format=raw,if=ide"     -nic user,model=e1000     -serial "file:$log" -display none -monitor none -no-reboot "${extra[@]}"
+  timeout 45 qemu-system-x86_64 -m 512 -smp 1     -drive "file=$img,format=raw,if=ide"     -nic user,model=e1000     -serial "file:$log" -display none -monitor none -no-reboot "${extra[@]}"
   rc=$?
   set -e
   [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ] || return "$rc"

@@ -6,7 +6,8 @@ OUT="${3:-orangepi-v04-audit}"
 mkdir -p "$OUT"
 MAN="$(find "$DIR" -type f -name BUILD-MANIFEST.txt -print -quit)"
 SUMS="$(find "$DIR" -type f -name SHA256SUMS -print -quit)"
-GZ="$(find "$DIR" -type f -name '*.img.gz' -print -quit)"
+GZ="$(find "$DIR" -type f -name '*-ext4-sdcard.img.gz' -print -quit)"
+[ -n "$GZ" ] || GZ="$(find "$DIR" -type f -name '*.img.gz' -print -quit)"
 test -n "$MAN" -a -n "$SUMS" -a -n "$GZ" -a -s "$GZ"
 grep -Fq "Target: $TARGET" "$MAN"
 (cd "$(dirname "$SUMS")" && sha256sum -c "$(basename "$SUMS")") | tee "$OUT/checksums.txt"
@@ -49,7 +50,7 @@ if printf '%s' "$ARCH" | grep -qi 'aarch64\|ARM aarch64'; then
 else
   QEMU="$(command -v qemu-arm-static)"
 fi
-"$QEMU" "$MNT/bin/busybox" echo BLAZE_ARM_USERSPACE_OK > "$OUT/qemu-user.txt"
+"$QEMU" -L "$MNT" "$MNT/bin/busybox" echo BLAZE_ARM_USERSPACE_OK > "$OUT/qemu-user.txt"
 grep -Fq BLAZE_ARM_USERSPACE_OK "$OUT/qemu-user.txt"
 
 python3 - "$OUT/audit.json" "$TARGET" "$GZ" "$ROOTDEV" <<'PY'
