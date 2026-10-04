@@ -1,5 +1,13 @@
-BlazeRental R281 Test Hub v0.1.0 - Test Report
+BlazeRental R281 Test Hub v0.1.1 - Test Report
 ================================================
+
+Packaging regression check
+- v0.1.0 correctly failed closed because two embedded payload hashes referred to the pre-GitHub build.
+- v0.1.1 pins the SHA-256 of the payload files actually committed on main:
+  - rental: 7659e082583a771d9e9aa8ee3b9612d3cbfff2c1807d696c24f3578d5ba92113
+  - rental-admin: a794e80ad1dc95cf938cd08f618740bf87d44e30bb3dad4f2c217520225c2059
+  - index.html: 687094a3fe151e751f0067baf78666f7233eb4ee8fb767e5a89a0fba307a7ddf
+- Payload verification remains mandatory; it was not disabled as a workaround.
 
 Static checks
 - POSIX shell syntax: PASS for installer, app CGI, admin CGI.

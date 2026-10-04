@@ -2,7 +2,7 @@
 
 Standalone BlazeRental-compatible manual-time testing server for the Notion R281.
 
-Version: **0.1.0**
+Version: **0.1.1**
 
 ## Purpose
 
@@ -47,6 +47,10 @@ State under `/etc/blazepwifi-rental` is preserved by default. To remove it too:
 ```sh
 ./install.sh --uninstall --purge
 ```
+
+## v0.1.1 checksum fix
+
+v0.1.0 accidentally embedded the pre-GitHub SHA-256 values for the two CGI payloads. The files themselves were correct; the installer correctly aborted rather than installing unverified content. v0.1.1 updates those two pinned hashes and keeps payload verification enabled.
 
 ## Validation boundary
 
