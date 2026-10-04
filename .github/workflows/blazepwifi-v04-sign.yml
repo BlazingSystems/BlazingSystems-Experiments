@@ -1,0 +1,136 @@
+name: BlazeRental v0.4 production signing
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful BlazePwifi build run containing the v0.4 unsigned APK"
+        required: true
+        type: string
+      candidate_sha:
+        description: "Exact commit SHA used by the build run"
+        required: true
+        type: string
+      publish:
+        description: "Commit the verified signed APK/certificate metadata to releases/0.4.0"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: blazerental-v04-production-sign
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      STORE_B64: ${{ secrets.BLAZERENTAL_KEYSTORE_B64 }}
+      STORE_PASS: ${{ secrets.BLAZERENTAL_KEYSTORE_PASSWORD }}
+      KEY_ALIAS_SECRET: ${{ secrets.BLAZERENTAL_KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Require existing production signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STORE_B64" || { echo "BLAZERENTAL_KEYSTORE_B64 is not configured"; exit 1; }
+          test -n "$STORE_PASS" || { echo "BLAZERENTAL_KEYSTORE_PASSWORD is not configured"; exit 1; }
+          printf '%s' "$STORE_B64" | base64 -d > "$RUNNER_TEMP/BlazeRental-production.p12"
+          test -s "$RUNNER_TEMP/BlazeRental-production.p12"
+
+      - name: Download exact unsigned v0.4 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          gh run download "$RUN_ID" --repo "${{ github.repository }}"             --name BlazePwifi-android-BlazeRental-v0.4 --dir candidate
+          UNSIGNED="$(find candidate -type f -name 'BlazeRental-v0.4.0-release-unsigned.apk' -print -quit)"
+          test -n "$UNSIGNED" -a -s "$UNSIGNED"
+          echo "UNSIGNED=$UNSIGNED" >> "$GITHUB_ENV"
+          sha256sum "$UNSIGNED" > candidate/UNSIGNED_SHA256
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "build-tools;36.0.0"
+          echo "APKSIGNER=${ANDROID_SDK_ROOT}/build-tools/36.0.0/apksigner" >> "$GITHUB_ENV"
+          echo "AAPT=${ANDROID_SDK_ROOT}/build-tools/36.0.0/aapt" >> "$GITHUB_ENV"
+          echo "ZIPALIGN=${ANDROID_SDK_ROOT}/build-tools/36.0.0/zipalign" >> "$GITHUB_ENV"
+
+      - name: Verify keystore certificate lineage before signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ALIAS="${KEY_ALIAS_SECRET:-blazerental}"
+          keytool -list -v -keystore "$RUNNER_TEMP/BlazeRental-production.p12"             -storetype PKCS12 -storepass "$STORE_PASS" -alias "$ALIAS" > "$RUNNER_TEMP/key.txt"
+          ACTUAL="$(sed -n 's/^[[:space:]]*SHA256: //p' "$RUNNER_TEMP/key.txt" | head -n1 | tr -d ':' | tr 'A-F' 'a-f')"
+          EXPECTED="$(tr -cd 'A-Fa-f0-9' < experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt | tr 'A-F' 'a-f' | tail -c 65 | tr -d '\n')"
+          test "$ACTUAL" = "$EXPECTED" || {
+            echo "Configured keystore is not the v0.3 BlazeRental production identity"
+            echo "expected $EXPECTED"
+            echo "actual   $ACTUAL"
+            exit 1
+          }
+
+      - name: Sign v0.4 APK using preserved identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/blazerental-v04"
+          mkdir -p "$OUT"
+          ALIAS="${KEY_ALIAS_SECRET:-blazerental}"
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED" "$OUT/BlazeRental-aligned.apk"
+          "$APKSIGNER" sign             --ks "$RUNNER_TEMP/BlazeRental-production.p12"             --ks-type PKCS12             --ks-key-alias "$ALIAS"             --ks-pass "pass:$STORE_PASS" --key-pass "pass:$STORE_PASS"             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true             --out "$OUT/BlazeRental.apk" "$OUT/BlazeRental-aligned.apk"
+          "$APKSIGNER" verify --verbose --print-certs "$OUT/BlazeRental.apk"             > "$OUT/BlazeRental-apksigner-verify.txt"
+          keytool -exportcert -rfc -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" -file "$OUT/BlazeRental-signing-cert.pem"
+          keytool -list -v -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" | sed -n '/SHA256:/p'             > "$OUT/BlazeRental-signing-fingerprint.txt"
+          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh             "$OUT/BlazeRental.apk"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
+          sha256sum "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-cert.pem"             > "$OUT/SHA256SUMS"
+          rm -f "$OUT/BlazeRental-aligned.apk"
+
+      - name: Upload verified signed v0.4 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlazeRental-v0.4.0-production-signed
+          path: ${{ runner.temp }}/blazerental-v04/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish public signed release files to branch
+        if: inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST=experiment/openwrt/BlazePwifi/releases/0.4.0
+          OUT="$RUNNER_TEMP/blazerental-v04"
+          cp "$OUT/BlazeRental.apk" "$DEST/BlazeRental.apk"
+          cp "$OUT/BlazeRental-signing-cert.pem" "$DEST/BlazeRental-signing-cert.pem"
+          cp "$OUT/BlazeRental-signing-fingerprint.txt" "$DEST/BlazeRental-signing-fingerprint.txt"
+          cp "$OUT/BlazeRental-apksigner-verify.txt" "$DEST/BlazeRental-apksigner-verify.txt"
+          sha256sum "$DEST/BlazeRental.apk" > "$DEST/BlazeRental.apk.sha256"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DEST"
+          git commit -m "release(blazerental): add signed v0.4.0 APK [skip ci]"
+          git push origin HEAD:blazepwifi-v0.4.0-implementation
