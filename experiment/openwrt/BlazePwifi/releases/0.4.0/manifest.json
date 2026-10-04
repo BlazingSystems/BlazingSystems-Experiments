@@ -1,0 +1,30 @@
+{
+  "release": "0.4.0",
+  "edition": "Launcher Edition",
+  "state": "candidate",
+  "required_targets": [
+    "android",
+    "esp8266",
+    "esp32",
+    "ruijie",
+    "x86_64",
+    "orangepi_zero3",
+    "orangepi_one",
+    "orangepi_pc"
+  ],
+  "optional_targets": [
+    "orangepi_zero",
+    "orangepi_zero2",
+    "orangepi_zero2w",
+    "orangepi_pc2",
+    "orangepi_pc_plus",
+    "orangepi_one_plus"
+  ],
+  "simulation": {
+    "android": "required",
+    "x86_64": "required",
+    "orangepi": "userspace-and-image-structure",
+    "esp": "binary-and-protocol",
+    "ruijie": "firmware-structure-and-target-identity"
+  }
+}
