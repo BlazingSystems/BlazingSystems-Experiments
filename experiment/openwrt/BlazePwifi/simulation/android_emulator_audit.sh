@@ -18,6 +18,7 @@ grep -q 'BlazeRental' "$OUT/01-window.xml"
 grep -q 'INSERT COIN' "$OUT/01-window.xml"
 adb exec-out screencap -p > "$OUT/01-locked.png"
 adb shell dumpsys device_policy > "$OUT/device-policy.txt"
+adb shell dumpsys package com.blazesystems.blazerental > "$OUT/package-state-before-reboot.txt" || true
 grep -qi 'no_factory_reset' "$OUT/device-policy.txt"
 
 adb reboot
