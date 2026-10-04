@@ -3,8 +3,8 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
-[ "$(cat "$ROOT/VERSION")" = "0.3.0-rc.1" ] || {
-  echo "VERSION must be 0.3.0-rc.1" >&2
+[ "$(cat "$ROOT/VERSION")" = "0.3.0" ] || {
+  echo "VERSION must be 0.3.0" >&2
   exit 1
 }
 

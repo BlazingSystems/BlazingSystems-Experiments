@@ -2,7 +2,7 @@
 
 BlazePwifi is an open-source prepaid Wi-Fi, captive-portal, coin-controller and managed rental-device platform for OpenWrt, Orange Pi, x86 PCs, ESP8266/ESP32 and Android.
 
-Current release candidate: **0.3.0-rc.1**  
+Current production release: **0.3.0**  
 OpenWrt build baseline: **25.12.5**
 
 ## Capability tiers

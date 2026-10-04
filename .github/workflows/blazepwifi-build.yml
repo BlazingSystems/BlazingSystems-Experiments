@@ -168,26 +168,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
-      - name: Build installable BlazeRental APK
+      - name: Build BlazeRental source-validation APK
         working-directory: experiment/openwrt/BlazePwifi/android/BlazeRental
         run: |
           gradle --no-daemon :app:assembleDebug
           mkdir -p ../../dist/android
-          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental.apk
-          cp ../../tools/make-provisioning.py ../../dist/android/
-          python3 -m pip install --quiet "qrcode[pil]"
-          python3 ../../tools/make-provisioning.py \
-            --apk ../../dist/android/BlazeRental.apk \
-            --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0-rc.1/BlazeRental.apk" \
-            --server-url "http://192.168.1.1:8080" \
-            --enrollment-token "000000000000.000000000000000000000000000000000000" \
-            --device-name "SAMPLE - generate a real token in admin" \
-            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.json
-          python3 ../../tools/render-qr.py \
-            --json ../../dist/android/BlazeRental-provisioning-SAMPLE.json \
-            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.png
-          cp ../../tools/render-qr.py ../../dist/android/
-          (cd ../../dist/android && sha256sum BlazeRental.apk BlazeRental-provisioning-SAMPLE.json BlazeRental-provisioning-SAMPLE.png > SHA256SUMS)
+          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental-ci-debug.apk
+          if [ -f ../../releases/0.3.0/BlazeRental.apk ]; then
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs ../../releases/0.3.0/BlazeRental.apk
+          fi
+          (cd ../../dist/android && sha256sum BlazeRental-ci-debug.apk > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
           name: BlazePwifi-android-BlazeRental
@@ -239,5 +229,79 @@ jobs:
             gh release edit "$TAG" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
           else
             gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "BlazePwifi 0.3.0-rc.1" --notes-file experiment/openwrt/BlazePwifi/releases/0.3.0-rc.1/RELEASE_NOTES.md
+          fi
+          gh release upload "$TAG" release-out/* --clobber
+
+
+  publish_release:
+    if: github.ref == 'refs/heads/blazepwifi-v0.3.0-production' && contains(github.event.head_commit.message, '[release]')
+    needs: [validate, esp8266, esp32, android, firmware, firmware_optional]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.3.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: BlazePwifi-*
+          path: downloaded
+      - name: Assemble production release assets
+        run: |
+          set -eu
+          test -f experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental.apk
+          mkdir -p release-out
+          find downloaded -mindepth 1 -maxdepth 1 -type d | while read d; do
+            n=$(basename "$d")
+            (cd "$d" && zip -qr "../../release-out/${n}.zip" .)
+            find "$d" -type f | while read f; do
+              b=$(basename "$f")
+              case "$b" in
+                BlazeRental-ci-debug.apk) ;;
+                *.bin|*.img.gz|*.ino|*.tar.gz|*.json|*.png)
+                  [ -e "release-out/$b" ] || cp "$f" "release-out/$b"
+                  ;;
+              esac
+            done
+          done
+          cp experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental.apk release-out/BlazeRental.apk
+          [ ! -f experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-cert.pem ] || cp experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-cert.pem release-out/
+          [ ! -f experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt ] || cp experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt release-out/
+          python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py \
+            --apk release-out/BlazeRental.apk \
+            --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0/BlazeRental.apk" \
+            --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html \
+            --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js \
+            --out release-out/BlazeRental-QR-Setup.html
+          python3 -m pip install --quiet "qrcode[pil]"
+          python3 experiment/openwrt/BlazePwifi/tools/make-provisioning.py \
+            --apk release-out/BlazeRental.apk \
+            --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0/BlazeRental.apk" \
+            --server-url "http://192.168.1.1:8080" \
+            --enrollment-token "000000000000.000000000000000000000000000000000000" \
+            --device-name "SAMPLE - generate a real token in admin" \
+            --out release-out/BlazeRental-provisioning-SAMPLE.json
+          python3 experiment/openwrt/BlazePwifi/tools/render-qr.py \
+            --json release-out/BlazeRental-provisioning-SAMPLE.json \
+            --out release-out/BlazeRental-provisioning-SAMPLE.png
+          tar -czf release-out/BlazePwifi-portal-templates.tar.gz -C experiment/openwrt/BlazePwifi portal-templates
+          (
+            cd release-out
+            sha256sum * | grep -v ' SHA256SUMS$' > SHA256SUMS
+            python3 -c 'import hashlib,json,pathlib; r=pathlib.Path("."); a=[{"name":p.name,"size":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(r.iterdir()) if p.is_file() and p.name!="manifest.json"]; pathlib.Path("manifest.json").write_text(json.dumps({"version":"0.3.0","type":"production","assets":a},indent=2)+"\\n")'
+          )
+      - name: Create or update GitHub production release
+        run: |
+          set -eu
+          NOTES=experiment/openwrt/BlazePwifi/releases/0.3.0/RELEASE_NOTES.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --latest --title "BlazePwifi 0.3.0" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "BlazePwifi 0.3.0" --notes-file "$NOTES"
           fi
           gh release upload "$TAG" release-out/* --clobber

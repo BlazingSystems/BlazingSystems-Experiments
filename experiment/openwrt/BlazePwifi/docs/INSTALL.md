@@ -1,6 +1,6 @@
 # Installation
 
-BlazePwifi 0.3.0-rc.1 is built against OpenWrt 25.12.5. Verify the exact device revision and a recovery path before flashing.
+BlazePwifi 0.3.0 is built against OpenWrt 25.12.5. Verify the exact device revision and a recovery path before flashing.
 
 ## First login
 
