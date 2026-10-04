@@ -56,6 +56,7 @@ VENDO="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
 ADMIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
 DEVICE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
+echo "integration: portal/accounting start"
 OUT="$(printf 'action=rates' | sh "$API")"
 echo "$OUT" | grep -q '"rates"'
 ! echo "$OUT" | grep -q 'missing or invalid device token'
@@ -104,6 +105,7 @@ OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE2" | sh "$API")"
 echo "$OUT" | grep -q '"ok":true'
 export TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff REMOTE_ADDR=10.0.0.2
 
+echo "integration: controller targeting ok"
 EVENT=1122334455667788
 SIG="$(printf 'vendokey|coin|vendo-01|%s|1|%s|vendokey' "$EVENT" "$TARGET" | sha256sum | awk '{print $1}')"
 BODY="action=coin&id=vendo-01&nonce=$EVENT&pulses=1&target=$TARGET&sig=$SIG"
@@ -123,6 +125,7 @@ BADSIG="$(printf 'vendokey|coin|vendo-01|9988776655443322|1|%s|vendokey' "$BADTA
 OUT="$(printf 'action=coin&id=vendo-01&nonce=9988776655443322&pulses=1&target=%s&sig=%s' "$BADTARGET" "$BADSIG" | sh "$VENDO")"
 echo "$OUT" | grep -q 'coin target mismatch'
 
+echo "integration: coin accounting ok"
 OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"ok":true'
 echo "$OUT" | grep -q '"credit_cents":0'
@@ -142,6 +145,7 @@ REMAIN="$(printf '%s' "$OUT" | sed -n 's/.*"remaining_seconds":\([0-9]*\).*/\1/p
 [ "$REMAIN" -gt 0 ]
 [ "$(awk -F '\t' -v d="$DEVICE" '$1==d {c++} END{print c+0}' "$T/state/accounts.tsv")" -eq 1 ]
 
+echo "integration: session rotation ok"
 printf 'TESTCODE\t250\n' > "$T/state/vouchers.tsv"
 OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"credit_cents":250'
@@ -150,6 +154,7 @@ export TEST_IP=10.0.0.4 TEST_MAC=02:aa:bb:cc:dd:ee REMOTE_ADDR=10.0.0.4
 OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE2" | sh "$API")"
 echo "$OUT" | grep -q 'voucher invalid or used'
 
+echo "integration: voucher replay ok"
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 LOGIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login"
 export BP_AUTH_NOW=2000000000 SERVER_PORT=8443
@@ -167,4 +172,5 @@ export SERVER_PORT=8443
 OUT="$(printf 'action=status' | sh "$ADMIN")"
 echo "$OUT" | grep -q '"ok":true'
 
+echo "integration: admin session ok"
 echo 'BlazePwifi integration checks passed'
