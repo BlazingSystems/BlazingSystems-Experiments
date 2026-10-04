@@ -95,7 +95,7 @@ bp_auth_set_password() {
 bp_auth_verify_password() {
 	user="$1"; pass="$2"; line="$(bp_auth_user_line "$user")"
 	[ -n "$line" ] || return 1
-	oldifs="$IFS"; IFS='\t'; set -- $line; IFS="$oldifs"
+	oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
 	role="$2"; scheme="$3"; salt="$4"; stored="$5"; rounds="$6"
 	case "$scheme" in
 		openssl6)
@@ -125,7 +125,7 @@ bp_auth_fail_update() {
 	line="$(bp_auth_failure_line "$key")"
 	count=0; start="$now"; lock_until=0; level=0
 	if [ -n "$line" ]; then
-		oldifs="$IFS"; IFS='\t'; set -- $line; IFS="$oldifs"
+		oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
 		count="${2:-0}"; start="${3:-$now}"; lock_until="${4:-0}"; level="${5:-0}"
 	fi
 	if [ "$now" -ge "$lock_until" ] 2>/dev/null && [ $((now-start)) -gt "$window" ] 2>/dev/null; then
