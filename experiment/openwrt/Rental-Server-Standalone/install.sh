@@ -1,8 +1,8 @@
 #!/bin/sh
-# Rental Server Standalone installer v0.1.1
+# Rental Server Standalone installer v0.1.2
 # BLAZE_R281_RENTAL_HUB
 set -eu
-VERSION='0.1.1'
+VERSION='0.1.2'
 MARKER='BLAZE_R281_RENTAL_HUB'
 REPO_RAW='https://raw.githubusercontent.com/BlazingSystems/BlazingSystems-Experiments/main/experiment/openwrt/Rental-Server-Standalone'
 MODE=install
@@ -72,7 +72,7 @@ fetch_or_copy root/www/cgi-bin/rental-admin "$TMP/root/www/cgi-bin/rental-admin"
 fetch_or_copy root/www/rental/index.html "$TMP/root/www/rental/index.html"
 echo '7659e082583a771d9e9aa8ee3b9612d3cbfff2c1807d696c24f3578d5ba92113  root/www/cgi-bin/rental' > "$TMP/SHA256SUMS"
 echo 'a794e80ad1dc95cf938cd08f618740bf87d44e30bb3dad4f2c217520225c2059  root/www/cgi-bin/rental-admin' >> "$TMP/SHA256SUMS"
-echo '687094a3fe151e751f0067baf78666f7233eb4ee8fb767e5a89a0fba307a7ddf  root/www/rental/index.html' >> "$TMP/SHA256SUMS"
+echo '56330ee3df791ed402d471cdeb2fa15b1303601f097885cc1ab867c3700d0f40  root/www/rental/index.html' >> "$TMP/SHA256SUMS"
 (cd "$TMP" && sha256sum -c SHA256SUMS >/dev/null) || { rm -rf "$TMP"; echo 'ERROR: payload checksum verification failed.' >&2; exit 1; }
 
 STAMP="$(date +%Y%m%d-%H%M%S)"

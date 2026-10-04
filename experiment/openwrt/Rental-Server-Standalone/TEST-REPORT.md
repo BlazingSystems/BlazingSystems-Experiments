@@ -1,4 +1,4 @@
-BlazeRental R281 Test Hub v0.1.1 - Test Report
+BlazeRental R281 Test Hub v0.1.2 - Test Report
 ================================================
 
 Packaging regression check
@@ -8,6 +8,12 @@ Packaging regression check
   - rental-admin: a794e80ad1dc95cf938cd08f618740bf87d44e30bb3dad4f2c217520225c2059
   - index.html: 687094a3fe151e751f0067baf78666f7233eb4ee8fb767e5a89a0fba307a7ddf
 - Payload verification remains mandatory; it was not disabled as a workaround.
+
+R281 dashboard authentication regression
+- Dashboard now sends admin_token in the POST body in addition to X-Blaze-Rental-Admin.
+- rental-admin already accepts either transport and validates the value against /etc/blazepwifi-rental/admin.token.
+- This fixes uHTTPd/CGI environments where the custom request header is omitted.
+- Authentication is not bypassed and the token comparison remains mandatory.
 
 Static checks
 - POSIX shell syntax: PASS for installer, app CGI, admin CGI.

@@ -13,7 +13,7 @@
 <script>
 const $=id=>document.getElementById(id); let admin=sessionStorage.getItem('blazeRentalAdmin')||'';
 $('server').textContent=location.origin;
-async function api(action,data={}){const b=new URLSearchParams({action,...data});let r=await fetch('/cgi-bin/rental-admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-Rental-Admin':admin},body:b});return r.json()}
+async function api(action,data={}){const b=new URLSearchParams({action,admin_token:admin,...data});let r=await fetch('/cgi-bin/rental-admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-Rental-Admin':admin},body:b});return r.json()}
 function fmt(s){s=Math.max(0,Number(s)||0);let d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;return(d?d+'d ':'')+[h,m,x].map(v=>String(v).padStart(2,'0')).join(':')}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function login(){admin=$('key').value.trim();let j=await api('health');if(!j.ok){$('health').textContent=j.error||'Access denied';$('health').className='pill bad';return}sessionStorage.setItem('blazeRentalAdmin',admin);$('health').textContent='R281 rental server online · v'+j.version;$('health').className='pill ok';['enrollCard','devicesCard','eventsCard'].forEach(x=>$(x).classList.remove('hidden'));refreshDevices();refreshEvents()}
