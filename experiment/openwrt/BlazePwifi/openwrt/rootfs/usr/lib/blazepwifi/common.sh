@@ -5,7 +5,7 @@ BP_RUN=${BP_RUN:-/tmp/blazepwifi}
 BP_ACCOUNTS="$BP_STATE/accounts.tsv"
 BP_VOUCHERS="$BP_STATE/vouchers.tsv"
 BP_VENDOS="$BP_RUN/vendos.tsv"
-BP_TARGET="$BP_RUN/coin-target.tsv"
+BP_TARGET_DIR="$BP_RUN/targets"
 BP_LEGACY_CREDITS="$BP_STATE/credits.tsv"
 BP_LEGACY_SESSIONS="$BP_STATE/sessions.tsv"
 BP_POST_BODY=""
@@ -19,8 +19,8 @@ bp_json() { printf 'Content-Type: application/json\r\nCache-Control: no-store\r\
 bp_fail() { bp_json "{\"ok\":false,\"error\":\"$(bp_json_escape "$1")\"}"; exit 0; }
 
 bp_init_dirs() {
-	mkdir -p "$BP_STATE" "$BP_RUN"
-	chmod 700 "$BP_STATE" "$BP_RUN"
+	mkdir -p "$BP_STATE" "$BP_RUN" "$BP_TARGET_DIR"
+	chmod 700 "$BP_STATE" "$BP_RUN" "$BP_TARGET_DIR"
 	touch "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 	chmod 600 "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 }
