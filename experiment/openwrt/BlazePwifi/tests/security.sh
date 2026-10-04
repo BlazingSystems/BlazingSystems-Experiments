@@ -68,7 +68,11 @@ CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ]
 
 echo "security: session lookup"
-awk -F '\t' '{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s\n",$2,$3,$5,$6,$7,$8,$9}' "$T/run/admin-sessions.tsv" || true
+awk -F '\t' 'NF{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s token_len=%s\n",$2,$3,$5,$6,$7,$8,$9,length($1)}' "$T/run/admin-sessions.tsv" || true
+COOKIE_TOKEN="${COOKIE#blaze_admin=}"
+COOKIE_FP="$(printf '%s' "$COOKIE_TOKEN" | sha256sum | cut -c1-12)"
+STORED_FP="$(awk -F '\t' 'NF{print $1; exit}' "$T/run/admin-sessions.tsv" | sha256sum | cut -c1-12)"
+echo "security: cookie token_len=${#COOKIE_TOKEN} fp=$COOKIE_FP stored_fp=$STORED_FP"
 OUT="$(HTTP_COOKIE="$COOKIE" REQUEST_METHOD=GET sh "$SESSION")"
 SCLASS="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
 SUSER="$(printf '%s' "$OUT" | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')"
