@@ -7,6 +7,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/build.gradle'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/**'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/tests/unit/**'
+      - 'experiment/openwrt/BlazePwifi/tests/v04_android_source.sh'
       - '.github/workflows/blazepwifi-v04-launcher-model.yml'
   workflow_dispatch:
 
@@ -52,6 +53,9 @@ jobs:
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /opt
           echo "/opt/gradle-${GRADLE_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Verify v0.4 Android source contract
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_android_source.sh
 
       - name: Run rental model unit tests and compile launcher
         shell: bash
