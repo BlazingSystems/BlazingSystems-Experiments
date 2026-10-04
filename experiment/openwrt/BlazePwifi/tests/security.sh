@@ -71,9 +71,15 @@ echo "$OUT" | grep -q 'locked'
 
 echo "security: post-lock login"
 export BP_AUTH_NOW=2000000910
+set +e
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
-if ! echo "$OUT" | grep -q '"ok":true'; then
-  echo "security: post-lock response => $OUT" >&2
+LOGIN_RC=$?
+set -e
+if [ "$LOGIN_RC" -ne 0 ] || ! echo "$OUT" | grep -q '"ok":true'; then
+  SAFE_OUT="$(printf '%s' "$OUT" | sed -E 's/(blaze_admin=)[0-9a-f]+/\1<redacted>/g; s/("csrf":")[^"]*/\1<redacted>/g')"
+  echo "security: post-lock rc=$LOGIN_RC response => $SAFE_OUT" >&2
+  [ -f "$T/run/auth-failures.tsv" ] && sed 's/^/security: post-lock counter /' "$T/run/auth-failures.tsv" >&2 || true
+  [ -f "$T/state/admin-users.tsv" ] && awk -F '\t' '{printf "security: user=%s role=%s scheme=%s rounds=%s must=%s\n",$1,$2,$3,$6,$7}' "$T/state/admin-users.tsv" >&2 || true
   exit 1
 fi
 echo "$OUT" | grep -q 'Secure'
