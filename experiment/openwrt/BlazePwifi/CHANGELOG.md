@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0-rc.1 — 2026-10-04
+
+- Reconciled public WiFi5 behavior and public KLCiS/WiFi5 integration material without redistributing closed WiFi5 binaries.
+- Replaced MAC-only balances with browser device-token accounts that survive private/random MAC rotation.
+- Added server-side pause/resume with optional pause lifetime limit.
+- Made coin events target-bound, signed, and idempotent across lost acknowledgements.
+- Separated durable voucher-use markers from bounded coin replay history.
+- Moved Vendo heartbeat and active coin-window state to RAM to reduce flash wear.
+- Added dynamic IPv4/IPv6 walled-garden sets for payment or login domains.
+- Moved the BlazePwifi forward gate after firewall4 so OpenWrt zone policy remains authoritative.
+- Added HTTPS-only admin listener on port 8443 with local self-signed certificate generation.
+- Bound service listeners to the LAN address rather than WAN-facing wildcard addresses.
+- Secured ESP8266 setup AP with a generated WPA2 password and automatic AP shutdown after provisioning.
+- Added automatic single-Vendo selection and explicit multi-Vendo selection.
+- Added v0.1 MAC-account migration, persistence/replay stress tests, and firmware SHA256SUMS.
+- Continued support for OpenWrt 25.12.5 Ruijie RG-EW1200G Pro v1.1 and x86_64 ImageBuilder outputs.
+
 ## 0.1.0-alpha.1 — 2026-10-04
 
 - Initial BlazePwifi clean-room implementation.
