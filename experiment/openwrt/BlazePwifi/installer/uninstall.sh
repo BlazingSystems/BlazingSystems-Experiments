@@ -4,6 +4,8 @@ set -eu
 /etc/init.d/blazepwifi stop 2>/dev/null || true
 /etc/init.d/blazepwifi disable 2>/dev/null || true
 nft delete table inet blazepwifi 2>/dev/null || true
-uci -q delete uhttpd.blazepwifi || true; uci commit uhttpd; /etc/init.d/uhttpd restart 2>/dev/null || true
+for s in blazepwifi blazepwifi_vendo blazepwifi_admin; do uci -q delete "uhttpd.$s" || true; done
+uci commit uhttpd
+/etc/init.d/uhttpd restart 2>/dev/null || true
 rm -rf /www/blazepwifi /usr/lib/blazepwifi /usr/sbin/blazepwifi-core /etc/init.d/blazepwifi
-printf 'BlazePwifi runtime removed. Persistent state and /etc/config/blazepwifi were retained.\n'
+printf 'BlazePwifi runtime removed. Persistent state, keys, and /etc/config/blazepwifi were retained.\n'
