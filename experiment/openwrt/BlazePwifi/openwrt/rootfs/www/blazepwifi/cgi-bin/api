@@ -12,52 +12,161 @@ case "$action" in
   rates)
     bp_json "{\"ok\":true,\"rates\":$(bp_rates_json)}"
     ;;
+  vendos)
+    bp_json "{\"ok\":true,\"vendos\":$(bp_online_vendos_json)}"
+    ;;
+esac
+
+device="$(bp_device_norm "$(bp_param device)" 2>/dev/null || true)"
+[ -n "$device" ] || bp_fail "missing or invalid device token"
+[ -n "$mac" ] || bp_fail "client MAC not resolved"
+
+bp_lock || bp_fail "accounting busy"
+bp_bind_device "$device" "$mac" "$ipaddr"
+bp_unlock
+
+case "$action" in
   me)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
-    credit="$(bp_get_credit "$mac")"; expiry="$(bp_get_session_expiry "$mac")"; now="$(bp_now)"
-    remaining=0; [ "$expiry" -gt "$now" ] 2>/dev/null && remaining=$((expiry-now))
-    bp_json "{\"ok\":true,\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining}"
+    credit="$(bp_get_credit "$device")"
+    remaining="$(bp_remaining "$device")"
+    paused="$(bp_account_field "$device" 5)"; [ -n "$paused" ] || paused=0
+    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused}"
     ;;
+
   coin_start)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
+    vendo="$(bp_param vendo)"
+    if [ -z "$vendo" ]; then
+      vendo="$(bp_choose_vendo 2>/dev/null || true)"
+      [ -n "$vendo" ] || bp_fail "select a vendo or wait for one to come online"
+    fi
+    printf '%s' "$vendo" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || bp_fail "invalid vendo"
     now="$(bp_now)"; window="$(bp_cfg coin_window)"; [ -n "$window" ] || window=120
-    expires=$((now+window)); vendo="$(bp_param vendo)"; nonce="$(hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$now")"
-    printf '%s\t%s\t%s\t%s\n' "$mac" "$nonce" "$expires" "$vendo" > "$BP_TARGET"; chmod 600 "$BP_TARGET"
-    bp_json "{\"ok\":true,\"nonce\":\"$nonce\",\"expires\":$expires}"
+    expires=$((now+window))
+    target_nonce="$(hexdump -n 8 -e '8/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$now")"
+    bp_lock || bp_fail "accounting busy"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$BP_TARGET"
+    chmod 600 "$BP_TARGET"
+    bp_unlock
+    bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"expires\":$expires}"
     ;;
+
   coin_stop)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
-    if [ -f "$BP_TARGET" ] && [ "$(cut -f1 "$BP_TARGET")" = "$mac" ]; then rm -f "$BP_TARGET"; fi
+    bp_lock || bp_fail "accounting busy"
+    if [ -f "$BP_TARGET" ] && [ "$(cut -f1 "$BP_TARGET")" = "$device" ]; then rm -f "$BP_TARGET"; fi
+    bp_unlock
     bp_json '{"ok":true}'
     ;;
+
   connect)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
     cents="$(bp_param cents)"; case "$cents" in ''|*[!0-9]*) bp_fail "invalid rate";; esac
     sec="$(bp_rate_seconds "$cents" 2>/dev/null || true)"; [ -n "$sec" ] || bp_fail "rate not configured"
-    credit="$(bp_get_credit "$mac")"; [ "$credit" -ge "$cents" ] || bp_fail "insufficient credit"
+
     bp_lock || bp_fail "accounting busy"
-    credit="$(bp_get_credit "$mac")"; [ "$credit" -ge "$cents" ] || { bp_unlock; bp_fail "insufficient credit"; }
-    bp_set_credit "$mac" $((credit-cents))
-    now="$(bp_now)"; expiry="$(bp_get_session_expiry "$mac")"; [ "$expiry" -lt "$now" ] 2>/dev/null && expiry="$now"
-    expiry=$((expiry+sec)); bp_set_session "$mac" "$expiry" "$ipaddr"; bp_unlock
-    bp_authorize_mac "$mac"
-    bp_json "{\"ok\":true,\"credit_cents\":$((credit-cents)),\"expiry\":$expiry}"
+    line="$(bp_account_line "$device")"
+    credit="$(printf '%s' "$line" | cut -f2)"
+    [ "$credit" -ge "$cents" ] 2>/dev/null || { bp_unlock; bp_fail "insufficient credit"; }
+    expiry="$(printf '%s' "$line" | cut -f3)"
+    remaining="$(printf '%s' "$line" | cut -f4)"
+    paused="$(printf '%s' "$line" | cut -f5)"
+    ps="$(printf '%s' "$line" | cut -f6)"
+    events="$(printf '%s' "$line" | cut -f9)"
+    newcredit=$((credit-cents))
+    now="$(bp_now)"
+
+    if [ "$paused" = 1 ]; then
+      [ -n "$remaining" ] || remaining=0
+      remaining=$((remaining+sec))
+      bp_account_write "$device" "$newcredit" 0 "$remaining" 1 "$ps" "$mac" "$ipaddr" "$events"
+      newexpiry=0
+    else
+      [ -n "$expiry" ] || expiry=0
+      [ "$expiry" -gt "$now" ] 2>/dev/null || expiry="$now"
+      newexpiry=$((expiry+sec))
+      bp_account_write "$device" "$newcredit" "$newexpiry" 0 0 0 "$mac" "$ipaddr" "$events"
+    fi
+    bp_unlock
+
+    [ "$paused" = 1 ] || bp_authorize_mac "$mac"
+    bp_json "{\"ok\":true,\"credit_cents\":$newcredit,\"expiry\":$newexpiry,\"paused\":$([ "$paused" = 1 ] && echo 1 || echo 0)}"
     ;;
+
+  pause)
+    bp_lock || bp_fail "accounting busy"
+    line="$(bp_account_line "$device")"
+    credit="$(printf '%s' "$line" | cut -f2)"
+    expiry="$(printf '%s' "$line" | cut -f3)"
+    remaining="$(printf '%s' "$line" | cut -f4)"
+    paused="$(printf '%s' "$line" | cut -f5)"
+    events="$(printf '%s' "$line" | cut -f9)"
+    now="$(bp_now)"
+    if [ "$paused" = 1 ]; then
+      bp_unlock
+      bp_json "{\"ok\":true,\"paused\":1,\"remaining_seconds\":${remaining:-0}}"
+      exit 0
+    fi
+    if [ -n "$expiry" ] && [ "$expiry" -gt "$now" ] 2>/dev/null; then remaining=$((expiry-now)); else remaining=0; fi
+    bp_account_write "$device" "$credit" 0 "$remaining" 1 "$now" "$mac" "$ipaddr" "$events"
+    bp_unlock
+    bp_deauthorize_mac "$mac"
+    bp_json "{\"ok\":true,\"paused\":1,\"remaining_seconds\":$remaining}"
+    ;;
+
+  resume)
+    bp_lock || bp_fail "accounting busy"
+    line="$(bp_account_line "$device")"
+    credit="$(printf '%s' "$line" | cut -f2)"
+    remaining="$(printf '%s' "$line" | cut -f4)"
+    paused="$(printf '%s' "$line" | cut -f5)"
+    events="$(printf '%s' "$line" | cut -f9)"
+    [ -n "$remaining" ] || remaining=0
+    if [ "$paused" != 1 ]; then
+      bp_unlock
+      bp_json "{\"ok\":true,\"paused\":0,\"remaining_seconds\":$(bp_remaining "$device")}"
+      exit 0
+    fi
+    [ "$remaining" -gt 0 ] 2>/dev/null || { bp_account_write "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"; bp_unlock; bp_fail "no paused time remaining"; }
+    now="$(bp_now)"; expiry=$((now+remaining))
+    bp_account_write "$device" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" "$events"
+    bp_unlock
+    bp_authorize_mac "$mac"
+    bp_json "{\"ok\":true,\"paused\":0,\"expiry\":$expiry,\"remaining_seconds\":$remaining}"
+    ;;
+
   disconnect)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
-    bp_set_session "$mac" "$(bp_now)" "$ipaddr"; bp_deauthorize_mac "$mac"
+    bp_lock || bp_fail "accounting busy"
+    line="$(bp_account_line "$device")"
+    credit="$(printf '%s' "$line" | cut -f2)"
+    events="$(printf '%s' "$line" | cut -f9)"
+    bp_account_write "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
+    bp_unlock
+    bp_deauthorize_mac "$mac"
     bp_json '{"ok":true}'
     ;;
+
   redeem)
-    [ -n "$mac" ] || bp_fail "client MAC not resolved"
-    code="$(bp_param code)"; printf '%s' "$code" | grep -Eq '^[A-Za-z0-9-]{4,32}$' || bp_fail "invalid voucher"
+    code="$(printf '%s' "$(bp_param code)" | tr 'a-z' 'A-Z')"
+    printf '%s' "$code" | grep -Eq '^[A-Z0-9-]{4,32}$' || bp_fail "invalid voucher"
+    event="$(bp_event_hash "voucher|$code")"
+
     bp_lock || bp_fail "accounting busy"
-    line="$(awk -F '\t' -v c="$code" '$1==c && $3=="" {print; exit}' "$BP_VOUCHERS")"
-    [ -n "$line" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
-    cents="$(printf '%s' "$line" | cut -f2)"; now="$(bp_now)"; tmp="$BP_RUN/vouchers.$$"
-    awk -F '\t' -v OFS='\t' -v c="$code" -v m="$mac" -v n="$now" '$1==c && $3=="" {$3=m;$4=n} {print}' "$BP_VOUCHERS" > "$tmp" && mv "$tmp" "$BP_VOUCHERS"
-    old="$(bp_get_credit "$mac")"; bp_set_credit "$mac" $((old+cents)); bp_unlock
-    bp_json "{\"ok\":true,\"credit_cents\":$((old+cents))}"
+    used="$(bp_find_event_device "$event")"
+    [ -z "$used" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
+    cents="$(awk -F '\t' -v c="$code" '$1==c {print $2; exit}' "$BP_VOUCHERS")"
+    [ -n "$cents" ] || { bp_unlock; bp_fail "voucher invalid or used"; }
+
+    line="$(bp_account_line "$device")"
+    credit="$(printf '%s' "$line" | cut -f2)"
+    expiry="$(printf '%s' "$line" | cut -f3)"
+    remaining="$(printf '%s' "$line" | cut -f4)"
+    paused="$(printf '%s' "$line" | cut -f5)"
+    ps="$(printf '%s' "$line" | cut -f6)"
+    events="$(printf '%s' "$line" | cut -f9)"
+    newevents="$(bp_events_push "$events" "$event")"
+    newcredit=$((credit+cents))
+    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$newevents"
+    bp_unlock
+    bp_json "{\"ok\":true,\"credit_cents\":$newcredit}"
     ;;
+
   *) bp_fail "unknown action" ;;
 esac
