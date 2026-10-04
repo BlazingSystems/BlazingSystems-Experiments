@@ -33,11 +33,13 @@ public final class RentalLeaseStore {
                 .putString("server", safe(server))
                 .putString("enrollment", safe(token))
                 .putString("device_name", safe(name))
+                .putBoolean("setup_complete", false)
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
                 .remove("lease_sync_elapsed")
                 .apply();
+        AndroidRentalPolicyRepository.clear(context);
     }
 
     public static void setDeviceIdentity(Context context, String id, String secret) {
@@ -136,6 +138,7 @@ public final class RentalLeaseStore {
                 .remove("lease_until_ms")
                 .remove("admin_unlock_until")
                 .apply();
+        AndroidRentalPolicyRepository.clear(context);
     }
 
     public static boolean verifyAdminPassword(Context context, String password) {
