@@ -25,15 +25,17 @@ export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 . "$BP_LIB"
 bp_init_dirs
 
-# A dead CGI owner must not leave the accounting lock wedged.
-mkdir -p "$BP_RUN/lock"
-printf '99999999\n' > "$BP_RUN/lock/pid"
+# Kernel flock must be released automatically when a CGI exits without
+# explicitly unlocking, so a crashed request cannot wedge accounting.
+(
+  . "$BP_LIB"
+  bp_init_dirs
+  bp_lock
+  exit 0
+)
 bp_lock
-bp_capture_pid
-[ "$(cat "$BP_RUN/lock/pid")" = "$BP_SELF_PID" ]
 bp_unlock
-[ ! -d "$BP_RUN/lock" ]
-echo 'stress: stale lock recovery ok'
+echo 'stress: crash-safe flock release ok'
 
 # A read-only portal visit must not create a durable account row.
 D0=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
@@ -115,13 +117,14 @@ echo 'stress: migration replay blocked'
 # Concurrent writers must serialize without losing rows or sharing temp paths.
 i=1
 while [ "$i" -le 12 ]; do
+  n="$i"
   (
     . "$BP_LIB"
     bp_init_dirs
-    d="$(printf '%032x' "$i")"
-    m="$(printf '02:00:00:00:01:%02x' "$i")"
-    bp_lock
-    bp_account_write "$d" "$i" 0 0 0 0 "$m" "10.0.1.$i" ""
+    d="$(printf '%032x' "$n")"
+    m="$(printf '02:00:00:00:01:%02x' "$n")"
+    bp_lock || exit 1
+    bp_account_write "$d" "$n" 0 0 0 0 "$m" "10.0.1.$n" ""
     bp_unlock
   ) &
   i=$((i+1))
