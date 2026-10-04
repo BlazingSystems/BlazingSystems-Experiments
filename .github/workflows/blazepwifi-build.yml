@@ -19,6 +19,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
       - name: Accounting integration test
         run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
+      - name: Persistence and replay stress test
+        run: sh experiment/openwrt/BlazePwifi/tests/stress.sh
       - name: Build release bundle
         run: |
           VERSION=$(cat experiment/openwrt/BlazePwifi/VERSION)
