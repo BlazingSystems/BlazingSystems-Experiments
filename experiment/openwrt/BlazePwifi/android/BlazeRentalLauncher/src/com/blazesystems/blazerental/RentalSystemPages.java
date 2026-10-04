@@ -17,6 +17,7 @@ import android.os.Handler;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.android.launcher3.CellLayout;
@@ -36,6 +37,8 @@ public final class RentalSystemPages {
         Workspace workspace = launcher.getWorkspace();
         if (workspace == null) return;
         boolean restricted = LauncherAccessController.isRentalRestricted(launcher);
+        ManagedPolicyController.apply(launcher);
+        ManagedPolicyController.enforceLauncherTask(launcher);
 
         if (!restricted) {
             if (workspace.getScreenWithId(PAGE_RENTAL) != null
@@ -171,10 +174,33 @@ public final class RentalSystemPages {
             }
         });
 
-        BluetoothAdapter bluetooth = BluetoothAdapter.getDefaultAdapter();
-        String bt = bluetooth == null ? "Bluetooth: unavailable"
-                : "Bluetooth: " + (bluetooth.isEnabled() ? "on" : "off");
-        root.addView(infoCard(launcher, bt));
+        final Button bluetoothToggle = smallButton(launcher,
+                QuickControlController.isBluetoothEnabled() ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
+        root.addView(bluetoothToggle, rowMargins(launcher));
+        bluetoothToggle.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean next = !QuickControlController.isBluetoothEnabled();
+                boolean requested = QuickControlController.setBluetoothEnabled(next);
+                bluetoothToggle.setText(next && requested ? "BLUETOOTH: ON" : "BLUETOOTH: OFF");
+                if (!requested) Toast.makeText(launcher,
+                        "Bluetooth control is unavailable on this device", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        final Button torchToggle = smallButton(launcher,
+                QuickControlController.torchEnabled(launcher) ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
+        root.addView(torchToggle, rowMargins(launcher));
+        torchToggle.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean next = !QuickControlController.torchEnabled(launcher);
+                if (QuickControlController.setTorch(launcher, next)) {
+                    torchToggle.setText(next ? "FLASHLIGHT: ON" : "FLASHLIGHT: OFF");
+                } else {
+                    Toast.makeText(launcher, "Flashlight unavailable", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
         root.addView(infoCard(launcher, networkStatus(launcher)));
 
         final Button timerToggle = smallButton(launcher,
@@ -197,7 +223,10 @@ public final class RentalSystemPages {
 
         root.addView(body(launcher,
                 "Safe controls only. Android Settings and the system notification shade stay locked in Rental Mode."));
-        return root;
+        ScrollView scroll = new ScrollView(launcher);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        return scroll;
     }
 
     private static View createNotificationsPage(final Launcher launcher) {
@@ -246,7 +275,10 @@ public final class RentalSystemPages {
             }
         };
         root.post(refresh);
-        return root;
+        ScrollView scroll = new ScrollView(launcher);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        return scroll;
     }
 
     private static LinearLayout basePage(Context context) {
