@@ -3,7 +3,7 @@
 BlazePwifi is a clean-room, open-source PisoWiFi/captive-portal platform for OpenWrt. It uses an OpenWrt router or x86 controller plus one or more ESP8266 coin/vendo controllers.
 
 Target base: OpenWrt 25.12.x
-Release candidate: 0.2.0-rc.1
+Release candidate: 0.2.0-rc.2
 Primary build target: OpenWrt 25.12.5
 
 ## Hardware targets
