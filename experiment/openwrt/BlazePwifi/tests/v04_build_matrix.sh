@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-WF="$ROOT/../../.github/workflows/blazepwifi-build.yml"
+WF="$ROOT/../../../.github/workflows/blazepwifi-build.yml"
 [ "$(cat "$ROOT/VERSION")" = "0.4.0" ]
 test -f "$ROOT/releases/0.4.0/README.md"
 test -f "$ROOT/releases/0.4.0/ASSETS.md"
