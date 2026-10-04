@@ -17,15 +17,32 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
 mkdir -p "$BACKUP"
 cp -a /etc/config/uhttpd "$BACKUP/" 2>/dev/null || true
-cp -a /etc/config/blazepwifi "$BACKUP/" 2>/dev/null || true
+EXISTING_CONFIG=0
+if [ -f /etc/config/blazepwifi ]; then
+  cp -a /etc/config/blazepwifi "$BACKUP/blazepwifi.config"
+  EXISTING_CONFIG=1
+fi
 cp -a /etc/blazepwifi "$BACKUP/" 2>/dev/null || true
 
 echo "Installing BlazePwifi files..."
 cp -a "$BASE/openwrt/rootfs/." /
 rm -f /etc/uci-defaults/99-blazepwifi
+if [ "$EXISTING_CONFIG" = 1 ]; then
+  cp -a "$BACKUP/blazepwifi.config" /etc/config/blazepwifi
+fi
 chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /www/blazepwifi/cgi-bin/*
 mkdir -p /etc/blazepwifi/state /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /tmp/blazepwifi
+
+ensure_opt(){ key="$1"; value="$2"; uci -q get "blazepwifi.main.$key" >/dev/null 2>&1 || uci set "blazepwifi.main.$key=$value"; }
+ensure_opt portal_port 8080
+ensure_opt vendo_port 4455
+ensure_opt admin_port 8443
+ensure_opt coin_window 120
+ensure_opt pulse_value_centavos 100
+ensure_opt event_history 64
+ensure_opt pause_max_seconds 0
+ensure_opt walled_refresh_seconds 120
 
 randkey(){ hexdump -n 18 -e '18/1 "%02x"' /dev/urandom; }
 ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
