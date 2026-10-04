@@ -1,43 +1,99 @@
 #!/bin/sh
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 bp_init_dirs
-action="$(bp_param action)"; id="$(bp_param id)"; nonce="$(bp_param nonce)"; pulses="$(bp_param pulses)"; sig="$(bp_param sig)"
+
+action="$(bp_param action)"
+id="$(bp_param id)"
+nonce="$(bp_param nonce)"
+pulses="$(bp_param pulses)"
+target="$(bp_param target)"
+sig="$(bp_param sig)"
+
 printf '%s' "$id" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || bp_fail "invalid vendo id"
 printf '%s' "$nonce" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid nonce"
 [ -n "$pulses" ] || pulses=0
-bp_check_vendo_sig "$action" "$id" "$nonce" "$pulses" "$sig" || bp_fail "bad signature"
-now="$(bp_now)"; ipaddr="${REMOTE_ADDR:-0.0.0.0}"
+bp_check_vendo_sig "$action" "$id" "$nonce" "$pulses" "$target" "$sig" || bp_fail "bad signature"
 
-last_coin_nonce="$(awk -F '\t' -v id="$id" '$1==id {print $4; exit}' "$BP_VENDOS")"
+now="$(bp_now)"
+ipaddr="${REMOTE_ADDR:-0.0.0.0}"
+
 heartbeat() {
-  tmp="$BP_RUN/vendos.$$"
-  awk -F '\t' -v OFS='\t' -v id="$id" -v n="$now" -v ip="$ipaddr" 'BEGIN{f=0} $1==id {$2=n;$3=ip;f=1} {print} END{if(!f) print id,n,ip,""}' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
+	tmp="$BP_RUN/vendos.$$"
+	awk -F '\t' -v OFS='\t' -v id="$id" -v n="$now" -v ip="$ipaddr" '
+		BEGIN{f=0}
+		$1==id {print id,n,ip;f=1;next}
+		{print}
+		END{if(!f) print id,n,ip}
+	' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
+	chmod 600 "$BP_VENDOS"
 }
+
+bp_lock || bp_fail "vendo state busy"
 heartbeat
+bp_unlock
 
 case "$action" in
-  register|ping) bp_json "{\"ok\":true,\"server_time\":$now}" ;;
+  register|ping)
+    bp_json "{\"ok\":true,\"server_time\":$now}"
+    ;;
+
   poll)
     insert=0; target_nonce=""; expires=0
     if [ -f "$BP_TARGET" ]; then
-      IFS="$(printf '\t')" read -r mac target_nonce expires wanted < "$BP_TARGET"
-      if [ "$expires" -gt "$now" ] 2>/dev/null && { [ -z "$wanted" ] || [ "$wanted" = "$id" ]; }; then insert=1; fi
+      IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$BP_TARGET"
+      if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then insert=1; fi
     fi
     bp_json "{\"ok\":true,\"insert\":$insert,\"target_nonce\":\"$(bp_json_escape "$target_nonce")\",\"expires\":${expires:-0}}"
     ;;
+
   coin)
     case "$pulses" in ''|*[!0-9]*) bp_fail "invalid pulse count";; esac
     [ "$pulses" -ge 1 ] && [ "$pulses" -le 20 ] || bp_fail "pulse count out of range"
-    [ "$nonce" != "$last_coin_nonce" ] || bp_fail "replayed coin event"
-    [ -f "$BP_TARGET" ] || bp_fail "no active coin window"
-    IFS="$(printf '\t')" read -r mac target_nonce expires wanted < "$BP_TARGET"
-    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$BP_TARGET"; bp_fail "coin window expired"; }
-    [ -z "$wanted" ] || [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
-    unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100; add=$((unit*pulses))
-    new="$(bp_add_credit "$mac" "$add")" || bp_fail "accounting busy"
-    tmp="$BP_RUN/vendos.$$"
-    awk -F '\t' -v OFS='\t' -v id="$id" -v cn="$nonce" '$1==id {$4=cn} {print}' "$BP_VENDOS" > "$tmp" && mv "$tmp" "$BP_VENDOS"
-    bp_json "{\"ok\":true,\"credited_cents\":$add,\"credit_cents\":$new,\"target_nonce\":\"$(bp_json_escape "$target_nonce")\"}"
+    printf '%s' "$target" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || bp_fail "invalid coin target"
+
+    event="$(bp_event_hash "coin|$id|$nonce|$target")"
+    duplicate_device="$(bp_find_event_device "$event")"
+    if [ -n "$duplicate_device" ]; then
+      credit="$(bp_get_credit "$duplicate_device")"
+      bp_json "{\"ok\":true,\"duplicate\":true,\"credited_cents\":0,\"credit_cents\":$credit,\"target_nonce\":\"$target\"}"
+      exit 0
+    fi
+
+    bp_lock || bp_fail "accounting busy"
+    duplicate_device="$(bp_find_event_device "$event")"
+    if [ -n "$duplicate_device" ]; then
+      credit="$(bp_get_credit "$duplicate_device")"
+      bp_unlock
+      bp_json "{\"ok\":true,\"duplicate\":true,\"credited_cents\":0,\"credit_cents\":$credit,\"target_nonce\":\"$target\"}"
+      exit 0
+    fi
+
+    [ -f "$BP_TARGET" ] || { bp_unlock; bp_fail "no active coin window"; }
+    IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$BP_TARGET"
+    [ "$target" = "$target_nonce" ] || { bp_unlock; bp_fail "coin target mismatch"; }
+    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$BP_TARGET"; bp_unlock; bp_fail "coin window expired"; }
+    [ "$wanted" = "$id" ] || { bp_unlock; bp_fail "another vendo selected"; }
+
+    line="$(bp_account_line "$device")"
+    [ -n "$line" ] || { bp_unlock; bp_fail "target account not found"; }
+    credit="$(printf '%s' "$line" | cut -f2)"
+    expiry="$(printf '%s' "$line" | cut -f3)"
+    remaining="$(printf '%s' "$line" | cut -f4)"
+    paused="$(printf '%s' "$line" | cut -f5)"
+    ps="$(printf '%s' "$line" | cut -f6)"
+    account_mac="$(printf '%s' "$line" | cut -f7)"
+    account_ip="$(printf '%s' "$line" | cut -f8)"
+    events="$(printf '%s' "$line" | cut -f9)"
+
+    unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+    add=$((unit*pulses))
+    newcredit=$((credit+add))
+    newevents="$(bp_events_push "$events" "$event")"
+    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
+    bp_unlock
+
+    bp_json "{\"ok\":true,\"duplicate\":false,\"credited_cents\":$add,\"credit_cents\":$newcredit,\"target_nonce\":\"$target\"}"
     ;;
+
   *) bp_fail "unknown vendo action" ;;
 esac
