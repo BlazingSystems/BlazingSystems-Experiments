@@ -31,3 +31,7 @@ EasyMode is an application/management layer. Normal installation does **not** mo
 ## Status
 
 `5.0.0-alpha.1` is **Static Tested / Hardware Verification Required**. It is not yet a hardware-certified replacement for 4.1.4.
+
+## R281 hardware revision
+
+[4.2.1 R281 experiment](releases/v4.2.1-r281-experiment/) preserves the newer live R281 UI and adds a tested dedicated repeater option, scan/diagnostic fixes and recovery-probe routing. It is a separate hardware-tested source snapshot; 5.0 alpha and the preserved 4.1.4 baseline remain unchanged. See its audit for unverified features and firmware/reset-persistence limits.
