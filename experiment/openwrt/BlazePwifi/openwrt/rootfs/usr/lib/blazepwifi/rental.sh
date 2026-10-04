@@ -64,7 +64,7 @@ bp_rental_list_json() {
     salt="$(printf '%s' "$p" | cut -f3)"
     hash="$(printf '%s' "$p" | cut -f4)"
     preferred="$(printf '%s' "$p" | cut -f6)"
-    mode=rental; hidden=""; rev=0; timer_toggle=1; notifications=1; quick=""
+    mode=rental; hidden=""; rev=0; timer_mode=overlay; timer_toggle=1; notifications=1; quick=""
     if command -v bp_rental_policy_v2_get >/dev/null 2>&1; then
       v2="$(bp_rental_policy_v2_get "$id" 2>/dev/null || true)"
       if [ -n "$v2" ]; then
@@ -73,6 +73,7 @@ bp_rental_list_json() {
         allowed="$(printf '%s' "$v2" | cut -f6)"
         hidden="$(printf '%s' "$v2" | cut -f7)"
         preferred="$(printf '%s' "$v2" | cut -f8)"
+        timer_mode="$(printf '%s' "$v2" | cut -f9)"
         timer_toggle="$(printf '%s' "$v2" | cut -f10)"
         quick="$(printf '%s' "$v2" | cut -f11)"
         notifications="$(printf '%s' "$v2" | cut -f12)"
@@ -86,8 +87,8 @@ bp_rental_list_json() {
     inventory="$(bp_rental_inventory_get "$id")"
     [ "$salt" != "-" ] && [ -n "$salt" ] && [ "$hash" != "-" ] && [ -n "$hash" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","preferred_vendo":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_password_set":%s,"inventory":"%s"}' \
-      "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}" "${rev:-0}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")" "$(bp_json_escape "$preferred")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}" "$admin_set" "$(bp_json_escape "$inventory")"
+    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","preferred_vendo":"%s","timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_password_set":%s,"inventory":"%s"}' \
+      "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}" "${rev:-0}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")" "$(bp_json_escape "$preferred")" "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}" "$admin_set" "$(bp_json_escape "$inventory")"
   done < "$BP_RENTAL_DEVICES"
   printf ']'
 }

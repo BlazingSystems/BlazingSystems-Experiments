@@ -68,7 +68,7 @@ EOF
 bp_rental_policy_v2_patch() {
   did="$1"; expected="$2"; actor="$3"; mode_new="$4"; allowed_new="$5"; hidden_new="$6"; preferred_new="$7"
   timer_toggle_new="$8"; notifications_new="$9"; shift 9
-  quick_new="$1"; gesture_new="$2"; admin_password="$3"
+  quick_new="$1"; gesture_new="$2"; admin_password="$3"; timer_mode_new="${4:-@keep}"
 
   case "$expected" in ''|*[!0-9]*) return 3;; esac
   line="$(bp_rental_policy_v2_get "$did")" || return 1
@@ -81,6 +81,7 @@ EOF
   [ "$allowed_new" = "@keep" ] || allowed="$allowed_new"
   [ "$hidden_new" = "@keep" ] || { hidden="$hidden_new"; [ -n "$hidden" ] || hidden="-"; }
   [ "$preferred_new" = "@keep" ] || { preferred="$preferred_new"; [ -n "$preferred" ] || preferred="-"; }
+  [ "$timer_mode_new" = "@keep" ] || timer_mode="$timer_mode_new"
   [ "$timer_toggle_new" = "@keep" ] || timer_toggle="$timer_toggle_new"
   [ "$notifications_new" = "@keep" ] || notifications="$notifications_new"
   [ "$quick_new" = "@keep" ] || { quick="$quick_new"; [ -n "$quick" ] || quick="-"; }
@@ -90,6 +91,7 @@ EOF
   bp_rental_packages_valid "$allowed" || return 2
   [ "$hidden" = "-" ] || bp_rental_policy_v2_list_valid "$hidden" 2048 || return 2
   bp_rental_vendo_valid "$preferred" || return 2
+  case "$timer_mode" in overlay|always|off) ;; *) return 2;; esac
   bp_rental_policy_v2_bool "$timer_toggle" || return 2
   bp_rental_policy_v2_bool "$notifications" || return 2
   [ "$quick" = "-" ] || bp_rental_policy_v2_list_valid "$quick" 1024 || return 2

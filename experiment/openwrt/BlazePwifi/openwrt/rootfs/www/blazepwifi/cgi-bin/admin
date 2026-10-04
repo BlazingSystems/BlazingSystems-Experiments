@@ -93,13 +93,14 @@ case "$action" in
     allowed="$(bp_param allowed_packages)"; [ -n "$allowed" ] || allowed="@keep"
     hidden="$(bp_param hidden_packages)"; [ -n "$hidden" ] || hidden="@keep"
     preferred="$(bp_param preferred_vendo)"; [ -n "$preferred" ] || preferred="@keep"
+    timer_mode="$(bp_param timer_mode)"; [ -n "$timer_mode" ] || timer_mode="@keep"
     timer="$(bp_param timer_user_toggle)"; [ -n "$timer" ] || timer="@keep"
     notifications="$(bp_param notifications_enabled)"; [ -n "$notifications" ] || notifications="@keep"
     quick="$(bp_param quick_controls)"; [ -n "$quick" ] || quick="@keep"
     gesture="$(bp_param admin_gesture_value)"; [ -n "$gesture" ] || gesture="@keep"
     admin_password="$(bp_param admin_password)"; [ -n "$admin_password" ] || admin_password="@keep"
     actor="admin:$BP_AUTH_USER"
-    if newrev="$(bp_rental_policy_v2_patch "$did" "$expected" "$actor" "$mode" "$allowed" "$hidden" "$preferred" "$timer" "$notifications" "$quick" "$gesture" "$admin_password")"; then
+    if newrev="$(bp_rental_policy_v2_patch "$did" "$expected" "$actor" "$mode" "$allowed" "$hidden" "$preferred" "$timer" "$notifications" "$quick" "$gesture" "$admin_password" "$timer_mode")"; then
       body="$(bp_rental_policy_v2_json "$did")" || bp_fail "policy unavailable"
       bp_auth_audit rental_policy_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$newrev"
       bp_json "$(printf '{"ok":true,"policy_revision":%s,"policy":%s}' "$newrev" "$body")"

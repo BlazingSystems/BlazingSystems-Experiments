@@ -23,11 +23,12 @@ L="$(bp_rental_policy_v2_get "$D")"
 [ "$(printf '%s' "$L" | cut -f6)" = com.example.one ]
 [ "$(printf '%s' "$L" | cut -f8)" = vendo1 ]
 [ "$(printf '%s' "$L" | cut -f15)" = abc ]
-R="$(bp_rental_policy_v2_patch "$D" 1 test unrestricted 'com.example.one,com.example.two' '' @keep 0 1 @keep 5000 @keep)"
+R="$(bp_rental_policy_v2_patch "$D" 1 test unrestricted 'com.example.one,com.example.two' '' @keep 0 1 @keep 5000 @keep always)"
 [ "$R" = 2 ]
 L2="$(bp_rental_policy_v2_get "$D")"
 [ "$(printf '%s' "$L2" | cut -f5)" = unrestricted ]
 [ "$(printf '%s' "$L2" | cut -f7)" = - ]
+[ "$(printf '%s' "$L2" | cut -f9)" = always ]
 [ "$(printf '%s' "$L2" | cut -f14)" = 5000 ]
 if bp_rental_policy_v2_patch "$D" 1 stale rental @keep @keep @keep @keep @keep @keep @keep @keep >/dev/null; then
   echo "stale CAS unexpectedly succeeded" >&2; exit 1

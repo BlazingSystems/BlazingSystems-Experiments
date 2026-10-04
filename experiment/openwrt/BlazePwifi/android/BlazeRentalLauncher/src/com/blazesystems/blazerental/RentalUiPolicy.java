@@ -26,8 +26,7 @@ public final class RentalUiPolicy {
                 .putString("operator_timer_mode", mode)
                 .putBoolean("operator_timer_toggle_allowed", timerUserToggleAllowed)
                 .putString("operator_quick_controls",
-                        quickControls == null || quickControls.trim().length() == 0
-                                ? DEFAULT_QUICK : quickControls.trim())
+                        quickControls == null ? DEFAULT_QUICK : quickControls.trim())
                 .putBoolean("operator_notifications_enabled", notificationsEnabled)
                 .putString("admin_gesture_type",
                         gestureType == null || gestureType.length() == 0 ? "hold" : gestureType)
@@ -58,7 +57,9 @@ public final class RentalUiPolicy {
     }
 
     public static boolean quickControlAllowed(Context context, String key) {
-        String csv = prefs(context).getString("operator_quick_controls", DEFAULT_QUICK);
+        String csv = prefs(context).contains("operator_quick_controls")
+                ? prefs(context).getString("operator_quick_controls", "")
+                : DEFAULT_QUICK;
         Set<String> values = new HashSet<String>();
         for (String part : csv.split(",")) {
             String value = part.trim();
