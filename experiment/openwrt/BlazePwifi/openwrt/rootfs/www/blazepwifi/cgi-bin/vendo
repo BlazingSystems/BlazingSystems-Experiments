@@ -39,9 +39,14 @@ case "$action" in
 
   poll)
     insert=0; target_nonce=""; expires=0
-    if [ -f "$BP_TARGET" ]; then
-      IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$BP_TARGET"
-      if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then insert=1; fi
+    target_file="$BP_TARGET_DIR/$id.tsv"
+    if [ -f "$target_file" ]; then
+      IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$target_file"
+      if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then
+        insert=1
+      else
+        rm -f "$target_file"
+      fi
     fi
     bp_json "{\"ok\":true,\"insert\":$insert,\"target_nonce\":\"$(bp_json_escape "$target_nonce")\",\"expires\":${expires:-0}}"
     ;;
@@ -68,10 +73,11 @@ case "$action" in
       exit 0
     fi
 
-    [ -f "$BP_TARGET" ] || { bp_unlock; bp_fail "no active coin window"; }
-    IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$BP_TARGET"
+    target_file="$BP_TARGET_DIR/$id.tsv"
+    [ -f "$target_file" ] || { bp_unlock; bp_fail "no active coin window"; }
+    IFS="$(printf '\t')" read -r device mac target_nonce expires wanted < "$target_file"
     [ "$target" = "$target_nonce" ] || { bp_unlock; bp_fail "coin target mismatch"; }
-    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$BP_TARGET"; bp_unlock; bp_fail "coin window expired"; }
+    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_unlock; bp_fail "coin window expired"; }
     [ "$wanted" = "$id" ] || { bp_unlock; bp_fail "another vendo selected"; }
 
     line="$(bp_account_line "$device")"
