@@ -1,4 +1,5 @@
 #!/bin/sh
+# v0.3 security/bootstrap verification retrigger
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
