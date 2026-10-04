@@ -25,6 +25,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/config.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
+      - name: Admin UI validation
+        run: sh experiment/openwrt/BlazePwifi/tests/admin_ui.sh
       - name: Accounting integration test x3
         run: |
           for i in 1 2 3; do
