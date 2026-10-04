@@ -11,7 +11,7 @@ Highlights:
 - libgpiod Orange Pi controller agent;
 - OpenWrt image builds for priority Orange Pi boards and successful additional variants;
 - x86_64 BIOS and UEFI images;
-- BlazeRental Android DPC/companion APK with QR provisioning artifacts;
+- BlazeRental Android DPC/companion APK with QR provisioning artifacts and functional manual APK enrollment;
 - server-authoritative rental leases and one-time enrollment.
 
 ## Validation boundary
