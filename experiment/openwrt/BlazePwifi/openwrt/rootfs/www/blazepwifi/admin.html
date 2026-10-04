@@ -3,7 +3,7 @@
 <div class="card"><div class="grid"><div class="metric">Active sessions<br><b id="sessions">—</b></div><div class="metric">Paused sessions<br><b id="paused">—</b></div><div class="metric">Vendos online<br><b id="vendos">—</b></div><div class="metric">Free memory<br><b id="mem">—</b></div><div class="metric">Load<br><b id="load">—</b></div></div></div>
 <div class="card"><h3>Create voucher</h3><input id="cents" type="number" min="1" value="100"><button onclick="voucher()">Create</button><pre id="out"></pre></div>
 <script>
-if(location.protocol!=='https:'){location.replace('https://'+location.hostname+':8443/admin.html')}
+if(location.protocol!=='https:'){fetch('/cgi-bin/api',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=config'}).then(r=>r.json()).then(x=>location.replace('https://'+location.hostname+':'+(x.admin_port||8443)+'/admin.html')).catch(()=>location.replace('https://'+location.hostname+':8443/admin.html'))}
 let token=sessionStorage.blazeAdmin||'';key.value=token;
 function saveKey(){token=key.value;sessionStorage.blazeAdmin=token;status()}
 async function a(action,data={}){const body=new URLSearchParams({action,...data});let r=await fetch('/cgi-bin/admin',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','X-Blaze-Admin':token},body});return r.json()}
