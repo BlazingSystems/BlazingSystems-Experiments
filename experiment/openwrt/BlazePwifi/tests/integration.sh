@@ -75,6 +75,12 @@ OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
+[ -s "$T/state/targets/vendo-01.tsv" ]
+
+# Simulate a router reboot/tmpfs loss before the ESP reports the coin.
+rm -rf "$T/run"
+mkdir -p "$T/run"
+chmod 700 "$T/run"
 
 # Another customer cannot steal vendo-01, but can use vendo-02 concurrently.
 DEVICE2=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
