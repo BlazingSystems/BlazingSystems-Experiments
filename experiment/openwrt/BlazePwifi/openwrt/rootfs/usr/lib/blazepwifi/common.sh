@@ -139,6 +139,10 @@ bp_bind_device() {
 		[ -n "$mac" ] && claimed="$(awk -F '\t' -v m="$mac" '$7==m {print $1; exit}' "$BP_ACCOUNTS")"
 		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_CREDITS")"; fi
 		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		if [ -n "$claimed" ] && [ -n "$mac" ]; then
+			bp_remove_legacy_mac "$mac"
+			bp_durable_sync
+		fi
 		if [ "$create" != 1 ] && [ "$credit" -eq 0 ] 2>/dev/null && { [ -z "$expiry" ] || [ "$expiry" -le "$(bp_now)" ] 2>/dev/null; }; then
 			return 0
 		fi
