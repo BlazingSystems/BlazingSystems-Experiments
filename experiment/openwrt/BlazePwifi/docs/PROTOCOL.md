@@ -46,3 +46,16 @@ Firmware v0.2 migrates the prior v0.1 stored SSID, password, server, Vendo key, 
 ## Network security
 
 Keep Vendos on a trusted LAN or dedicated management/VLAN segment. Port 4455 is authenticated but intentionally remains HTTP to keep the ESP8266 client small; it must not be published to WAN.
+
+
+## Controller implementations
+
+The protocol is platform-neutral. BlazePwifi v0.3 uses the same authenticated, target-bound coin semantics for:
+
+- **ESP8266** — compact controller using EEPROM configuration and LittleFS pending-event journal.
+- **ESP32** — controller using Preferences/NVS configuration and LittleFS pending-event journal, with configurable polarity, debounce and pulse grouping.
+- **Linux GPIO** — Orange Pi/SBC agent using the GPIO character-device stack through libgpiod tools.
+
+No server action is ESP32-only. A deployment can mix ESP8266, ESP32 and Linux GPIO controllers while retaining one accounting protocol.
+
+Hardware pins and polarities are deployment configuration, not protocol constants.
