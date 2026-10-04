@@ -13,6 +13,12 @@ public class BlazeDeviceAdminReceiver extends DeviceAdminReceiver {
                 DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE);
         RentalLeaseStore.acceptProvisioningExtras(context, extras);
         ManagedPolicyController.apply(context);
+        final Context app = context.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                if (RentalLeaseStore.hasEnrollmentConfig(app)) LeaseClient.sync(app);
+            }
+        }).start();
         ManagedPolicyController.openHome(context);
     }
 
