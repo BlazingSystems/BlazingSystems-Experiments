@@ -1,11 +1,11 @@
 #!/bin/sh
 # v0.3 security/bootstrap verification retrigger
 set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 if grep -Fq '"$" | sha256sum' "$ROOT/openwrt/rootfs/etc/uci-defaults/99-blazepwifi"; then
   echo 'uci-default entropy fallback must mix the process id' >&2
   exit 1
 fi
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
 for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'admin-login' -o -name 'admin-session' -o -name 'admin-logout' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
   sh -n "$f"
