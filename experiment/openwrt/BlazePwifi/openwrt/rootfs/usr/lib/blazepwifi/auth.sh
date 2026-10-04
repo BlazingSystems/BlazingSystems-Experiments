@@ -35,14 +35,31 @@ bp_auth_unlock() {
 
 bp_auth_random_hex() {
 	bytes="$1"
-	out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null || true)"
-	if [ "${#out}" -lt $((bytes*2)) ]; then
-		out="$(od -An -N "$bytes" -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+	case "$bytes" in ''|*[!0-9]*) return 1;; esac
+	[ "$bytes" -ge 1 ] 2>/dev/null || return 1
+	need=$((bytes*2))
+
+	# Sanitize before measuring. Some constrained BusyBox/hexdump combinations
+	# can emit formatting characters or short output; never accept a short
+	# session/enrollment secret merely because shell character counting differs.
+	out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null 		| tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+	have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
+	if [ "${have:-0}" -lt "$need" ] 2>/dev/null; then
+		out="$(od -An -v -N "$bytes" -tx1 /dev/urandom 2>/dev/null 			| tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+		have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
 	fi
-	if [ "${#out}" -lt $((bytes*2)) ]; then
-		out="$(printf '%s|%s|%s' "$(date +%s 2>/dev/null)" "$$" "$bytes" | bp_sha256)"
+	if [ "${have:-0}" -lt "$need" ] 2>/dev/null; then
+		# Emergency fallback is sufficient for every current caller (<=32 bytes)
+		# and still mixes time/process data through SHA-256. Refuse larger
+		# requests rather than silently returning weak/short material.
+		[ "$need" -le 64 ] || return 1
+		out="$(printf '%s|%s|%s|%s' "$(date +%s 2>/dev/null)" "$" "$bytes" 			"$(od -An -N 16 -tx1 /dev/urandom 2>/dev/null || true)" | bp_sha256)"
 	fi
-	printf '%s' "$out" | tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' | cut -c1-$((bytes*2))
+
+	out="$(printf '%s' "$out" | tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' | cut -c1-"$need")"
+	have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
+	[ "$have" -eq "$need" ] 2>/dev/null || return 1
+	printf '%s' "$out"
 }
 
 bp_auth_clean_field() {
