@@ -1,5 +1,6 @@
 package com.blazesystems.blazerental;
 
+import android.app.Activity;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -27,6 +28,25 @@ public final class ManagedPolicyController {
         DevicePolicyManager dpm = (DevicePolicyManager)
                 context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         return dpm != null && dpm.isDeviceOwnerApp(context.getPackageName());
+    }
+
+    public static boolean isAdminActive(Context context) {
+        DevicePolicyManager dpm = (DevicePolicyManager)
+                context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        return dpm != null && dpm.isAdminActive(admin(context));
+    }
+
+    public static void enforceLauncherTask(Activity activity) {
+        if (activity == null || Build.VERSION.SDK_INT < 21) return;
+        DevicePolicyManager dpm = (DevicePolicyManager)
+                activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (dpm == null || !dpm.isDeviceOwnerApp(activity.getPackageName())) return;
+        boolean restricted = !AndroidRentalPolicyRepository.load(activity).isUnrestricted();
+        boolean adminWindow = RentalLeaseStore.isAdminWindowActive(activity);
+        try {
+            if (restricted && !adminWindow) activity.startLockTask();
+            else activity.stopLockTask();
+        } catch (Exception ignored) {}
     }
 
     public static List<String> safeLaunchablePackages(Context context) {
