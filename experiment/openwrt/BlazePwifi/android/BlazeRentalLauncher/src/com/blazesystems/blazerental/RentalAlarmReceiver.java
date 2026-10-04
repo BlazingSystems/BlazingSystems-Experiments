@@ -27,7 +27,7 @@ public class RentalAlarmReceiver extends BroadcastReceiver {
         new Thread(new Runnable() {
             @Override public void run() {
                 try {
-                    if (RentalLeaseStore.isEnrolled(context)) LeaseClient.sync(context);
+                    if (RentalLeaseStore.hasEnrollmentConfig(context)) LeaseClient.sync(context);
                     ManagedPolicyController.apply(context);
                     if (!RentalLeaseStore.isLeaseValid(context)
                             && !AndroidRentalPolicyRepository.load(context).isUnrestricted()) {
