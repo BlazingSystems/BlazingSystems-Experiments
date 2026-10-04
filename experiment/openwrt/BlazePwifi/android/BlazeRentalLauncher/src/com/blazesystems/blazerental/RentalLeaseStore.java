@@ -81,10 +81,60 @@ public final class RentalLeaseStore {
     }
 
     public static void recordAdminVerifier(Context context, String salt, String hash, int rounds) {
+        String safeSalt = safe(salt);
+        String safeHash = safe(hash);
+        if (safeSalt.length() == 0 || safeHash.length() == 0) return;
         prefs(context).edit()
-                .putString("admin_salt", safe(salt))
-                .putString("admin_hash", safe(hash))
+                .putString("admin_salt", safeSalt)
+                .putString("admin_hash", safeHash)
                 .putInt("admin_rounds", Math.max(1, rounds))
+                .apply();
+    }
+
+    public static boolean setLocalAdminPassword(Context context, String password) {
+        if (password == null || password.length() < 8) return false;
+        try {
+            String salt = Hmac.nonce();
+            int rounds = 4096;
+            String hash = Hmac.sha256Iter(password, salt, rounds);
+            recordAdminVerifier(context, salt, hash, rounds);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public static boolean hasAdminVerifier(Context context) {
+        SharedPreferences p = prefs(context);
+        return p.getString("admin_salt", "").length() > 0
+                && p.getString("admin_hash", "").length() > 0;
+    }
+
+    public static boolean hasEnrollmentConfig(Context context) {
+        return server(context).length() > 0
+                && (enrollment(context).length() > 0 || isEnrolled(context));
+    }
+
+    public static boolean isInitialSetupComplete(Context context) {
+        return prefs(context).getBoolean("setup_complete", false);
+    }
+
+    public static void markInitialSetupComplete(Context context, boolean complete) {
+        prefs(context).edit().putBoolean("setup_complete", complete).apply();
+    }
+
+    public static void prepareTransfer(Context context) {
+        prefs(context).edit()
+                .putBoolean("setup_complete", false)
+                .remove("server")
+                .remove("enrollment")
+                .remove("device_id")
+                .remove("device_secret")
+                .remove("lease_duration_ms")
+                .remove("lease_sync_elapsed")
+                .remove("server_time_ms")
+                .remove("lease_until_ms")
+                .remove("admin_unlock_until")
                 .apply();
     }
 
