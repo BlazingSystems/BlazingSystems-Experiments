@@ -26,6 +26,17 @@ cd "$WORK"
 command -v curl >/dev/null || { echo "curl required" >&2; exit 1; }
 command -v zstd >/dev/null || { echo "zstd required" >&2; exit 1; }
 
+FILES_DIR="$ROOT/openwrt/rootfs"
+case "$TARGET" in
+  x86_64)
+    FILES_DIR="$WORK/rootfs-$TARGET"
+    rm -rf "$FILES_DIR"
+    mkdir -p "$FILES_DIR"
+    cp -a "$ROOT/openwrt/rootfs/." "$FILES_DIR/"
+    sh "$ROOT/build/prepare-tabler.sh" "$FILES_DIR/www/blazepwifi/vendor/tabler"
+    ;;
+esac
+
 [ -f "$IB" ] || curl -fL "$BASE/$IB" -o "$IB"
 curl -fsSL "$BASE/sha256sums" -o sha256sums
 EXPECTED="$(awk -v f="$IB" '$2=="*"f || $2==f {print $1;exit}' sha256sums)"
@@ -39,7 +50,7 @@ D="$(find . -maxdepth 1 -type d -name 'openwrt-imagebuilder-*' | head -n1)"
 mv "$D" imagebuilder
 cd imagebuilder
 
-make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls flock" FILES="$ROOT/openwrt/rootfs"
+make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls flock" FILES="$FILES_DIR"
 
 OUT="$ROOT/dist/$TARGET"
 rm -rf "$OUT"
