@@ -22,3 +22,5 @@ Signed APK import requested from verified signing handoff.
 
 Signed BlazeRental APK imported and verified.
 Final production publication requested.
+
+Android production ZIP packaging corrected; release assets refresh requested.
