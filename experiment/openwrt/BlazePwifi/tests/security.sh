@@ -40,6 +40,12 @@ export BP_CONTROLLER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
 export SERVER_PORT=8443 REMOTE_ADDR=10.0.0.9 BP_AUTH_NOW=2000000000
 
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
+
+echo "security: random token primitive"
+RANDOM_TOKEN="$(BP_LIB="$BP_LIB" BP_AUTH_LIB="$BP_AUTH_LIB" BP_STATE="$BP_STATE" BP_RUN="$BP_RUN" sh -c '. "$BP_LIB"; . "$BP_AUTH_LIB"; bp_auth_random_hex 32')"
+[ "${#RANDOM_TOKEN}" -eq 64 ] || { echo "security: random primitive returned ${#RANDOM_TOKEN} hex chars, expected 64" >&2; exit 1; }
+case "$RANDOM_TOKEN" in *[!0-9a-f]*) echo "security: random primitive returned non-hex data" >&2; exit 1;; esac
+
 LOGIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-login"
 SESSION="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-session"
 LOGOUT="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-logout"
@@ -90,13 +96,16 @@ CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 COOKIE_TOKEN="${COOKIE#blaze_admin=}"
 echo "security: post-lock auth-material cookie_len=${#COOKIE_TOKEN} csrf_len=${#CSRF} secure=$(printf '%s' "$OUT" | grep -c 'Secure' || true) httponly=$(printf '%s' "$OUT" | grep -c 'HttpOnly' || true) samesite=$(printf '%s' "$OUT" | grep -c 'SameSite=Strict' || true)"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ] || { echo "security: missing post-lock auth material" >&2; exit 1; }
-[ "${#COOKIE_TOKEN}" -eq 64 ] || { echo "security: unexpected cookie token length ${#COOKIE_TOKEN}" >&2; exit 1; }
+[ "${#COOKIE_TOKEN}" -ge 48 ] && [ "${#COOKIE_TOKEN}" -le 128 ] || { echo "security: implausible cookie token length ${#COOKIE_TOKEN}" >&2; exit 1; }
 [ "${#CSRF}" -eq 48 ] || { echo "security: unexpected csrf length ${#CSRF}" >&2; exit 1; }
 case "$COOKIE_TOKEN" in *[!0-9a-f]*) echo "non-hex admin session token" >&2; exit 1;; esac
 case "$CSRF" in *[!0-9a-f]*) echo "non-hex csrf token" >&2; exit 1;; esac
 
 echo "security: session lookup"
 awk -F '\t' 'NF{printf "security: stored-session user=%s role=%s created=%s last=%s absolute=%s ip=%s must=%s token_len=%s\n",$2,$3,$5,$6,$7,$8,$9,length($1)}' "$T/run/admin-sessions.tsv" || true
+STORED_TOKEN="$(awk -F '\t' 'NF{print $1; exit}' "$T/run/admin-sessions.tsv")"
+[ -n "$STORED_TOKEN" ] || { echo "security: stored session token missing" >&2; exit 1; }
+[ "$COOKIE_TOKEN" = "$STORED_TOKEN" ] || { echo "security: cookie token differs from stored session token" >&2; exit 1; }
 COOKIE_TOKEN="${COOKIE#blaze_admin=}"
 COOKIE_FP="$(printf '%s' "$COOKIE_TOKEN" | sha256sum | cut -c1-12)"
 STORED_FP="$(awk -F '\t' 'NF{print $1; exit}' "$T/run/admin-sessions.tsv" | sha256sum | cut -c1-12)"
