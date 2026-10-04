@@ -16,26 +16,21 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p BlazeRental.apk --clobber
-      - run: |
-          sudo chmod 666 /dev/kvm 2>/dev/null || true
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-30;default;x86_64"
-          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-          echo no | "$AVDMANAGER" create avd -f -n blazeaudit -k "system-images;android-30;default;x86_64"
-          nohup "$ANDROID_HOME/emulator/emulator" -avd blazeaudit -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > emulator.log 2>&1 &
-          adb wait-for-device
-          for i in $(seq 1 150); do
-            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
-            sleep 2
-          done
-          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
-          bash experiment/openwrt/BlazePwifi/simulation/android_emulator_audit.sh
-          adb emu kill || true
-          sleep 3
-          gzip -c "$HOME/.android/avd/blazeaudit.avd/userdata-qemu.img" > simulation-results/android/BlazeRental-Android-DeviceOwner-VM-backup.img.gz
-          cp emulator.log simulation-results/android/
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - name: Run signed APK as Android Device Owner
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: bash experiment/openwrt/BlazePwifi/simulation/android_emulator_audit.sh
       - uses: actions/upload-artifact@v4
         with:
           name: blazepwifi-sim-android
