@@ -17,6 +17,9 @@ for asset in "${ASSETS[@]}"; do
   gh release download v0.3.0 -R BlazingSystems/BlazingSystems-Experiments -p "$asset" -D downloads --clobber
   img="downloads/${asset%.gz}"
   gzip -dkf "downloads/$asset"
+  size=$(stat -c%s "$img")
+  rem=$((size % 512))
+  [ "$rem" -eq 0 ] || truncate -s $((size + 512 - rem)) "$img"
   loop=$(sudo losetup --find --show --partscan "$img")
   mnt=$(mktemp -d)
   rootdev=$(lsblk -lnpo NAME,FSTYPE "$loop" | awk '$2=="ext4"{print $1}' | tail -n1)
