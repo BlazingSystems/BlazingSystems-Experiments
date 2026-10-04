@@ -50,6 +50,7 @@ export BP_STATE="$T/state" BP_RUN="$T/run"
 export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 export BP_CONFIG_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/config.sh"
+export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
 export REQUEST_METHOD=POST REMOTE_ADDR=10.0.0.2 TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff SERVER_PORT=4455
 
 API="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/api"
