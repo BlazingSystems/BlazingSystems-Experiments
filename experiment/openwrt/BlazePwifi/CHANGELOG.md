@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.2.0-rc.1 — 2026-10-04
+## 0.2.0-rc.2 — 2026-10-04
+
+- Final RC2 hardening: atomic persistent-state replacement, stale-lock recovery, durable coin-target/ESP pending-event recovery, local firewall-zone rules, repeated x3 regression/stress gates, and fail-closed clock synchronization checks.
 
 - Reconciled public WiFi5 behavior and public KLCiS/WiFi5 integration material without redistributing closed WiFi5 binaries.
 - Replaced MAC-only balances with browser device-token accounts that survive private/random MAC rotation.
