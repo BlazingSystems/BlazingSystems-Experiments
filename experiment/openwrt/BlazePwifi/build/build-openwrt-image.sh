@@ -39,7 +39,7 @@ D="$(find . -maxdepth 1 -type d -name 'openwrt-imagebuilder-*' | head -n1)"
 mv "$D" imagebuilder
 cd imagebuilder
 
-make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls" FILES="$ROOT/openwrt/rootfs"
+make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls flock" FILES="$ROOT/openwrt/rootfs"
 
 OUT="$ROOT/dist/$TARGET"
 rm -rf "$OUT"
