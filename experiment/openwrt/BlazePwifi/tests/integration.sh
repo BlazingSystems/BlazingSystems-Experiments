@@ -61,15 +61,18 @@ DEVICE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 echo "integration: portal/accounting start"
 OUT="$(printf 'action=rates' | sh "$API")"
+echo "integration: rates => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"rates"'
 ! echo "$OUT" | grep -q 'missing or invalid device token'
 
 REGNONCE=0102030405060708
 REGSIG="$(printf 'vendokey|register|vendo-01|%s|0||vendokey' "$REGNONCE" | sha256sum | awk '{print $1}')"
 OUT="$(printf 'action=register&id=vendo-01&nonce=%s&pulses=0&target=&sig=%s' "$REGNONCE" "$REGSIG" | sh "$VENDO")"
+echo "integration: register vendo-01 => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"ok":true'
 
 OUT="$(printf 'action=vendos' | sh "$API")"
+echo "integration: vendos => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"vendo-01"'
 
 # Register a second physical Vendo so simultaneous target isolation is exercised.
@@ -84,6 +87,7 @@ echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
 [ ! -s "$T/state/accounts.tsv" ]
 
 OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "integration: coin_start => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
