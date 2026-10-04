@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -eux
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/state" "$T/run"
