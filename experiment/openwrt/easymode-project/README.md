@@ -35,3 +35,5 @@ EasyMode is an application/management layer. Normal installation does **not** mo
 ## R281 hardware revision
 
 [4.2.1 R281 experiment](releases/v4.2.1-r281-experiment/) preserves the newer live R281 UI and adds a tested dedicated repeater option, scan/diagnostic fixes and recovery-probe routing. It is a separate hardware-tested source snapshot; 5.0 alpha and the preserved 4.1.4 baseline remain unchanged. See its audit for unverified features and firmware/reset-persistence limits.
+
+- [4.2.2 installed R281 experiment](releases/v4.2.2-r281-experiment/): current deployed source, independent repeater AP settings and tested shared-login captive compatibility. Firmware/reset validation remains separate.
