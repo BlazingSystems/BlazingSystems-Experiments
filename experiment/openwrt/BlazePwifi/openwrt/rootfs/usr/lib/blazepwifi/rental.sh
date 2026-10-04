@@ -64,12 +64,30 @@ bp_rental_list_json() {
     salt="$(printf '%s' "$p" | cut -f3)"
     hash="$(printf '%s' "$p" | cut -f4)"
     preferred="$(printf '%s' "$p" | cut -f6)"
+    mode=rental; hidden=""; rev=0; timer_toggle=1; notifications=1; quick=""
+    if command -v bp_rental_policy_v2_get >/dev/null 2>&1; then
+      v2="$(bp_rental_policy_v2_get "$id" 2>/dev/null || true)"
+      if [ -n "$v2" ]; then
+        rev="$(printf '%s' "$v2" | cut -f2)"
+        mode="$(printf '%s' "$v2" | cut -f5)"
+        allowed="$(printf '%s' "$v2" | cut -f6)"
+        hidden="$(printf '%s' "$v2" | cut -f7)"
+        preferred="$(printf '%s' "$v2" | cut -f8)"
+        timer_toggle="$(printf '%s' "$v2" | cut -f10)"
+        quick="$(printf '%s' "$v2" | cut -f11)"
+        notifications="$(printf '%s' "$v2" | cut -f12)"
+        salt="$(printf '%s' "$v2" | cut -f15)"
+        hash="$(printf '%s' "$v2" | cut -f16)"
+      fi
+    fi
+    [ "$hidden" = "-" ] && hidden=""
     [ "$preferred" = "-" ] && preferred=""
+    [ "$quick" = "-" ] && quick=""
     inventory="$(bp_rental_inventory_get "$id")"
-    [ "$salt" != "-" ] && [ "$hash" != "-" ] && admin_set=true || admin_set=false
+    [ "$salt" != "-" ] && [ -n "$salt" ] && [ "$hash" != "-" ] && [ -n "$hash" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s,"allowed_packages":"%s","preferred_vendo":"%s","admin_password_set":%s,"inventory":"%s"}' \
-      "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$preferred")" "$admin_set" "$(bp_json_escape "$inventory")"
+    printf '{"device_id":"%s","label":"%s","lease_until":%s,"last_seen":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","preferred_vendo":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_password_set":%s,"inventory":"%s"}' \
+      "$(bp_json_escape "$id")" "$(bp_json_escape "$label")" "${lease:-0}" "${last:-0}" "${rev:-0}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")" "$(bp_json_escape "$preferred")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}" "$admin_set" "$(bp_json_escape "$inventory")"
   done < "$BP_RENTAL_DEVICES"
   printf ']'
 }
@@ -196,7 +214,9 @@ bp_rental_lease_expire() {
 
 bp_rental_device_revoke() {
   did="$1"; [ -n "$(bp_rental_device_line "$did")" ] || return 1
-  for file in "$BP_RENTAL_DEVICES" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY"; do
+  for file in "$BP_RENTAL_DEVICES" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "${BP_RENTAL_POLICY_V2:-}"; do
+    [ -n "$file" ] || continue
+    [ -f "$file" ] || continue
     tmp="$BP_STATE/.rental-revoke.$(bp_tmp_suffix)"
     awk -F '\t' -v d="$did" '$1!=d {print}' "$file" > "$tmp" || return 1
     chmod 600 "$tmp" && mv "$tmp" "$file" || return 1
