@@ -3,15 +3,21 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/state" "$T/run"
+
 cat > "$T/bin/uci" <<'UCI'
 #!/bin/sh
-# Minimal fixture for BlazePwifi tests.
 case "$*" in
   *'get blazepwifi.main.lan_if') echo br-lan;;
   *'get blazepwifi.main.coin_window') echo 120;;
   *'get blazepwifi.main.pulse_value_centavos') echo 100;;
   *'get blazepwifi.main.admin_key') echo adminkey;;
   *'get blazepwifi.main.vendo_key') echo vendokey;;
+  *'get blazepwifi.main.pause_max_seconds') echo 0;;
+  *'get blazepwifi.main.event_history') echo 16;;
+  *'get blazepwifi.main.admin_port') echo 8443;;
+  *'get blazepwifi.main.walled_refresh_seconds') echo 120;;
+  *'get blazepwifi.main.walled_ip') exit 1;;
+  *'get blazepwifi.main.walled_domain') exit 1;;
   *'get blazepwifi.p1.cents') echo 100;;
   *'get blazepwifi.p1.seconds') echo 600;;
   *'get blazepwifi.p1.label') echo 'P1 / 10 minutes';;
@@ -19,24 +25,121 @@ case "$*" in
   *) exit 1;;
 esac
 UCI
+
 cat > "$T/bin/ip" <<'IP'
 #!/bin/sh
-echo '10.0.0.2 dev br-lan lladdr aa:bb:cc:dd:ee:ff REACHABLE'
+echo "$TEST_IP dev br-lan lladdr $TEST_MAC REACHABLE"
 IP
+
 cat > "$T/bin/nft" <<'NFT'
 #!/bin/sh
 exit 0
 NFT
+
 chmod +x "$T/bin/"*
-export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run" BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh" REMOTE_ADDR=10.0.0.2 REQUEST_METHOD=POST
+export PATH="$T/bin:$PATH"
+export BP_STATE="$T/state" BP_RUN="$T/run"
+export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
+export REQUEST_METHOD=POST REMOTE_ADDR=10.0.0.2 TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff SERVER_PORT=4455
+
 API="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/api"
 VENDO="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
-OUT="$(printf 'action=coin_start' | sh "$API")"; echo "$OUT" | grep -q '"ok":true'
-NONCE="$(printf '%s' "$OUT" | sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p')"; [ -n "$NONCE" ]
-REQNONCE=1122334455667788
-SIG="$(printf 'vendokey|coin|vendo-01|%s|1|vendokey' "$REQNONCE" | sha256sum | awk '{print $1}')"
-OUT="$(printf 'action=coin&id=vendo-01&nonce=%s&pulses=1&sig=%s' "$REQNONCE" "$SIG" | sh "$VENDO")"; echo "$OUT" | grep -q '"credited_cents":100'
-OUT="$(printf 'action=coin&id=vendo-01&nonce=%s&pulses=1&sig=%s' "$REQNONCE" "$SIG" | sh "$VENDO")"; echo "$OUT" | grep -q 'replayed coin event'
-OUT="$(printf 'action=connect&cents=100' | sh "$API")"; echo "$OUT" | grep -q '"ok":true'
-OUT="$(printf 'action=me' | sh "$API")"; echo "$OUT" | grep -q '"remaining_seconds":'
-echo 'BlazePwifi integration checks passed'
+ADMIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
+DEVICE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+OUT="$(printf 'action=rates' | sh "$API")"
+echo "$OUT" | grep -q '"rates"'
+! echo "$OUT" | grep -q 'missing or invalid device token'
+
+REGNONCE=0102030405060708
+REGSIG="$(printf 'vendokey|register|vendo-01|%s|0||vendokey' "$REGNONCE" | sha256sum | awk '{print $1}')"
+OUT="$(printf 'action=register&id=vendo-01&nonce=%s&pulses=0&target=&sig=%s' "$REGNONCE" "$REGSIG" | sh "$VENDO")"
+echo "$OUT" | grep -q '"ok":true'
+
+OUT="$(printf 'action=vendos' | sh "$API")"
+echo "$OUT" | grep -q '"vendo-01"'
+
+# Register a second physical Vendo so simultaneous target isolation is exercised.
+REG2NONCE=0203040506070809
+REG2SIG="$(printf 'vendokey|register|vendo-02|%s|0||vendokey' "$REG2NONCE" | sha256sum | awk '{print $1}')"
+OUT="$(printf 'action=register&id=vendo-02&nonce=%s&pulses=0&target=&sig=%s' "$REG2NONCE" "$REG2SIG" | sh "$VENDO")"
+echo "$OUT" | grep -q '"ok":true'
+
+OUT="$(printf 'action=me&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"credit_cents":0'
+echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
+
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
+[ -n "$TARGET" ]
+
+# Another customer cannot steal vendo-01, but can use vendo-02 concurrently.
+DEVICE2=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+export TEST_IP=10.0.0.4 TEST_MAC=02:aa:bb:cc:dd:ee REMOTE_ADDR=10.0.0.4
+OUT="$(printf 'action=me&device=%s' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q 'selected vendo is busy'
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-02' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+echo "$OUT" | grep -q '"vendo":"vendo-02"'
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+export TEST_IP=10.0.0.2 TEST_MAC=aa:bb:cc:dd:ee:ff REMOTE_ADDR=10.0.0.2
+
+EVENT=1122334455667788
+SIG="$(printf 'vendokey|coin|vendo-01|%s|1|%s|vendokey' "$EVENT" "$TARGET" | sha256sum | awk '{print $1}')"
+BODY="action=coin&id=vendo-01&nonce=$EVENT&pulses=1&target=$TARGET&sig=$SIG"
+OUT="$(printf '%s' "$BODY" | sh "$VENDO")"
+echo "$OUT" | grep -q '"credited_cents":100'
+echo "$OUT" | grep -q '"duplicate":false'
+
+OUT="$(printf '%s' "$BODY" | sh "$VENDO")"
+echo "$OUT" | grep -q '"duplicate":true'
+echo "$OUT" | grep -q '"credited_cents":0'
+
+OUT="$(printf 'action=me&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"credit_cents":100'
+
+BADTARGET=0011223344556677
+BADSIG="$(printf 'vendokey|coin|vendo-01|9988776655443322|1|%s|vendokey' "$BADTARGET" | sha256sum | awk '{print $1}')"
+OUT="$(printf 'action=coin&id=vendo-01&nonce=9988776655443322&pulses=1&target=%s&sig=%s' "$BADTARGET" "$BADSIG" | sh "$VENDO")"
+echo "$OUT" | grep -q 'coin target mismatch'
+
+OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+echo "$OUT" | grep -q '"credit_cents":0'
+
+OUT="$(printf 'action=pause&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"paused":1'
+PAUSED="$(printf '%s' "$OUT" | sed -n 's/.*"remaining_seconds":\([0-9]*\).*/\1/p')"
+[ "$PAUSED" -gt 0 ]
+
+OUT="$(printf 'action=resume&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"paused":0'
+
+export TEST_IP=10.0.0.3 TEST_MAC=02:11:22:33:44:55 REMOTE_ADDR=10.0.0.3
+OUT="$(printf 'action=me&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"mac":"02:11:22:33:44:55"'
+REMAIN="$(printf '%s' "$OUT" | sed -n 's/.*"remaining_seconds":\([0-9]*\).*/\1/p')"
+[ "$REMAIN" -gt 0 ]
+[ "$(awk -F '\t' -v d="$DEVICE" '$1==d {c++} END{print c+0}' "$T/state/accounts.tsv")" -eq 1 ]
+
+printf 'TESTCODE\t250\n' > "$T/state/vouchers.tsv"
+OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"credit_cents":250'
+
+export TEST_IP=10.0.0.4 TEST_MAC=02:aa:bb:cc:dd:ee REMOTE_ADDR=10.0.0.4
+OUT="$(printf 'action=redeem&device=%s&code=TESTCODE' "$DEVICE2" | sh "$API")"
+echo "$OUT" | grep -q 'voucher invalid or used'
+
+export HTTP_X_BLAZE_ADMIN=adminkey SERVER_PORT=8080
+OUT="$(printf 'action=status' | sh "$ADMIN")"
+echo "$OUT" | grep -q 'requires HTTPS'
+
+export SERVER_PORT=8443
+OUT="$(printf 'action=status' | sh "$ADMIN")"
+echo "$OUT" | grep -q '"ok":true'
+
+echo 'BlazePwifi v0.2 integration checks passed'

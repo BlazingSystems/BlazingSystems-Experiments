@@ -2,32 +2,35 @@
 
 BP_STATE=${BP_STATE:-/etc/blazepwifi/state}
 BP_RUN=${BP_RUN:-/tmp/blazepwifi}
-BP_CREDITS="$BP_STATE/credits.tsv"
-BP_SESSIONS="$BP_STATE/sessions.tsv"
-BP_VENDOS="$BP_STATE/vendos.tsv"
-BP_TARGET="$BP_RUN/coin-target.tsv"
+BP_ACCOUNTS="$BP_STATE/accounts.tsv"
 BP_VOUCHERS="$BP_STATE/vouchers.tsv"
-BP_POST_BODY_SET=0
+BP_VENDOS="$BP_RUN/vendos.tsv"
+BP_TARGET_DIR="$BP_RUN/targets"
+BP_LEGACY_CREDITS="$BP_STATE/credits.tsv"
+BP_LEGACY_SESSIONS="$BP_STATE/sessions.tsv"
 BP_POST_BODY=""
-if [ "${REQUEST_METHOD:-GET}" = POST ]; then IFS= read -r BP_POST_BODY; BP_POST_BODY_SET=1; fi
+if [ "${REQUEST_METHOD:-GET}" = POST ]; then IFS= read -r BP_POST_BODY; fi
 
 bp_cfg() { uci -q get "blazepwifi.main.$1"; }
 bp_now() { date +%s; }
+bp_sha256() { sha256sum | awk '{print $1}'; }
 bp_json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 bp_json() { printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }
 bp_fail() { bp_json "{\"ok\":false,\"error\":\"$(bp_json_escape "$1")\"}"; exit 0; }
 
 bp_init_dirs() {
-	mkdir -p "$BP_STATE" "$BP_RUN"
-	chmod 700 "$BP_STATE" "$BP_RUN"
-	touch "$BP_CREDITS" "$BP_SESSIONS" "$BP_VENDOS" "$BP_VOUCHERS"
-	chmod 600 "$BP_CREDITS" "$BP_SESSIONS" "$BP_VENDOS" "$BP_VOUCHERS"
+	mkdir -p "$BP_STATE" "$BP_RUN" "$BP_TARGET_DIR"
+	chmod 700 "$BP_STATE" "$BP_RUN" "$BP_TARGET_DIR"
+	touch "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
+	chmod 600 "$BP_ACCOUNTS" "$BP_VOUCHERS" "$BP_VENDOS"
 }
 
 bp_lock() {
 	i=0
 	while ! mkdir "$BP_RUN/lock" 2>/dev/null; do
-		i=$((i+1)); [ "$i" -gt 40 ] && return 1; usleep 50000 2>/dev/null || sleep 1
+		i=$((i+1))
+		[ "$i" -gt 80 ] && return 1
+		usleep 50000 2>/dev/null || sleep 1
 	done
 }
 bp_unlock() { rmdir "$BP_RUN/lock" 2>/dev/null || true; }
@@ -37,8 +40,14 @@ bp_mac_norm() {
 	printf '%s' "$1" | tr 'A-F' 'a-f'
 }
 
+bp_device_norm() {
+	printf '%s' "$1" | tr 'A-F' 'a-f' | grep -Eq '^[0-9a-f]{32,64}$' || return 1
+	printf '%s' "$1" | tr 'A-F' 'a-f'
+}
+
 bp_mac_for_ip() {
-	ipaddr="$1"; lan_if="$(bp_cfg lan_if)"; [ -n "$lan_if" ] || lan_if=br-lan
+	ipaddr="$1"
+	lan_if="$(bp_cfg lan_if)"; [ -n "$lan_if" ] || lan_if=br-lan
 	ip neigh show "$ipaddr" dev "$lan_if" 2>/dev/null | awk '/lladdr/ {print $5; exit}' | tr 'A-F' 'a-f'
 }
 
@@ -48,40 +57,141 @@ bp_param() {
 	printf '%s' "$data" | tr '&' '\n' | awk -F= -v k="$key" '$1==k {sub(/^[^=]*=/,""); gsub(/\+/," "); print; exit}'
 }
 
-bp_get_credit() {
-	mac="$1"; awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_CREDITS"
+bp_account_line() {
+	awk -F '\t' -v d="$1" '$1==d {print; exit}' "$BP_ACCOUNTS"
 }
 
-bp_set_credit() {
-	mac="$1"; value="$2"; tmp="$BP_RUN/credits.$$"
-	awk -F '\t' -v OFS='\t' -v m="$mac" -v v="$value" 'BEGIN{f=0} $1==m {$2=v;f=1} {print} END{if(!f) print m,v}' "$BP_CREDITS" > "$tmp" && mv "$tmp" "$BP_CREDITS"
+bp_account_field() {
+	d="$1"; n="$2"
+	awk -F '\t' -v d="$d" -v n="$n" '$1==d {print $n; exit}' "$BP_ACCOUNTS"
 }
 
-bp_add_credit() {
-	mac="$1"; add="$2"; bp_lock || return 1
-	old="$(bp_get_credit "$mac")"; new=$((old+add)); bp_set_credit "$mac" "$new"; bp_unlock
-	printf '%s' "$new"
+bp_account_write() {
+	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
+	tmp="$BP_RUN/accounts.$$"
+	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
+		BEGIN{f=0}
+		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
+		{print}
+		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
+	' "$BP_ACCOUNTS" > "$tmp" && mv "$tmp" "$BP_ACCOUNTS"
+	chmod 600 "$BP_ACCOUNTS"
 }
 
-bp_get_session_expiry() {
-	mac="$1"; awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_SESSIONS"
+bp_remove_legacy_mac() {
+	mac="$1"
+	if [ -f "$BP_LEGACY_CREDITS" ]; then
+		tmp="$BP_RUN/legacy-credits.$$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
+	fi
+	if [ -f "$BP_LEGACY_SESSIONS" ]; then
+		tmp="$BP_RUN/legacy-sessions.$$"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
+	fi
 }
 
-bp_set_session() {
-	mac="$1"; expiry="$2"; ipaddr="$3"; tmp="$BP_RUN/sessions.$$"
-	awk -F '\t' -v OFS='\t' -v m="$mac" -v e="$expiry" -v ip="$ipaddr" 'BEGIN{f=0} $1==m {$2=e;$3=ip;f=1} {print} END{if(!f) print m,e,ip}' "$BP_SESSIONS" > "$tmp" && mv "$tmp" "$BP_SESSIONS"
+bp_authorize_mac() { [ -n "$1" ] && nft add element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
+bp_deauthorize_mac() { [ -n "$1" ] && nft delete element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
+
+bp_pause_limit_expired() {
+	d="$1"; paused="$(bp_account_field "$d" 5)"; ps="$(bp_account_field "$d" 6)"
+	[ "$paused" = 1 ] || return 1
+	limit="$(bp_cfg pause_max_seconds)"; [ -n "$limit" ] || limit=0
+	[ "$limit" -gt 0 ] 2>/dev/null || return 1
+	now="$(bp_now)"
+	[ $((now-ps)) -gt "$limit" ]
 }
 
-bp_authorize_mac() { nft add element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
-bp_deauthorize_mac() { nft delete element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
+bp_bind_device() {
+	d="$1"; mac="$2"; ipaddr="$3"
+	line="$(bp_account_line "$d")"
+	if [ -z "$line" ]; then
+		credit=0; expiry=0
+		if [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END{print v+0}' "$BP_LEGACY_CREDITS")"; fi
+		if [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END{print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""
+		[ -n "$mac" ] && bp_remove_legacy_mac "$mac"
+		[ "$expiry" -gt "$(bp_now)" ] 2>/dev/null && bp_authorize_mac "$mac"
+		return 0
+	fi
+
+	oldmac="$(printf '%s' "$line" | cut -f7)"
+	if bp_pause_limit_expired "$d"; then
+		credit="$(printf '%s' "$line" | cut -f2)"
+		events="$(printf '%s' "$line" | cut -f9)"
+		bp_account_write "$d" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
+		bp_deauthorize_mac "$oldmac"
+		return 0
+	fi
+
+	if [ -n "$mac" ] && [ "$oldmac" != "$mac" ]; then
+		credit="$(printf '%s' "$line" | cut -f2)"
+		expiry="$(printf '%s' "$line" | cut -f3)"
+		remaining="$(printf '%s' "$line" | cut -f4)"
+		paused="$(printf '%s' "$line" | cut -f5)"
+		ps="$(printf '%s' "$line" | cut -f6)"
+		events="$(printf '%s' "$line" | cut -f9)"
+		bp_account_write "$d" "$credit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$events"
+		bp_deauthorize_mac "$oldmac"
+		if [ "$paused" != 1 ] && [ "$expiry" -gt "$(bp_now)" ] 2>/dev/null; then bp_authorize_mac "$mac"; fi
+	fi
+}
+
+bp_get_credit() { v="$(bp_account_field "$1" 2)"; printf '%s' "${v:-0}"; }
+
+bp_remaining() {
+	d="$1"; paused="$(bp_account_field "$d" 5)"
+	if [ "$paused" = 1 ]; then
+		r="$(bp_account_field "$d" 4)"; printf '%s' "${r:-0}"; return
+	fi
+	e="$(bp_account_field "$d" 3)"; now="$(bp_now)"
+	if [ -n "$e" ] && [ "$e" -gt "$now" ] 2>/dev/null; then printf '%s' $((e-now)); else printf '0'; fi
+}
+
+bp_event_hash() { printf '%s' "$1" | bp_sha256; }
+
+bp_events_has() {
+	events="$1"; event="$2"
+	[ -n "$events" ] || return 1
+	printf ',%s,' "$events" | grep -Fq ",$event,"
+}
+
+bp_events_push() {
+	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=64
+	out="$event"; coin_count=0
+	case "$event" in c:*) coin_count=1;; esac
+	oldIFS="$IFS"; IFS=','
+	for e in $events; do
+		[ -n "$e" ] || continue
+		[ "$e" = "$event" ] && continue
+		case "$e" in
+			v:*) out="$out,$e" ;;
+			c:*)
+				[ "$coin_count" -ge "$max" ] && continue
+				out="$out,$e"; coin_count=$((coin_count+1))
+				;;
+			*) out="$out,$e" ;;
+		esac
+	done
+	IFS="$oldIFS"
+	printf '%s' "$out"
+}
+
+bp_find_event_device() {
+	event="$1"
+	awk -F '\t' -v e="$event" '{
+		n=split($9,a,",");
+		for(i=1;i<=n;i++) if(a[i]==e){print $1; exit}
+	}' "$BP_ACCOUNTS"
+}
 
 bp_rate_seconds() {
 	want="$1"
 	for s in $(uci -q show blazepwifi | sed -n "s/^blazepwifi\.\([^.=]*\)=rate$/\1/p"); do
-		c="$(uci -q get blazepwifi.$s.cents)"; [ "$c" = "$want" ] && { uci -q get blazepwifi.$s.seconds; return; }
+		c="$(uci -q get blazepwifi.$s.cents)"
+		[ "$c" = "$want" ] && { uci -q get blazepwifi.$s.seconds; return; }
 	done
 	return 1
 }
+
 bp_rates_json() {
 	first=1; printf '['
 	for s in $(uci -q show blazepwifi | sed -n "s/^blazepwifi\.\([^.=]*\)=rate$/\1/p"); do
@@ -92,15 +202,38 @@ bp_rates_json() {
 	printf ']'
 }
 
-bp_check_admin() { [ "${HTTP_X_BLAZE_ADMIN:-$(bp_param key)}" = "$(bp_cfg admin_key)" ]; }
-bp_sha256() { sha256sum | awk '{print $1}'; }
-bp_vendo_sig_expected() {
-	action="$1"; id="$2"; nonce="$3"; pulses="$4"; secret="$(bp_cfg vendo_key)"
-	printf '%s|%s|%s|%s|%s|%s' "$secret" "$action" "$id" "$nonce" "$pulses" "$secret" | bp_sha256
+bp_online_vendos_json() {
+	now="$(bp_now)"; first=1; printf '['
+	while IFS="$(printf '\t')" read -r id seen ipaddr; do
+		[ -n "$id" ] || continue
+		[ $((now-seen)) -le 30 ] 2>/dev/null || continue
+		[ "$first" = 1 ] || printf ','; first=0
+		printf '{"id":"%s","ip":"%s","last_seen":%s}' "$(bp_json_escape "$id")" "$(bp_json_escape "$ipaddr")" "$seen"
+	done < "$BP_VENDOS"
+	printf ']'
 }
+
+bp_choose_vendo() {
+	now="$(bp_now)"; chosen=""; count=0
+	while IFS="$(printf '\t')" read -r id seen ipaddr; do
+		[ -n "$id" ] || continue
+		[ $((now-seen)) -le 30 ] 2>/dev/null || continue
+		chosen="$id"; count=$((count+1))
+	done < "$BP_VENDOS"
+	[ "$count" -eq 1 ] || return 1
+	printf '%s' "$chosen"
+}
+
+bp_check_admin() { [ "${HTTP_X_BLAZE_ADMIN:-$(bp_param key)}" = "$(bp_cfg admin_key)" ]; }
+
+bp_vendo_sig_expected() {
+	action="$1"; id="$2"; nonce="$3"; pulses="$4"; target="$5"; secret="$(bp_cfg vendo_key)"
+	printf '%s|%s|%s|%s|%s|%s|%s' "$secret" "$action" "$id" "$nonce" "$pulses" "$target" "$secret" | bp_sha256
+}
+
 bp_check_vendo_sig() {
-	action="$1"; id="$2"; nonce="$3"; pulses="$4"; got="$5"
+	action="$1"; id="$2"; nonce="$3"; pulses="$4"; target="$5"; got="$6"
 	[ -n "$nonce" ] && [ -n "$got" ] || return 1
-	exp="$(bp_vendo_sig_expected "$action" "$id" "$nonce" "$pulses")"
+	exp="$(bp_vendo_sig_expected "$action" "$id" "$nonce" "$pulses" "$target")"
 	[ "$got" = "$exp" ]
 }

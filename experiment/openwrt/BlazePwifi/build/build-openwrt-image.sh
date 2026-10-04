@@ -21,8 +21,11 @@ EXPECTED="$(awk -v f="$IB" '$2=="*"f || $2==f {print $1;exit}' sha256sums)"
 [ -n "$EXPECTED" ] || { echo "checksum entry not found" >&2; exit 1; }
 echo "$EXPECTED  $IB" | sha256sum -c -
 rm -rf imagebuilder
-tar --zstd -xf "$IB"; D="$(find . -maxdepth 1 -type d -name 'openwrt-imagebuilder-*' | head -n1)"; mv "$D" imagebuilder
+tar --zstd -xf "$IB"
+D="$(find . -maxdepth 1 -type d -name 'openwrt-imagebuilder-*' | head -n1)"
+mv "$D" imagebuilder
 cd imagebuilder
-make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables" FILES="$ROOT/openwrt/rootfs"
+make image PROFILE="$PROFILE" PACKAGES="uhttpd nftables px5g-mbedtls" FILES="$ROOT/openwrt/rootfs"
 mkdir -p "$ROOT/dist/$TARGET"
 find bin/targets -type f \( -name '*sysupgrade*' -o -name '*combined*.img.gz' -o -name '*combined-efi*.img.gz' \) -exec cp -v {} "$ROOT/dist/$TARGET/" \;
+(cd "$ROOT/dist/$TARGET" && sha256sum * > SHA256SUMS)

@@ -1,36 +1,48 @@
-# Blaze Vendo protocol v1
+# Blaze Vendo protocol v2
 
-Transport: HTTP POST, `application/x-www-form-urlencoded`, default TCP port 4455.
+Transport: HTTP POST, application/x-www-form-urlencoded, default LAN TCP port 4455.
 
-Endpoint: `/cgi-bin/vendo`
+Endpoint: /cgi-bin/vendo
 
-Required fields:
-- `action`: `register`, `ping`, `poll`, or `coin`
-- `id`: configured Vendo identifier
-- `nonce`: 8–32 hex characters, freshly generated per request
-- `pulses`: decimal pulse count; `0` for non-coin requests
-- `sig`: SHA-256 signature
+## Fields
 
-Signature input:
+- action: register, ping, poll, or coin
+- id: configured Vendo identifier
+- nonce: 8–32 hexadecimal request/event identifier
+- pulses: decimal pulse count; 0 for non-coin requests
+- target: active coin-window target nonce for coin events; blank for register/ping/poll
+- sig: keyed SHA-256 digest
 
-```text
-VENDO_KEY|action|id|nonce|pulses|VENDO_KEY
-```
+## Signature input
 
-The key itself is never sent over the network. For `coin`, the server records the last accepted nonce for that Vendo and rejects a replay using the same nonce. The signature also prevents changing the pulse count without knowing the secret.
+    VENDO_KEY|action|id|nonce|pulses|target|VENDO_KEY
 
-`poll` response contains:
+The shared Vendo key is never placed in the request body.
 
-```json
-{"ok":true,"insert":1,"target_nonce":"...","expires":1234567890}
-```
+This is a compact keyed-digest construction for the isolated Vendo LAN. It is not a replacement for TLS on an untrusted network.
 
-`coin` response contains credited centavos and the resulting customer credit.
+## Poll
 
-## Provisioning
+A selected Vendo receives a response containing:
 
-The ESP firmware starts an AP named `BlazePwifi-Vendo-<chipid>`. Open its setup page and configure Wi-Fi SSID/password, BlazePwifi server IP, Vendo key, Vendo ID and GPIO mapping.
+    {"ok":true,"insert":1,"target_nonce":"...","expires":1234567890}
 
-## Security note
+The ESP remembers target_nonce before accepting pulses.
 
-Protocol v1 authenticates requests but does not encrypt payloads. Deploy the Vendo on the same trusted/isolated LAN or management VLAN. A future protocol revision may add TLS without changing the accounting model.
+## Coin event
+
+After a pulse burst, the ESP creates one event nonce and sends it with the target nonce. If the response is lost, the ESP retries the same event nonce, target and pulse count.
+
+The server persists an event marker in the same atomic account update as the credit. A retry returns ok with duplicate=true and credited_cents=0 rather than adding money again.
+
+The target nonce also prevents a delayed/replayed event from being attached to a different customer's later coin window.
+
+## Provisioning and upgrade
+
+The ESP starts a WPA2 setup AP named BlazePwifi-Vendo-<chipid>. A generated per-device setup password is printed on serial during provisioning. Once the Vendo has joined the configured Wi-Fi, its setup AP shuts down automatically after ten minutes.
+
+Firmware v0.2 migrates the prior v0.1 stored SSID, password, server, Vendo key, ID and GPIO mapping instead of resetting them.
+
+## Network security
+
+Keep Vendos on a trusted LAN or dedicated management/VLAN segment. Port 4455 is authenticated but intentionally remains HTTP to keep the ESP8266 client small; it must not be published to WAN.
