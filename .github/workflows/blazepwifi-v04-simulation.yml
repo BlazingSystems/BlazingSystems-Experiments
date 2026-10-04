@@ -1,0 +1,66 @@
+name: BlazePwifi v0.4 environment simulation
+
+on:
+  workflow_run:
+    workflows: ["BlazePwifi build"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful BlazePwifi build run ID to audit"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  android-emulator:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'blazepwifi-v0.4.0-implementation')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+      CANDIDATE_SHA: ${{ github.event_name == 'workflow_dispatch' && 'blazepwifi-v0.4.0-implementation' || github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Download exact v0.4 Android candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate/android
+          gh run download "$RUN_ID"             --repo "${{ github.repository }}"             --name BlazePwifi-android-BlazeRental-v0.4             --dir candidate/android
+          find candidate/android -maxdepth 2 -type f -print
+          APK="$(find candidate/android -type f -name 'BlazeRental-v0.4.0-ci.apk' -print -quit)"
+          test -n "$APK" -a -s "$APK"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          sha256sum "$APK" | tee candidate/android/AUDITED_APK_SHA256
+
+      - name: Run API 27 Device Owner emulator audit
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 27
+          arch: x86
+          target: default
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
+
+      - name: Upload Android audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-v0.4-android-simulation
+          path: |
+            simulation-out/android/
+            candidate/android/AUDITED_APK_SHA256
+          if-no-files-found: warn
