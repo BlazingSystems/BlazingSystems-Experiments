@@ -2,7 +2,7 @@
 
 ## 0.2.0-rc.2 — 2026-10-04
 
-- Final RC2 hardening: atomic persistent-state replacement, stale-lock recovery, durable coin-target/ESP pending-event recovery, local firewall-zone rules, repeated x3 regression/stress gates, and fail-closed clock synchronization checks.
+- Final RC2 hardening: atomic persistent-state replacement, kernel flock serialization, durable coin-target/ESP pending-event recovery, local firewall-zone rules, repeated x3 regression/stress gates, and fail-closed clock synchronization checks.
 
 - Reconciled public WiFi5 behavior and public KLCiS/WiFi5 integration material without redistributing closed WiFi5 binaries.
 - Replaced MAC-only balances with browser device-token accounts that survive private/random MAC rotation.
@@ -16,7 +16,7 @@
 - Bound service listeners to the LAN address rather than WAN-facing wildcard addresses.
 - Secured ESP8266 setup AP with a generated WPA2 password and automatic AP shutdown after provisioning.
 - Added automatic single-Vendo selection and explicit multi-Vendo selection.
-- Added v0.1 MAC-account migration, crash-safe legacy claims, stale-lock recovery, same-filesystem atomic state replacement, persistence/replay/concurrency stress tests, and firmware SHA256SUMS.
+- Added v0.1 MAC-account migration, crash-safe legacy claims, kernel-backed flock serialization, same-filesystem atomic state replacement, persistence/replay/concurrency stress tests, and firmware SHA256SUMS.
 - Added ESP8266 LittleFS journaling for unacknowledged coin events across ESP brownouts.
 - Added LAN-zone service firewall rules and clean uninstall removal.
 - Added executable-mode auditing for direct-flash runtime scripts.
