@@ -63,4 +63,17 @@ printf '%s' "$LIST" | grep -q '"admin_password_set":true'
 printf '%s' "$LIST" | grep -q '"preferred_vendo":"vendo-02"'
 printf '%s' "$LIST" | grep -q '"inventory":"com.android.chrome,com.example.game"'
 
+# An expired rental must still be able to synchronize so it can receive a new
+# lease later. The server reports lease_until_ms == server_time_ms while
+# retaining the expired authoritative lease in state.
+bp_rental_device_write "$DID" "$DSEC" 1 'Phone 01' 1
+N3=expired123
+SIG3="$(bp_rental_hmac "$DSEC" "status|$N3|$DSEC")"
+OUT3="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$N3" "$SIG3" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUT3" | grep -q '"ok":true'
+S3="$(printf '%s' "$OUT3" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+L3="$(printf '%s' "$OUT3" | sed -n 's/.*"lease_until_ms":\([0-9]*\).*/\1/p')"
+[ -n "$S3" ] && [ "$L3" = "$S3" ]
+[ "$(printf '%s' "$(bp_rental_device_line "$DID")" | cut -f3)" -eq 1 ]
+
 echo "BlazeRental production server checks passed"
