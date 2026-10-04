@@ -44,10 +44,16 @@ echo "security: lockout"
 i=1
 while [ "$i" -le 5 ]; do
   OUT="$(printf 'username=admin&password=wrong-%s' "$i" | REQUEST_METHOD=POST sh "$LOGIN")"
+  CLASS="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+  echo "security: attempt $i => ${CLASS:-no-error-class}"
+  [ -f "$T/run/auth-failures.tsv" ] && sed 's/^/security: counter /' "$T/run/auth-failures.tsv" || true
   echo "$OUT" | grep -Eq 'invalid credentials|locked'
   i=$((i+1))
 done
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
+CLASS="$(printf '%s' "$OUT" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+echo "security: correct-during-lock => ${CLASS:-no-error-class}"
+[ -f "$T/run/auth-failures.tsv" ] && sed 's/^/security: final-counter /' "$T/run/auth-failures.tsv" || true
 echo "$OUT" | grep -q 'locked'
 
 echo "security: post-lock login"
