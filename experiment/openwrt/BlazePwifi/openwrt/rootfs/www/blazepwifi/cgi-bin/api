@@ -25,19 +25,37 @@ device="$(bp_device_norm "$(bp_param device)" 2>/dev/null || true)"
 [ -n "$device" ] || bp_fail "missing or invalid device token"
 [ -n "$mac" ] || bp_fail "client MAC not resolved"
 
+create_account=0
+case "$action" in
+  coin_start|redeem) create_account=1 ;;
+esac
+
 bp_lock || bp_fail "accounting busy"
-bp_bind_device "$device" "$mac" "$ipaddr"
+bp_bind_device "$device" "$mac" "$ipaddr" "$create_account"
 bp_unlock
+
+case "$action" in
+  pause|resume|disconnect)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
+    [ -n "$(bp_account_line "$device")" ] || bp_fail "no active account/session"
+    ;;
+esac
 
 case "$action" in
   me)
     credit="$(bp_get_credit "$device")"
-    remaining="$(bp_remaining "$device")"
     paused="$(bp_account_field "$device" 5)"; [ -n "$paused" ] || paused=0
-    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused}"
+    now="$(bp_now)"
+    if bp_time_sane "$now"; then
+      remaining="$(bp_remaining "$device")"; time_sync=true
+    else
+      remaining=0; time_sync=false
+    fi
+    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync}"
     ;;
 
   coin_start)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     vendo="$(bp_param vendo)"
     if [ -z "$vendo" ]; then
       vendo="$(bp_choose_vendo 2>/dev/null || true)"
@@ -56,18 +74,23 @@ case "$action" in
         bp_fail "selected vendo is busy"
       fi
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_file"
-    chmod 600 "$target_file"
+    target_tmp="$BP_TARGET_DIR/.$vendo.$(bp_tmp_suffix)"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$device" "$mac" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
+    chmod 600 "$target_tmp"
+    mv "$target_tmp" "$target_file"
+    bp_durable_sync
     bp_unlock
     bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"expires\":$expires}"
     ;;
 
   coin_stop)
     bp_lock || bp_fail "accounting busy"
+    removed=0
     for target_file in "$BP_TARGET_DIR"/*.tsv; do
       [ -f "$target_file" ] || continue
-      [ "$(cut -f1 "$target_file")" = "$device" ] && rm -f "$target_file"
+      if [ "$(cut -f1 "$target_file")" = "$device" ]; then rm -f "$target_file"; removed=1; fi
     done
+    [ "$removed" = 1 ] && bp_durable_sync
     bp_unlock
     bp_json '{"ok":true}'
     ;;
@@ -106,6 +129,7 @@ case "$action" in
     ;;
 
   pause)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     bp_lock || bp_fail "accounting busy"
     line="$(bp_account_line "$device")"
     credit="$(printf '%s' "$line" | cut -f2)"
@@ -127,6 +151,7 @@ case "$action" in
     ;;
 
   resume)
+    bp_time_sane "$(bp_now)" || bp_fail "router clock not synchronized"
     bp_lock || bp_fail "accounting busy"
     line="$(bp_account_line "$device")"
     credit="$(printf '%s' "$line" | cut -f2)"

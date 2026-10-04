@@ -3,7 +3,7 @@
 BlazePwifi is a clean-room, open-source PisoWiFi/captive-portal platform for OpenWrt. It uses an OpenWrt router or x86 controller plus one or more ESP8266 coin/vendo controllers.
 
 Target base: OpenWrt 25.12.x
-Release candidate: 0.2.0-rc.1
+Release candidate: 0.2.0-rc.2
 Primary build target: OpenWrt 25.12.5
 
 ## Hardware targets
@@ -19,7 +19,7 @@ Primary build target: OpenWrt 25.12.5
 - Pause/resume.
 - One-time vouchers.
 - Multiple Vendos with online discovery.
-- Target-bound signed coin events with idempotent retry protection.
+- Target-bound signed coin events with idempotent retry protection and ESP8266 LittleFS brownout journal.
 - WPA2-protected ESP setup AP.
 - Dynamic walled garden for e-payment/login providers.
 - nftables enforcement that remains subordinate to normal firewall4 policy.
@@ -45,7 +45,7 @@ The exact address follows the OpenWrt LAN configuration. The admin certificate i
 
 Run build/build-openwrt-image.sh ruijie or build/build-openwrt-image.sh x86_64.
 
-Outputs and SHA-256 files are written below dist/<target>/.
+Outputs and SHA-256 files are written below dist/<target>/. The Ruijie target emits the upstream-style `initramfs-kernel.bin` install image plus `squashfs-sysupgrade.bin`; x86_64 emits BIOS and EFI `.img.gz` disk images.
 
 ## Validation status
 
@@ -58,7 +58,7 @@ The project has automated checks for:
 - voucher one-time use;
 - pause/resume;
 - private-MAC rotation;
-- persistence/reboot behavior;
+- router tmpfs loss, persistent coin-window recovery, and accounting reboot behavior;
 - v0.1 state migration;
 - ESP8266 firmware compilation;
 - Ruijie and x86_64 OpenWrt ImageBuilder output.

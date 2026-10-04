@@ -9,6 +9,8 @@ config core 'main'
 	option event_history '64'
 	option pause_max_seconds '0'
 	option walled_refresh_seconds '120'
+	option durable_sync '1'
+	option firewall_zone 'lan'
 	option admin_key 'CHANGE_ME'
 	option vendo_key 'CHANGE_ME'
 	# Optional examples:

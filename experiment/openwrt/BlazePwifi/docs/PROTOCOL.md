@@ -31,11 +31,11 @@ The ESP remembers target_nonce before accepting pulses.
 
 ## Coin event
 
-After a pulse burst, the ESP creates one event nonce and sends it with the target nonce. If the response is lost, the ESP retries the same event nonce, target and pulse count.
+Before reporting a pulse burst, the ESP journals the event nonce, target and pulse count to LittleFS. It then sends that exact event. If the response is lost—or the ESP reboots—the same event is recovered and retried.
 
 The server persists an event marker in the same atomic account update as the credit. A retry returns ok with duplicate=true and credited_cents=0 rather than adding money again.
 
-The target nonce also prevents a delayed/replayed event from being attached to a different customer's later coin window.
+The target nonce also prevents a delayed/replayed event from being attached to a different customer's later coin window. The router stores the active target in persistent state for the short insertion window, so a router reboot does not automatically lose the customer association.
 
 ## Provisioning and upgrade
 
