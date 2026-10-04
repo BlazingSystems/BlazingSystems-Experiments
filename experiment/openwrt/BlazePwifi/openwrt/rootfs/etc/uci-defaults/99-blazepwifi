@@ -1,7 +1,24 @@
 #!/bin/sh
 randkey(){ hexdump -n 18 -e '18/1 "%02x"' /dev/urandom; }
-[ "$(uci -q get blazepwifi.main.admin_key)" != CHANGE_ME ] || uci set blazepwifi.main.admin_key="$(randkey)"
-[ "$(uci -q get blazepwifi.main.vendo_key)" != CHANGE_ME ] || uci set blazepwifi.main.vendo_key="$(randkey)"
+ensure_opt(){ key="$1"; value="$2"; uci -q get "blazepwifi.main.$key" >/dev/null 2>&1 || uci set "blazepwifi.main.$key=$value"; }
+
+ensure_opt enabled 1
+ensure_opt lan_if br-lan
+ensure_opt portal_port 8080
+ensure_opt vendo_port 4455
+ensure_opt admin_port 8443
+ensure_opt coin_window 120
+ensure_opt pulse_value_centavos 100
+ensure_opt event_history 64
+ensure_opt pause_max_seconds 0
+ensure_opt walled_refresh_seconds 120
+ensure_opt durable_sync 1
+ensure_opt firewall_zone lan
+
+ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
+VENDO="$(uci -q get blazepwifi.main.vendo_key || true)"
+[ -n "$ADMIN" ] && [ "$ADMIN" != CHANGE_ME ] || uci set blazepwifi.main.admin_key="$(randkey)"
+[ -n "$VENDO" ] && [ "$VENDO" != CHANGE_ME ] || uci set blazepwifi.main.vendo_key="$(randkey)"
 uci commit blazepwifi
 
 LAN_IP="$(uci -q get network.lan.ipaddr || true)"; [ -n "$LAN_IP" ] || LAN_IP=192.168.1.1
