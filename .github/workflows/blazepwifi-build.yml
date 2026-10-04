@@ -171,7 +171,20 @@ jobs:
           gradle --no-daemon :app:assembleDebug
           mkdir -p ../../dist/android
           cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental.apk
-          sha256sum ../../dist/android/BlazeRental.apk > ../../dist/android/SHA256SUMS
+          cp ../../tools/make-provisioning.py ../../dist/android/
+          python3 -m pip install --quiet "qrcode[pil]"
+          python3 ../../tools/make-provisioning.py \
+            --apk ../../dist/android/BlazeRental.apk \
+            --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.3.0-rc.1/BlazeRental.apk" \
+            --server-url "http://192.168.1.1:8080" \
+            --enrollment-token "000000000000.000000000000000000000000000000000000" \
+            --device-name "SAMPLE - generate a real token in admin" \
+            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.json
+          python3 ../../tools/render-qr.py \
+            --json ../../dist/android/BlazeRental-provisioning-SAMPLE.json \
+            --out ../../dist/android/BlazeRental-provisioning-SAMPLE.png
+          cp ../../tools/render-qr.py ../../dist/android/
+          (cd ../../dist/android && sha256sum BlazeRental.apk BlazeRental-provisioning-SAMPLE.json BlazeRental-provisioning-SAMPLE.png > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
           name: BlazePwifi-android-BlazeRental
