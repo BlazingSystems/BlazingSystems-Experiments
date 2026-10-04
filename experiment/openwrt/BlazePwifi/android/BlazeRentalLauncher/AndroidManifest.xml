@@ -102,6 +102,16 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name="com.blazesystems.blazerental.RentalNotificationService"
+            android:label="BlazeRental notification mirror"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!--
         Main launcher activity. When extending only change the name, and keep all the
         attributes and intent filters the same

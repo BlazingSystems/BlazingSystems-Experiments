@@ -1,0 +1,314 @@
+package com.blazesystems.blazerental;
+
+import android.bluetooth.BluetoothAdapter;
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import com.android.launcher3.CellLayout;
+import com.android.launcher3.Hotseat;
+import com.android.launcher3.Launcher;
+import com.android.launcher3.Workspace;
+import java.util.List;
+
+public final class RentalSystemPages {
+    public static final long PAGE_RENTAL = -401L;
+    public static final long PAGE_QUICK = -402L;
+    public static final long PAGE_NOTIFICATIONS = -403L;
+
+    private RentalSystemPages() {}
+
+    public static void apply(final Launcher launcher) {
+        Workspace workspace = launcher.getWorkspace();
+        if (workspace == null) return;
+        boolean restricted = LauncherAccessController.isRentalRestricted(launcher);
+
+        if (!restricted) {
+            if (workspace.getScreenWithId(PAGE_RENTAL) != null
+                    || workspace.getScreenWithId(PAGE_QUICK) != null
+                    || workspace.getScreenWithId(PAGE_NOTIFICATIONS) != null) {
+                launcher.getModel().forceReload();
+            }
+            Hotseat hotseat = launcher.getHotseat();
+            if (hotseat != null) hotseat.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        workspace.removeAllWorkspaceScreens();
+        CellLayout rental = workspace.getScreenWithId(Workspace.FIRST_SCREEN_ID);
+        if (rental == null) rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
+        rental.removeAllViews();
+        CellLayout quick = workspace.insertNewWorkspaceScreen(PAGE_QUICK);
+        CellLayout notifications = workspace.insertNewWorkspaceScreen(PAGE_NOTIFICATIONS);
+
+        attachFullPage(rental, createRentalPage(launcher), 0x740401);
+        attachFullPage(quick, createQuickPage(launcher), 0x740402);
+        attachFullPage(notifications, createNotificationsPage(launcher), 0x740403);
+        workspace.setCurrentPage(0);
+
+        Hotseat hotseat = launcher.getHotseat();
+        if (hotseat != null) hotseat.setVisibility(View.GONE);
+    }
+
+    private static void attachFullPage(CellLayout page, View view, int id) {
+        CellLayout.LayoutParams lp = new CellLayout.LayoutParams(
+                0, 0, page.getCountX(), page.getCountY());
+        lp.canReorder = false;
+        page.addViewToCellLayout(view, 0, id, lp, true);
+    }
+
+    private static View createRentalPage(final Launcher launcher) {
+        final LinearLayout root = basePage(launcher);
+        final TextView state = headline(launcher, "BLAZERENTAL");
+        final TextView timer = headline(launcher, "00:00:00");
+        timer.setTextSize(42f);
+        final TextView detail = body(launcher, "TIME FINISHED");
+        final Button coin = actionButton(launcher, "INSERT COIN");
+
+        root.addView(state);
+        root.addView(timer);
+        root.addView(detail);
+        root.addView(coin, buttonMargins(launcher));
+
+        coin.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                coin.setEnabled(false);
+                detail.setText("Waiting for coin controller...");
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final String result = LeaseClient.coinStart(launcher, "");
+                        launcher.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                detail.setText(result);
+                                coin.setEnabled(true);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        });
+
+        final Runnable refresh = new Runnable() {
+            @Override public void run() {
+                long remaining = RentalLeaseStore.remainingMs(launcher);
+                boolean paid = remaining > 0L;
+                timer.setText(formatDuration(remaining));
+                detail.setText(paid ? "RENTAL ACTIVE" : "TIME FINISHED");
+                coin.setText(paid ? "ADD MORE TIME" : "INSERT COIN");
+                if (root.getWindowToken() != null) root.postDelayed(this, 1000L);
+            }
+        };
+        root.post(refresh);
+        return root;
+    }
+
+    private static View createQuickPage(final Launcher launcher) {
+        LinearLayout root = basePage(launcher);
+        root.addView(headline(launcher, "QUICK CONTROLS"));
+
+        final AudioManager audio = (AudioManager) launcher.getSystemService(Context.AUDIO_SERVICE);
+        LinearLayout volume = horizontal(launcher);
+        Button down = smallButton(launcher, "VOLUME −");
+        Button up = smallButton(launcher, "VOLUME +");
+        volume.addView(down, weight());
+        volume.addView(up, weight());
+        root.addView(volume, rowMargins(launcher));
+
+        down.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (audio != null) audio.adjustVolume(AudioManager.ADJUST_LOWER,
+                        AudioManager.FLAG_SHOW_UI);
+            }
+        });
+        up.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (audio != null) audio.adjustVolume(AudioManager.ADJUST_RAISE,
+                        AudioManager.FLAG_SHOW_UI);
+            }
+        });
+
+        BluetoothAdapter bluetooth = BluetoothAdapter.getDefaultAdapter();
+        String bt = bluetooth == null ? "Bluetooth: unavailable"
+                : "Bluetooth: " + (bluetooth.isEnabled() ? "on" : "off");
+        root.addView(infoCard(launcher, bt));
+        root.addView(infoCard(launcher, networkStatus(launcher)));
+
+        final Button timerToggle = smallButton(launcher,
+                launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
+                        .getBoolean("floating_timer", true)
+                        ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
+        root.addView(timerToggle, rowMargins(launcher));
+        timerToggle.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean current = launcher.getSharedPreferences(
+                        "blaze_rental_ui", Context.MODE_PRIVATE)
+                        .getBoolean("floating_timer", true);
+                boolean next = !current;
+                launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
+                        .edit().putBoolean("floating_timer", next).apply();
+                timerToggle.setText(next ? "FLOATING TIMER: ON" : "FLOATING TIMER: OFF");
+                Toast.makeText(launcher, next ? "Floating timer enabled" :
+                        "Floating timer disabled", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        root.addView(body(launcher,
+                "Safe controls only. Android Settings and the system notification shade stay locked in Rental Mode."));
+        return root;
+    }
+
+    private static View createNotificationsPage(final Launcher launcher) {
+        final LinearLayout root = basePage(launcher);
+        root.addView(headline(launcher, "NOTIFICATIONS"));
+        final LinearLayout list = new LinearLayout(launcher);
+        list.setOrientation(LinearLayout.VERTICAL);
+        root.addView(list, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final Runnable refresh = new Runnable() {
+            @Override public void run() {
+                list.removeAllViews();
+                List<RentalNotificationService.Entry> entries =
+                        RentalNotificationService.snapshot();
+                if (entries.isEmpty()) {
+                    list.addView(infoCard(launcher,
+                            "No mirrored notifications yet. Notification access is granted during managed setup."));
+                } else {
+                    int start = Math.max(0, entries.size() - 8);
+                    for (int i = entries.size() - 1; i >= start; i--) {
+                        RentalNotificationService.Entry e = entries.get(i);
+                        String title = e.title.length() == 0 ? e.packageName : e.title;
+                        String text = e.text.length() == 0 ? e.packageName : e.text;
+                        list.addView(infoCard(launcher, title + "\n" + text));
+                    }
+                }
+                if (root.getWindowToken() != null) root.postDelayed(this, 2000L);
+            }
+        };
+        root.post(refresh);
+        return root;
+    }
+
+    private static LinearLayout basePage(Context context) {
+        LinearLayout root = new LinearLayout(context);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        int p = dp(context, 24);
+        root.setPadding(p, dp(context, 54), p, p);
+        root.setBackgroundColor(Color.rgb(10, 16, 29));
+        return root;
+    }
+
+    private static LinearLayout horizontal(Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        return row;
+    }
+
+    private static TextView headline(Context c, String text) {
+        TextView v = new TextView(c);
+        v.setText(text);
+        v.setTextColor(Color.WHITE);
+        v.setTextSize(26f);
+        v.setGravity(Gravity.CENTER);
+        v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        v.setPadding(0, dp(c, 8), 0, dp(c, 8));
+        return v;
+    }
+
+    private static TextView body(Context c, String text) {
+        TextView v = new TextView(c);
+        v.setText(text);
+        v.setTextColor(Color.rgb(180, 194, 217));
+        v.setTextSize(15f);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(c, 8), dp(c, 10), dp(c, 8), dp(c, 10));
+        return v;
+    }
+
+    private static TextView infoCard(Context c, String text) {
+        TextView v = body(c, text);
+        v.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(20, 30, 49));
+        bg.setCornerRadius(dp(c, 14));
+        v.setBackground(bg);
+        LinearLayout.LayoutParams lp = rowMargins(c);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private static Button actionButton(Context c, String text) {
+        Button b = new Button(c);
+        b.setText(text);
+        b.setTextSize(18f);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTextColor(Color.WHITE);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(37, 99, 235));
+        bg.setCornerRadius(dp(c, 14));
+        b.setBackground(bg);
+        b.setMinHeight(dp(c, 58));
+        return b;
+    }
+
+    private static Button smallButton(Context c, String text) {
+        Button b = actionButton(c, text);
+        b.setTextSize(13f);
+        b.setMinHeight(dp(c, 48));
+        return b;
+    }
+
+    private static LinearLayout.LayoutParams buttonMargins(Context c) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 62));
+        lp.setMargins(0, dp(c, 24), 0, dp(c, 18));
+        return lp;
+    }
+
+    private static LinearLayout.LayoutParams rowMargins(Context c) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(c, 8), 0, dp(c, 8));
+        return lp;
+    }
+
+    private static LinearLayout.LayoutParams weight() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    }
+
+    private static String networkStatus(Context c) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager)
+                    c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            NetworkInfo active = cm == null ? null : cm.getActiveNetworkInfo();
+            return active != null && active.isConnected()
+                    ? "Network: connected via " + active.getTypeName()
+                    : "Network: offline";
+        } catch (Exception ignored) {
+            return "Network: unavailable";
+        }
+    }
+
+    private static String formatDuration(long ms) {
+        long total = Math.max(0L, ms / 1000L);
+        long hours = total / 3600L;
+        long minutes = (total % 3600L) / 60L;
+        long seconds = total % 60L;
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+    }
+
+    private static int dp(Context c, int value) {
+        return Math.round(value * c.getResources().getDisplayMetrics().density);
+    }
+}

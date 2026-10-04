@@ -82,6 +82,8 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Toast;
 
 import com.android.launcher3.DropTarget.DragObject;
+import com.blazesystems.blazerental.LauncherAccessController;
+import com.blazesystems.blazerental.RentalSystemPages;
 import com.android.launcher3.LauncherSettings.Favorites;
 import com.android.launcher3.Workspace.ItemOperator;
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate;
@@ -2732,6 +2734,7 @@ public class Launcher extends BaseActivity
 
     @Override
     public boolean onLongClick(View v) {
+        if (LauncherAccessController.isRentalRestricted(this)) return true;
         if (!isDraggingEnabled()) return false;
         if (isWorkspaceLocked()) return false;
         if (mState != State.WORKSPACE) return false;
@@ -2943,6 +2946,11 @@ public class Launcher extends BaseActivity
      */
     public void showAppsView(boolean animated, boolean updatePredictedApps,
             boolean focusSearchBar) {
+        if (!LauncherAccessController.canOpenAppDrawer(this)) {
+            showWorkspace(true);
+            Toast.makeText(this, "Insert coin to unlock apps", Toast.LENGTH_SHORT).show();
+            return;
+        }
         markAppsViewShown();
         if (updatePredictedApps) {
             tryAndUpdatePredictedApps();
@@ -3629,6 +3637,7 @@ public class Launcher extends BaseActivity
         mWorkspace.restoreInstanceStateForRemainingPages();
 
         setWorkspaceLoading(false);
+        RentalSystemPages.apply(this);
 
         if (mPendingActivityResult != null) {
             handleActivityResult(mPendingActivityResult.requestCode,
@@ -3696,7 +3705,7 @@ public class Launcher extends BaseActivity
                 return;
             }
 
-            mAppsView.setApps(apps);
+            mAppsView.setApps(LauncherAccessController.filterApps(this, apps));
         }
         if (mLauncherCallbacks != null) {
             mLauncherCallbacks.bindAllApplications(apps);
@@ -3736,7 +3745,7 @@ public class Launcher extends BaseActivity
         }
 
         if (mAppsView != null) {
-            mAppsView.addOrUpdateApps(apps);
+            mAppsView.addOrUpdateApps(LauncherAccessController.filterApps(this, apps));
         }
     }
 

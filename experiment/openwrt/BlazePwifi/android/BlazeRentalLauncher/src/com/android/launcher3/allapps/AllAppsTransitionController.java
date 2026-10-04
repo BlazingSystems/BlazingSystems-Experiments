@@ -20,6 +20,7 @@ import android.view.animation.Interpolator;
 import android.view.inputmethod.InputMethodManager;
 
 import com.android.launcher3.AbstractFloatingView;
+import com.blazesystems.blazerental.LauncherAccessController;
 import com.android.launcher3.Hotseat;
 import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherAnimUtils;
@@ -133,6 +134,10 @@ public class AllAppsTransitionController implements TouchController, SwipeDetect
 
     @Override
     public boolean onControllerInterceptTouchEvent(MotionEvent ev) {
+        if (!mLauncher.isAllAppsVisible()
+                && !LauncherAccessController.canOpenAppDrawer(mLauncher)) {
+            return false;
+        }
         if (ev.getAction() == MotionEvent.ACTION_DOWN) {
             mNoIntercept = false;
             mTouchEventStartedOnHotseat = mLauncher.getDragLayer().isEventOverHotseat(ev);
@@ -206,7 +211,8 @@ public class AllAppsTransitionController implements TouchController, SwipeDetect
         if (hasSpringAnimationHandler()) {
             mSpringAnimationHandler.skipToEnd();
         }
-        mNotificationState = NotificationState.Free;
+        mNotificationState = LauncherAccessController.isRentalRestricted(mLauncher)
+                ? NotificationState.Locked : NotificationState.Free;
     }
 
     @Override
