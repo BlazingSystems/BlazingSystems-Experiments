@@ -29,7 +29,8 @@ bp_init_dirs
 mkdir -p "$BP_RUN/lock"
 printf '99999999\n' > "$BP_RUN/lock/pid"
 bp_lock
-[ "$(cat "$BP_RUN/lock/pid")" = "$(bp_self_pid)" ]
+bp_capture_pid
+[ "$(cat "$BP_RUN/lock/pid")" = "$BP_SELF_PID" ]
 bp_unlock
 [ ! -d "$BP_RUN/lock" ]
 echo 'stress: stale lock recovery ok'
