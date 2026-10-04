@@ -9,7 +9,11 @@ import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.content.Intent;
+import android.os.SystemClock;
+import android.os.Handler;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -72,6 +76,34 @@ public final class RentalSystemPages {
         final TextView state = headline(launcher, "BLAZERENTAL");
         final TextView timer = headline(launcher, "00:00:00");
         timer.setTextSize(42f);
+        final Handler adminHandler = new Handler();
+        final long holdMs = launcher.getSharedPreferences("blaze_rental_ui", Context.MODE_PRIVATE)
+                .getLong("admin_hold_ms", 4000L);
+        final AdminGestureController adminGesture = new AdminGestureController(holdMs);
+        final Runnable openAdmin = new Runnable() {
+            @Override public void run() {
+                if (adminGesture.shouldTrigger(SystemClock.elapsedRealtime())) {
+                    adminGesture.cancel();
+                    launcher.startActivity(new Intent(launcher, BlazeAdminActivity.class));
+                }
+            }
+        };
+        timer.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    adminGesture.onDown(SystemClock.elapsedRealtime());
+                    adminHandler.postDelayed(openAdmin, holdMs);
+                    return true;
+                }
+                if (event.getAction() == MotionEvent.ACTION_UP
+                        || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                    adminHandler.removeCallbacks(openAdmin);
+                    adminGesture.onUp(SystemClock.elapsedRealtime());
+                    return true;
+                }
+                return true;
+            }
+        });
         final TextView detail = body(launcher, "TIME FINISHED");
         final Button coin = actionButton(launcher, "INSERT COIN");
 

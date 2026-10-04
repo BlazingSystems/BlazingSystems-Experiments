@@ -52,6 +52,9 @@
     <!-- Custom -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
@@ -101,6 +104,18 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_SERVICE" />
             </intent-filter>
         </service>
+
+        <activity
+            android:name="com.blazesystems.blazerental.BlazeAdminActivity"
+            android:label="BlazeRental Admin"
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name="com.blazesystems.blazerental.QrEnrollmentScannerActivity"
+            android:label="Scan BlazePwifi QR"
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait" />
 
         <service
             android:name="com.blazesystems.blazerental.RentalNotificationService"
