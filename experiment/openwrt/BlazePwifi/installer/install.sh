@@ -31,7 +31,7 @@ rm -f /etc/uci-defaults/99-blazepwifi
 if [ "$EXISTING_CONFIG" = 1 ]; then
   cp -a "$BACKUP/blazepwifi.config" /etc/config/blazepwifi
 fi
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/common.sh /www/blazepwifi/cgi-bin/*
+chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
 mkdir -p /etc/blazepwifi/state /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /tmp/blazepwifi
 
@@ -46,12 +46,32 @@ ensure_opt pause_max_seconds 0
 ensure_opt walled_refresh_seconds 120
 ensure_opt durable_sync 1
 ensure_opt firewall_zone lan
+ensure_opt auth_max_attempts 5
+ensure_opt auth_global_max_attempts 30
+ensure_opt auth_window_seconds 300
+ensure_opt auth_lock_seconds 900
+ensure_opt auth_idle_seconds 900
+ensure_opt auth_absolute_seconds 28800
+ensure_opt auth_kdf_rounds 2048
+ensure_opt auth_bind_ip 1
 
-randkey(){ hexdump -n 18 -e '18/1 "%02x"' /dev/urandom; }
-ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
+randhex(){
+  bytes="${1:-18}"
+  out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null || true)"
+  [ "${#out}" -ge $((bytes*2)) ] || out="$(od -An -N "$bytes" -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
+  [ "${#out}" -ge $((bytes*2)) ] || out="$(printf '%s|%s' "$(date +%s)" "$" | sha256sum | awk '{print $1}')"
+  printf '%s' "$out" | cut -c1-$((bytes*2))
+}
+OLD_ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
 VENDO="$(uci -q get blazepwifi.main.vendo_key || true)"
-[ "$ADMIN" != CHANGE_ME ] && [ -n "$ADMIN" ] || { ADMIN="$(randkey)"; uci set blazepwifi.main.admin_key="$ADMIN"; }
-[ "$VENDO" != CHANGE_ME ] && [ -n "$VENDO" ] || { VENDO="$(randkey)"; uci set blazepwifi.main.vendo_key="$VENDO"; }
+[ "$VENDO" != CHANGE_ME ] && [ -n "$VENDO" ] || { VENDO="$(randhex 18)"; uci set blazepwifi.main.vendo_key="$VENDO"; }
+
+BOOTSTRAP=""
+if ! grep -q '^admin	' /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
+  if [ -n "$OLD_ADMIN" ] && [ "$OLD_ADMIN" != CHANGE_ME ]; then BOOTSTRAP="$OLD_ADMIN"; else BOOTSTRAP="$(randhex 12)"; fi
+  BP_LIB=/usr/lib/blazepwifi/common.sh /usr/lib/blazepwifi/auth.sh --set-bootstrap admin admin "$BOOTSTRAP"
+fi
+uci -q delete blazepwifi.main.admin_key || true
 uci commit blazepwifi
 
 LAN_IP="$(uci -q get network.lan.ipaddr || true)"
@@ -135,8 +155,14 @@ echo "BlazePwifi installed."
 echo "Portal:   http://$LAN_IP:$PORTAL/"
 echo "Admin:    https://$LAN_IP:$ADMIN_PORT/admin.html"
 echo "ESP API:  http://$LAN_IP:$VENDO_PORT/cgi-bin/vendo"
-echo "Admin key: $ADMIN"
+echo "Admin username: admin"
+if [ -n "$BOOTSTRAP" ]; then
+  echo "Bootstrap admin password: $BOOTSTRAP"
+  echo "IMPORTANT: sign in and replace this bootstrap password immediately."
+else
+  echo "Admin credentials: preserved from existing v0.3 authentication state."
+fi
 echo "Vendo key: $VENDO"
 echo "Backup: $BACKUP"
 echo "A browser warning for the local self-signed admin certificate is expected."
-echo "IMPORTANT: save the two keys now; existing configured keys are never regenerated during upgrades."
+echo "Existing Vendo credentials are preserved during upgrades."
