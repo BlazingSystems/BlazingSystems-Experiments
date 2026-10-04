@@ -28,6 +28,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 
 public class BlazeAdminActivity extends Activity {
@@ -36,6 +37,7 @@ public class BlazeAdminActivity extends Activity {
 
     private LinearLayout content;
     private final List<CheckBox> appChecks = new ArrayList<CheckBox>();
+    private final List<CheckBox> hiddenAppChecks = new ArrayList<CheckBox>();
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -190,7 +192,7 @@ public class BlazeAdminActivity extends Activity {
 
         section("Apps");
         buildAppInventory();
-        Button saveApps = secondary("SAVE APP ALLOWLIST");
+        Button saveApps = secondary("SAVE APP ALLOW / HIDE POLICY");
         content.addView(saveApps, full());
         saveApps.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { saveAppPolicy(); }
@@ -320,6 +322,7 @@ public class BlazeAdminActivity extends Activity {
 
     private void buildAppInventory() {
         appChecks.clear();
+        hiddenAppChecks.clear();
         Intent query = new Intent(Intent.ACTION_MAIN);
         query.addCategory(Intent.CATEGORY_LAUNCHER);
         final PackageManager pm = getPackageManager();
@@ -333,33 +336,73 @@ public class BlazeAdminActivity extends Activity {
         RentalPolicy policy = AndroidRentalPolicyRepository.load(this);
         for (ResolveInfo resolve : apps) {
             if (resolve.activityInfo == null) continue;
-            String pkg = resolve.activityInfo.packageName;
+            final String pkg = resolve.activityInfo.packageName;
             if (pkg == null || pkg.equals(getPackageName())) continue;
-            CheckBox box = new CheckBox(this);
-            box.setText(resolve.loadLabel(pm) + "\n" + pkg);
-            box.setTextColor(Color.rgb(225, 232, 244));
-            box.setTag(pkg);
-            box.setChecked(policy.isPackageAllowed(pkg));
-            appChecks.add(box);
+
             LinearLayout card = card();
-            card.addView(box);
+            TextView appName = label(String.valueOf(resolve.loadLabel(pm)));
+            appName.setTextColor(Color.WHITE);
+            appName.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            card.addView(appName);
+            TextView packageName = label(pkg);
+            packageName.setTextSize(12f);
+            card.addView(packageName);
+
+            LinearLayout choices = new LinearLayout(this);
+            choices.setOrientation(LinearLayout.HORIZONTAL);
+            final CheckBox allow = new CheckBox(this);
+            allow.setText("ALLOW");
+            allow.setTextColor(Color.rgb(180, 220, 255));
+            allow.setTag(pkg);
+            allow.setChecked(policy.getAllowedPackages().contains(pkg)
+                    && !policy.getHiddenPackages().contains(pkg));
+            final CheckBox hide = new CheckBox(this);
+            hide.setText("HIDE");
+            hide.setTextColor(Color.rgb(255, 180, 180));
+            hide.setTag(pkg);
+            hide.setChecked(policy.getHiddenPackages().contains(pkg)
+                    || policy.getSensitivePackages().contains(pkg));
+
+            allow.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (allow.isChecked()) hide.setChecked(false);
+                }
+            });
+            hide.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (hide.isChecked()) allow.setChecked(false);
+                }
+            });
+
+            appChecks.add(allow);
+            hiddenAppChecks.add(hide);
+            choices.addView(allow, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            choices.addView(hide, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            card.addView(choices);
             content.addView(card, full());
         }
     }
 
     private void saveAppPolicy() {
-        StringBuilder csv = new StringBuilder();
+        HashSet<String> allowed = new HashSet<String>();
+        HashSet<String> hidden = new HashSet<String>();
         for (CheckBox box : appChecks) {
-            if (!box.isChecked()) continue;
-            if (csv.length() > 0) csv.append(',');
-            csv.append((String) box.getTag());
+            if (box.isChecked()) allowed.add((String) box.getTag());
+        }
+        for (CheckBox box : hiddenAppChecks) {
+            if (box.isChecked()) hidden.add((String) box.getTag());
         }
         try {
+            AppPolicySelection selection = AppPolicySelection.of(allowed, hidden);
             JSONObject patch = new JSONObject();
-            patch.put("allowed_packages", csv.toString());
+            patch.put("allowed_packages", selection.allowedCsv());
+            patch.put("hidden_packages", selection.hiddenCsv());
             sendPatch(patch.toString());
         } catch (Exception e) {
-            Toast.makeText(this, "Unable to build policy update", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Unable to build app allow/hide policy",
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
