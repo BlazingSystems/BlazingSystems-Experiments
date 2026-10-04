@@ -55,7 +55,7 @@ case "$action" in
     per="$(bp_cfg rental_seconds_per_pulse)"
     [ -n "$per" ] || per=600
     server_ms=$((now*1000))
-    lease_ms=$(("${lease:-0}"*1000))
+    lease_ms=$((${lease:-0}*1000))
     canonical="$did|$nonce|$server_ms|$lease_ms|$allowed|$salt|$hash|$rounds|$preferred|$per"
     psig="$(bp_rental_hmac "$secret" "$canonical")" || bp_fail "rental crypto unavailable"
     bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"allowed_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"policy_sig":"%s"}' "$did" "$server_ms" "$lease_ms" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per" "$psig")"
