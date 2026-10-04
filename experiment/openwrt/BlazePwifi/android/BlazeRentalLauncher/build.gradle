@@ -53,14 +53,14 @@ android {
 
     productFlavors {
         aosp {
-            applicationId 'amirz.rootless.nexuslauncher'
-            testApplicationId 'amirz.rootless.nexuslauncher.tests'
+            applicationId 'com.blazesystems.blazerental'
+            testApplicationId 'com.blazesystems.blazerental.tests'
             flavorDimensions 'default'
         }
 
         l3go {
-            applicationId 'amirz.rootless.nexuslauncher'
-            testApplicationId 'amirz.rootless.nexuslauncher.tests'
+            applicationId 'com.blazesystems.blazerental'
+            testApplicationId 'com.blazesystems.blazerental.tests'
             flavorDimensions 'default'
         }
     }
