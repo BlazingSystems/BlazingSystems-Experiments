@@ -93,8 +93,11 @@ public final class LeaseClient {
                 if ("*".equals(allowed)) effectiveAllowed = inventoryCsv(context);
 
                 AndroidRentalPolicyRepository.applyVerified(context, revision, mode,
-                        effectiveAllowed, hidden, "", legacyCanonical, policySignature);
-                RentalLeaseStore.recordAdminVerifier(context, salt, hash, rounds);
+                        effectiveAllowed, hidden, "", legacyCanonical,
+                        policySignatureV2.length() > 0 ? policySignatureV2 : policySignature);
+                if (salt.length() > 0 && hash.length() > 0) {
+                    RentalLeaseStore.recordAdminVerifier(context, salt, hash, rounds);
+                }
             }
 
             ManagedPolicyController.apply(context);
