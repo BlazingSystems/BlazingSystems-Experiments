@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eux
+set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/state" "$T/run"
@@ -28,7 +28,7 @@ UCI
 
 cat > "$T/bin/ip" <<'IP'
 #!/bin/sh
-echo "\${TEST_IP:-10.0.0.2} dev br-lan lladdr \${TEST_MAC:-aa:bb:cc:dd:ee:ff} REACHABLE"
+echo "$TEST_IP dev br-lan lladdr $TEST_MAC REACHABLE"
 IP
 
 cat > "$T/bin/nft" <<'NFT'
