@@ -2,6 +2,7 @@
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 . "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
 . "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
+. "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -17,6 +18,34 @@ require_role() {
 }
 
 case "$action" in
+  rental_enroll_create)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    label="$(bp_param label)"; token="$(bp_rental_enroll_create "${label:-Rental phone}" 600)"
+    bp_auth_audit rental_enroll_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
+    bp_json "$(printf '{"ok":true,"enrollment_token":"%s","expires_seconds":600}' "$(bp_json_escape "$token")")"
+    ;;
+  rental_list)
+    require_role viewer
+    bp_rental_init
+    body="$(bp_rental_list_json)"
+    bp_json "$(printf '{"ok":true,"devices":%s}' "$body")"
+    ;;
+  rental_lease_set)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
+    case "$seconds" in ''|*[!0-9]*) bp_fail "invalid lease duration";; esac
+    [ "$seconds" -le 2592000 ] || bp_fail "lease duration too large"
+    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown rental device"
+    secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
+    lease=$((now+seconds)); bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last"
+    bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
+    bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
+    ;;
+
   portal_get)
     require_role viewer
     . "${BP_PORTAL_LIB:-/usr/lib/blazepwifi/portal.sh}"

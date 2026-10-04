@@ -55,6 +55,8 @@ public final class LeaseStore {
     public static String server(Context c){ return p(c).getString("server",""); }
     public static String enrollment(Context c){ return p(c).getString("enroll",""); }
     public static String deviceSecret(Context c){ return p(c).getString("device_secret",""); }
+    public static String deviceId(Context c){ return p(c).getString("device_id",""); }
+    public static void setDeviceIdentity(Context c,String id,String secret){ p(c).edit().putString("device_id",safe(id)).putString("device_secret",safe(secret)).apply(); }
     public static String deviceName(Context c){ return p(c).getString("device_name","Rental phone"); }
     public static boolean isEnrolled(Context c){ return !deviceSecret(c).isEmpty(); }
     private static String safe(String s){ return s==null?"":s.trim(); }

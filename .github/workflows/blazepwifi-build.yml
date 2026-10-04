@@ -31,6 +31,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: BlazeRental source validation
         run: sh experiment/openwrt/BlazePwifi/tests/android.sh
+      - name: BlazeRental server validation
+        run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation

@@ -19,7 +19,15 @@ public final class LeaseClient {
             String action=secret.isEmpty()?"enroll":"status";
             String authSecret=secret.isEmpty()?enroll:secret;
             if(authSecret.isEmpty()) return false;
-            String body="action="+action+"&nonce="+enc(nonce)+"&device="+enc(android.os.Build.SERIAL)+"&sig="+
+            String extra="";
+            if(secret.isEmpty()){
+                int dot=enroll.indexOf('.');
+                if(dot<=0) return false;
+                extra="&enroll_id="+enc(enroll.substring(0,dot));
+            } else {
+                extra="&device_id="+enc(LeaseStore.deviceId(c));
+            }
+            String body="action="+action+"&nonce="+enc(nonce)+extra+"&sig="+
                     enc(Hmac.sha256Hex(authSecret,action+"|"+nonce+"|"+authSecret));
             URL u=new URL(base.replaceAll("/+$","")+"/cgi-bin/rental");
             HttpURLConnection h=(HttpURLConnection)u.openConnection();
@@ -31,6 +39,8 @@ public final class LeaseClient {
             JSONObject j=new JSONObject(json);
             if(!j.optBoolean("ok",false)) return false;
             String newSecret=j.optString("device_secret",secret);
+            String deviceId=j.optString("device_id",LeaseStore.deviceId(c));
+            if(!deviceId.isEmpty() && !newSecret.isEmpty()) LeaseStore.setDeviceIdentity(c,deviceId,newSecret);
             long now=j.optLong("server_time_ms",0), until=j.optLong("lease_until_ms",0);
             if(now<=0 || until<now) return false;
             LeaseStore.recordServerLease(c,now,until,newSecret);
