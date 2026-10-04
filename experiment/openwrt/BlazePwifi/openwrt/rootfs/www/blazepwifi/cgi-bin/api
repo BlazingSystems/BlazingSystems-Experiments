@@ -25,9 +25,20 @@ device="$(bp_device_norm "$(bp_param device)" 2>/dev/null || true)"
 [ -n "$device" ] || bp_fail "missing or invalid device token"
 [ -n "$mac" ] || bp_fail "client MAC not resolved"
 
+create_account=0
+case "$action" in
+  coin_start|redeem) create_account=1 ;;
+esac
+
 bp_lock || bp_fail "accounting busy"
-bp_bind_device "$device" "$mac" "$ipaddr"
+bp_bind_device "$device" "$mac" "$ipaddr" "$create_account"
 bp_unlock
+
+case "$action" in
+  pause|resume|disconnect)
+    [ -n "$(bp_account_line "$device")" ] || bp_fail "no active account/session"
+    ;;
+esac
 
 case "$action" in
   me)
