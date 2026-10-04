@@ -44,7 +44,7 @@ public final class Policy {
         try{d.setLockTaskPackages(a,allow.toArray(new String[0]));}catch(Exception ignored){}
         if(Build.VERSION.SDK_INT>=28){try{d.setLockTaskFeatures(a,DevicePolicyManager.LOCK_TASK_FEATURE_NONE);}catch(Exception ignored){}}
         try{IntentFilter f=new IntentFilter(Intent.ACTION_MAIN);f.addCategory(Intent.CATEGORY_HOME);f.addCategory(Intent.CATEGORY_DEFAULT);d.addPersistentPreferredActivity(a,f,new ComponentName(c,MainActivity.class));}catch(Exception ignored){}
-        restrict(d,a,UserManager.DISALLOW_ADD_USER);restrict(d,a,UserManager.DISALLOW_SAFE_BOOT);restrict(d,a,UserManager.DISALLOW_DEBUGGING_FEATURES);restrict(d,a,UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES);
+        restrict(d,a,UserManager.DISALLOW_ADD_USER);restrict(d,a,UserManager.DISALLOW_SAFE_BOOT);restrict(d,a,UserManager.DISALLOW_FACTORY_RESET);restrict(d,a,UserManager.DISALLOW_DEBUGGING_FEATURES);restrict(d,a,UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES);
         try{d.setStatusBarDisabled(a,!adminWindow);}catch(Exception ignored){} try{d.setKeyguardDisabled(a,true);}catch(Exception ignored){}
     }
     private static void restrict(DevicePolicyManager d,ComponentName a,String r){try{d.addUserRestriction(a,r);}catch(Exception ignored){}}

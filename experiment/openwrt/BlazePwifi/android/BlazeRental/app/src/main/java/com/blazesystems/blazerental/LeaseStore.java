@@ -31,6 +31,7 @@ public final class LeaseStore {
                 .putString("allowed_packages",safe(allowed)).putString("admin_salt",safe(adminSalt))
                 .putString("admin_hash",safe(adminHash)).putInt("admin_rounds",adminRounds)
                 .putString("preferred_vendo",safe(preferredVendo)).putInt("seconds_per_pulse",secondsPerPulse).apply();
+        RentalAlarmReceiver.schedule(c,leaseUntilMs-serverNowMs);
     }
     public static boolean isLeaseValid(Context c){
         SharedPreferences s=p(c); long synced=s.getLong("elapsed_sync",0),serverNow=s.getLong("server_now",0),until=s.getLong("lease_until",0),elapsed=SystemClock.elapsedRealtime();
