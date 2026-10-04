@@ -1,0 +1,88 @@
+name: BlazeRental one-time production signing
+on:
+  push:
+    branches: [blazepwifi-v0.3.0-production]
+    paths:
+      - '.github/workflows/blazerental-production-sign.yml'
+      - '.github/blazerental-transfer-public.pem'
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK components
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Build unsigned release APK
+        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRental
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Create private production signing identity and sign APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/blazerental-sign"
+          mkdir -p "$OUT"
+          PASS="$(openssl rand -base64 36 | tr -d '\n')"
+          keytool -genkeypair -noprompt \
+            -keystore "$OUT/BlazeRental-production.p12" -storetype PKCS12 \
+            -storepass "$PASS" -keypass "$PASS" -alias blazerental \
+            -keyalg RSA -keysize 3072 -validity 36500 \
+            -dname "CN=BlazeRental,O=BlazingSystems,C=PH"
+          UNSIGNED="experiment/openwrt/BlazePwifi/android/BlazeRental/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED" "$OUT/BlazeRental-aligned.apk"
+          "$APKSIGNER" sign \
+            --ks "$OUT/BlazeRental-production.p12" \
+            --ks-key-alias blazerental \
+            --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out "$OUT/BlazeRental.apk" "$OUT/BlazeRental-aligned.apk"
+          "$APKSIGNER" verify --verbose --print-certs "$OUT/BlazeRental.apk" > "$OUT/BlazeRental-apksigner-verify.txt"
+          keytool -exportcert -rfc -alias blazerental -keystore "$OUT/BlazeRental-production.p12" \
+            -storepass "$PASS" -file "$OUT/BlazeRental-signing-cert.pem"
+          keytool -list -v -alias blazerental -keystore "$OUT/BlazeRental-production.p12" \
+            -storepass "$PASS" | sed -n '/SHA256:/p' > "$OUT/BlazeRental-signing-fingerprint.txt"
+
+          SECRET="$RUNNER_TEMP/blazerental-secret"
+          mkdir -p "$SECRET"
+          cp "$OUT/BlazeRental-production.p12" "$SECRET/"
+          printf '%s\n' "$PASS" > "$SECRET/keystore-password.txt"
+          cat > "$SECRET/README.txt" <<'TXT'
+BlazeRental production signing key backup.
+Keep this archive private and offline. Future APK updates must use this exact signing identity.
+TXT
+          tar -czf "$RUNNER_TEMP/BlazeRental-signing-backup.tar.gz" -C "$SECRET" .
+
+          openssl rand 32 > "$RUNNER_TEMP/aes.key"
+          openssl rand 16 > "$RUNNER_TEMP/aes.iv"
+          KEYHEX="$(xxd -p -c 256 "$RUNNER_TEMP/aes.key")"
+          IVHEX="$(xxd -p -c 256 "$RUNNER_TEMP/aes.iv")"
+          openssl enc -aes-256-cbc -K "$KEYHEX" -iv "$IVHEX" \
+            -in "$RUNNER_TEMP/BlazeRental-signing-backup.tar.gz" \
+            -out "$OUT/BlazeRental-signing-backup.enc"
+          openssl pkeyutl -encrypt -pubin -inkey .github/blazerental-transfer-public.pem \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+            -in "$RUNNER_TEMP/aes.key" -out "$OUT/BlazeRental-signing-aes-key.enc"
+          cp "$RUNNER_TEMP/aes.iv" "$OUT/BlazeRental-signing-aes-iv.bin"
+          sha256sum "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-cert.pem" > "$OUT/SHA256SUMS"
+          rm -f "$OUT/BlazeRental-production.p12" "$OUT/BlazeRental-aligned.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazeRental-production-signing-handoff
+          path: ${{ runner.temp }}/blazerental-sign/
+          retention-days: 1
+          if-no-files-found: error
