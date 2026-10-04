@@ -13,6 +13,10 @@ if [ "${REQUEST_METHOD:-GET}" = POST ]; then IFS= read -r BP_POST_BODY; fi
 
 bp_cfg() { uci -q get "blazepwifi.main.$1"; }
 bp_now() { date +%s; }
+bp_time_sane() {
+	now="${1:-$(bp_now)}"
+	[ "$now" -ge 1700000000 ] 2>/dev/null
+}
 bp_sha256() { sha256sum | awk '{print $1}'; }
 bp_json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 bp_json() { printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n%s\n' "$1"; }
