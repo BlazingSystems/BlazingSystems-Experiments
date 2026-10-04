@@ -23,6 +23,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/security.sh
       - name: Config API validation
         run: sh experiment/openwrt/BlazePwifi/tests/config.sh
+      - name: Template gallery validation
+        run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
