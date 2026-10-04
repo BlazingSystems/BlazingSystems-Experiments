@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Required targets: Ruijie RG-EW1200G Pro v1.1, x86_64 BIOS, x86_64 UEFI, Orange Pi Zero 3, One, PC, ESP8266, ESP32 and signed BlazeRental APK.
+- Required targets: Ruijie RG-EW1200G Pro v1.1, x86_64 BIOS, x86_64 UEFI, Orange Pi Zero 3, Orange Pi One, Orange Pi PC, ESP8266, ESP32 and signed BlazeRental APK.
 - Optional Orange Pi assets publish only when their own validation passes.
 - GitHub-hosted lack of exact board emulation must be labeled honestly.
 - Simulation consumes compiled candidate artifacts, not source-only substitutes.
@@ -120,7 +120,7 @@
 - Produces exact candidate binaries consumed by Task 5.
 
 - [ ] **Step 1: Trigger full candidate build.**
-  Required jobs: Android, ESP8266, ESP32, Ruijie, x86_64, Orange Pi Zero3, One and PC.
+  Required jobs: Android, ESP8266, ESP32, Ruijie, x86_64, Orange Pi Zero 3, Orange Pi One and Orange Pi PC.
 
 - [ ] **Step 2: Require all required jobs green.**
 
