@@ -52,8 +52,10 @@ public final class RentalSystemPages {
         CellLayout rental = workspace.getScreenWithId(Workspace.FIRST_SCREEN_ID);
         if (rental == null) rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
         rental.removeAllViews();
-        CellLayout quick = workspace.insertNewWorkspaceScreen(PAGE_QUICK);
-        CellLayout notifications = workspace.insertNewWorkspaceScreen(PAGE_NOTIFICATIONS);
+        workspace.insertNewWorkspaceScreen(PAGE_QUICK);
+        CellLayout quick = workspace.getScreenWithId(PAGE_QUICK);
+        workspace.insertNewWorkspaceScreen(PAGE_NOTIFICATIONS);
+        CellLayout notifications = workspace.getScreenWithId(PAGE_NOTIFICATIONS);
 
         attachFullPage(rental, createRentalPage(launcher), 0x740401);
         attachFullPage(quick, createQuickPage(launcher), 0x740402);
