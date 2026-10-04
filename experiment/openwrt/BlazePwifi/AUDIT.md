@@ -22,7 +22,7 @@ The audit covers the OpenWrt runtime, captive portal/API, nftables enforcement, 
 | ESP setup AP was open | Nearby reconfiguration risk | Per-device WPA2 password plus AP auto-shutdown |
 | v0.1 MAC state had no migration path | Upgrade could orphan balances | One-time MAC-to-device-token claim migration |
 | Cross-filesystem temp files | `/tmp` → `/etc` move was not a guaranteed atomic rename | Persistent account/voucher/target temp files now stage on the state filesystem |
-| Stale global lock | Crashed CGI could wedge accounting | Lock records current shell PID and recovers dead owners |
+| Stale/racy global lock | Crashed or concurrent CGI could wedge or overlap accounting | Kernel `flock` serializes writers and is automatically released on process exit |
 | Zero-balance visitors persisted | Account file could grow from casual portal views | Read-only visits stay non-persistent until a money/session action |
 | ESP/router brownout during coin ACK | Coin could be lost or duplicated | Durable router target + ESP LittleFS event journal + idempotent server marker |
 | Runtime scripts stored non-executable | Direct-flash image could boot with unusable service/CGI files | Git executable modes are audited and re-applied before release |
