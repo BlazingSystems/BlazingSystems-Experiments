@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
@@ -110,7 +111,14 @@ public final class ManagedPolicyController {
             restrict(dpm, admin, UserManager.DISALLOW_ADD_USER);
             restrict(dpm, admin, UserManager.DISALLOW_SAFE_BOOT);
             restrict(dpm, admin, UserManager.DISALLOW_FACTORY_RESET);
-            restrict(dpm, admin, UserManager.DISALLOW_DEBUGGING_FEATURES);
+            // Production rental phones disable debugging. Keep ADB available only on
+            // explicitly debuggable CI/development builds so Device Owner emulator
+            // validation can continue after policy application.
+            if (!isDebuggableBuild(context)) {
+                restrict(dpm, admin, UserManager.DISALLOW_DEBUGGING_FEATURES);
+            } else {
+                clearRestriction(dpm, admin, UserManager.DISALLOW_DEBUGGING_FEATURES);
+            }
             restrict(dpm, admin, UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES);
         } else {
             clearRestriction(dpm, admin, UserManager.DISALLOW_ADD_USER);
@@ -134,6 +142,14 @@ public final class ManagedPolicyController {
         home.addCategory(Intent.CATEGORY_HOME);
         home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         try { context.startActivity(home); } catch (Exception ignored) {}
+    }
+
+    private static boolean isDebuggableBuild(Context context) {
+        try {
+            return (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static void restrict(DevicePolicyManager dpm, ComponentName admin, String restriction) {

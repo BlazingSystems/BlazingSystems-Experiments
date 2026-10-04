@@ -13,6 +13,8 @@ LAUNCHER="$L/src/com/android/launcher3/Launcher.java"
 
 grep -Fq 'ManagedPolicyController.enforceLauncherTask(this);' "$N"
 grep -Fq 'setUninstallBlocked(admin, context.getPackageName(), true)' "$M"
+grep -Fq 'ApplicationInfo.FLAG_DEBUGGABLE' "$M"
+grep -Fq 'DISALLOW_DEBUGGING_FEATURES' "$M"
 grep -Fq 'TRANSFER TO ANOTHER SERVER / RUN INITIAL SETUP' "$A"
 grep -Fq 'SAVE APP ALLOW / HIDE POLICY' "$A"
 grep -Fq 'InitialSetupPolicy' "$L/tests/unit/com/blazesystems/blazerental/InitialSetupPolicyTest.java"
