@@ -4,6 +4,8 @@ OUT=simulation-results/android
 mkdir -p "$OUT"
 
 adb install -r BlazeRental.apk | tee "$OUT/install.txt"
+adb shell settings put global device_provisioned 0 || true
+adb shell settings put secure user_setup_complete 0 || true
 adb shell dpm set-device-owner com.blazesystems.blazerental/.BlazeDeviceAdminReceiver | tee "$OUT/device-owner.txt"
 adb shell am start -n com.blazesystems.blazerental/.MainActivity >/dev/null
 sleep 3
@@ -29,3 +31,9 @@ adb pull /sdcard/window.xml "$OUT/02-window.xml" >/dev/null
 grep -q 'BlazeRental' "$OUT/02-window.xml"
 adb exec-out screencap -p > "$OUT/02-after-reboot.png"
 printf '{"status":"PASS","signed_apk_install":"PASS","device_owner":"PASS","locked_ui":"PASS","reboot_persistence":"PASS"}\n' > "$OUT/android-audit.json"
+
+adb emu kill || true
+sleep 4
+AVDIMG=$(find "$HOME/.android/avd" -type f -name userdata-qemu.img | head -n1)
+test -n "$AVDIMG"
+gzip -c "$AVDIMG" > "$OUT/BlazeRental-Android-DeviceOwner-VM-backup.img.gz"
