@@ -64,8 +64,9 @@ bp_config_apply() {
 		return
 	fi
 	if [ -x /usr/lib/blazepwifi/apply-config.sh ]; then
-		/usr/lib/blazepwifi/apply-config.sh
+		/usr/lib/blazepwifi/apply-config.sh || return 1
 	fi
+	return 0
 }
 
 bp_config_set() {
