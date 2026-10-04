@@ -88,6 +88,7 @@ import com.android.launcher3.util.VerticalFlingDetector;
 import com.android.launcher3.util.WallpaperOffsetInterpolator;
 import com.android.launcher3.widget.PendingAddShortcutInfo;
 import com.android.launcher3.widget.PendingAddWidgetInfo;
+import com.blazesystems.blazerental.LauncherAccessController;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -185,6 +186,14 @@ public class Workspace extends PagedView
     private final int[] mTempXY = new int[2];
     @Thunk float[] mDragViewVisualCenter = new float[2];
     private final float[] mTempTouchCoordinates = new float[2];
+
+    // Rental mode owns exactly three fixed workspace pages. Keep an explicit
+    // horizontal-gesture fallback because some old Launcher3/PagedView builds
+    // do not reliably settle injected or low-velocity swipes after kiosk chrome
+    // is removed.
+    private float mBlazeRentalTouchDownX;
+    private float mBlazeRentalTouchDownY;
+    private int mBlazeRentalTouchDownPage = -1;
 
     private SpringLoadedDragController mSpringLoadedDragController;
     private final float mOverviewModeShrinkFactor;
@@ -1408,7 +1417,38 @@ public class Workspace extends PagedView
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
-        return mLauncher.isAllAppsVisible() || super.onTouchEvent(ev);
+        final boolean rentalRestricted = LauncherAccessController.isRentalRestricted(mLauncher);
+        if (rentalRestricted && ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            mBlazeRentalTouchDownX = ev.getX();
+            mBlazeRentalTouchDownY = ev.getY();
+            mBlazeRentalTouchDownPage = getCurrentPage();
+        }
+
+        boolean handled = mLauncher.isAllAppsVisible() || super.onTouchEvent(ev);
+
+        if (rentalRestricted && ev.getActionMasked() == MotionEvent.ACTION_UP
+                && mBlazeRentalTouchDownPage >= 0) {
+            float dx = ev.getX() - mBlazeRentalTouchDownX;
+            float dy = ev.getY() - mBlazeRentalTouchDownY;
+            float minSwipe = 72f * getResources().getDisplayMetrics().density;
+            if (Math.abs(dx) >= minSwipe && Math.abs(dx) > Math.abs(dy) * 1.15f) {
+                int target = mBlazeRentalTouchDownPage + (dx < 0f ? 1 : -1);
+                target = Math.max(0, Math.min(getPageCount() - 1, target));
+                if (target != getCurrentPage()) {
+                    snapToPage(target);
+                } else if (target != mBlazeRentalTouchDownPage) {
+                    // Native paging may already have selected the right page; re-snap
+                    // to finish any partially-settled old PagedView animation.
+                    snapToPage(target);
+                }
+                mBlazeRentalTouchDownPage = -1;
+                return true;
+            }
+            mBlazeRentalTouchDownPage = -1;
+        } else if (rentalRestricted && ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            mBlazeRentalTouchDownPage = -1;
+        }
+        return handled;
     }
 
     @Override
