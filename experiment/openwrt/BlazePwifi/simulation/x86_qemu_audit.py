@@ -20,11 +20,20 @@ child=pexpect.spawn(cmd[0],cmd[1:],encoding=None,timeout=240,logfile=log)
 prompt=b'root@[^\\r\\n]+:[^\\r\\n]*#'
 idx=child.expect([b'Please press Enter to activate this console',prompt,b'login:'],timeout=240)
 if idx==0:
-    child.send(b'\\r')
-    child.expect(prompt,timeout=180)
+    ready=False
+    for _ in range(12):
+        child.send(b'\\r\\n')
+        try:
+            child.expect([prompt,b'# '],timeout=15)
+            ready=True
+            break
+        except pexpect.TIMEOUT:
+            pass
+    if not ready:
+        raise RuntimeError('OpenWrt serial console did not activate')
 elif idx==2:
-    child.send(b'root\\r')
-    child.expect(prompt,timeout=60)
+    child.send(b'root\\r\\n')
+    child.expect([prompt,b'# '],timeout=60)
 
 def run(command,timeout=60):
     marker='__BLAZE_RC__'
