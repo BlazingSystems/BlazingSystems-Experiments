@@ -16,27 +16,31 @@ IMG="$OUT/candidate.img"
 gzip -dc "$GZ" > "$IMG"
 fdisk -l "$IMG" > "$OUT/fdisk.txt" 2>&1 || true
 
-LOOP="$(sudo losetup --show -Pf "$IMG")"
 MNT="$OUT/mnt"
 mkdir -p "$MNT"
 cleanup(){
   sudo umount "$MNT" 2>/dev/null || true
-  sudo losetup -d "$LOOP" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-ROOTDEV=""
-for p in "${LOOP}"p*; do
-  [ -b "$p" ] || continue
-  if sudo mount -o ro "$p" "$MNT" 2>/dev/null; then
-    if [ -f "$MNT/etc/openwrt_release" ] || [ -x "$MNT/etc/init.d/blazepwifi" ]; then
-      ROOTDEV="$p"
-      break
-    fi
-    sudo umount "$MNT"
-  fi
-done
-test -n "$ROOTDEV" || { echo "could not locate OpenWrt rootfs partition" >&2; exit 1; }
+# OpenWrt sunxi ext4 sdcard images can contain a few non-sector-aligned
+# trailer bytes. losetup --partscan may then omit /dev/loopXp2 on some hosted
+# kernels even though fdisk reports a valid partition table. Mount the Linux
+# root partition by its explicit sector offset instead.
+read -r ROOT_START ROOT_SECTORS <<EOF
+$(fdisk -l "$IMG" | awk '$NF=="Linux" {print $2, $4; exit}')
+EOF
+case "$ROOT_START:$ROOT_SECTORS" in
+  ''*|*:*[!0-9]*|*[!0-9]*:*) echo "could not parse OpenWrt Linux rootfs partition" >&2; exit 1;;
+esac
+ROOT_OFFSET=$((ROOT_START * 512))
+ROOT_LIMIT=$((ROOT_SECTORS * 512))
+sudo mount -o "ro,loop,offset=$ROOT_OFFSET,sizelimit=$ROOT_LIMIT" "$IMG" "$MNT"
+ROOTDEV="offset-sector:$ROOT_START"
+if [ ! -f "$MNT/etc/openwrt_release" ] && [ ! -x "$MNT/etc/init.d/blazepwifi" ]; then
+  echo "mounted Linux partition is not an OpenWrt rootfs" >&2
+  exit 1
+fi
 test -x "$MNT/etc/init.d/blazepwifi"
 test -x "$MNT/usr/sbin/blazepwifi-gpio-agent"
 test -d "$MNT/usr/share/blazepwifi/orangepi"

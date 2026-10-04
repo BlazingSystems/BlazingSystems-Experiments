@@ -129,7 +129,15 @@ dump_ui "03-quick-controls"
 assert_ui "$OUT/03-quick-controls.xml" "QUICK CONTROLS"
 assert_ui "$OUT/03-quick-controls.xml" "BLUETOOTH"
 assert_ui "$OUT/03-quick-controls.xml" "FLASHLIGHT"
-assert_ui "$OUT/03-quick-controls.xml" "FLOATING TIMER"
+
+# The quick-controls page intentionally scrolls on compact/low-resolution
+# devices. Verify the floating-timer user control after scrolling the native
+# ScrollView rather than requiring every safe control to fit above the fold.
+read -r qw qh <<<"$(screen_size)"
+adb shell input swipe $((qw/2)) $((qh*3/4)) $((qw/2)) $((qh/3)) 350
+sleep 1
+dump_ui "03b-quick-controls-scrolled"
+assert_ui "$OUT/03b-quick-controls-scrolled.xml" "FLOATING TIMER"
 
 # Page 3: notification mirror replaces notification shade.
 swipe_page_left
