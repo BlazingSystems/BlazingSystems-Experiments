@@ -37,8 +37,10 @@ for x in "$LOGIN" "$SESSION" "$LOGOUT" "$ADMIN"; do
   [ -x "$x" ] || { echo "missing executable admin endpoint: $x" >&2; exit 1; }
 done
 
+echo "security: provision admin"
 sh "$AUTH" --set-password admin admin 'Correct-Horse-123!'
 
+echo "security: lockout"
 i=1
 while [ "$i" -le 5 ]; do
   OUT="$(printf 'username=admin&password=wrong-%s' "$i" | REQUEST_METHOD=POST sh "$LOGIN")"
@@ -48,6 +50,7 @@ done
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
 echo "$OUT" | grep -q 'locked'
 
+echo "security: post-lock login"
 export BP_AUTH_NOW=2000000901
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
 echo "$OUT" | grep -q '"ok":true'
@@ -58,15 +61,18 @@ COOKIE="$(printf '%s\n' "$OUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/
 CSRF="$(printf '%s' "$OUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 [ -n "$COOKIE" ] && [ -n "$CSRF" ]
 
+echo "security: session lookup"
 OUT="$(HTTP_COOKIE="$COOKIE" REQUEST_METHOD=GET sh "$SESSION")"
 echo "$OUT" | grep -q '"username":"admin"'
 echo "$OUT" | grep -q '"role":"admin"'
 
+echo "security: admin status and csrf"
 OUT="$(printf 'action=status' | HTTP_COOKIE="$COOKIE" HTTP_X_BLAZE_CSRF="$CSRF" REQUEST_METHOD=POST sh "$ADMIN")"
 echo "$OUT" | grep -q '"ok":true'
 OUT="$(printf 'action=voucher_create&cents=100' | HTTP_COOKIE="$COOKIE" HTTP_X_BLAZE_CSRF=wrong REQUEST_METHOD=POST sh "$ADMIN")"
 echo "$OUT" | grep -q 'csrf'
 
+echo "security: viewer role"
 sh "$AUTH" --set-password viewer viewer 'Viewer-Pass-123!'
 VOUT="$(printf 'username=viewer&password=Viewer-Pass-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
 VCOOKIE="$(printf '%s\n' "$VOUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
@@ -74,11 +80,13 @@ VCSRF="$(printf '%s' "$VOUT" | sed -n 's/.*"csrf":"\([^"]*\)".*/\1/p')"
 OUT="$(printf 'action=voucher_create&cents=100' | HTTP_COOKIE="$VCOOKIE" HTTP_X_BLAZE_CSRF="$VCSRF" REQUEST_METHOD=POST sh "$ADMIN")"
 echo "$OUT" | grep -q 'insufficient role'
 
+echo "security: logout"
 OUT="$(printf 'csrf=%s' "$CSRF" | HTTP_COOKIE="$COOKIE" HTTP_X_BLAZE_CSRF="$CSRF" REQUEST_METHOD=POST sh "$LOGOUT")"
 echo "$OUT" | grep -q '"ok":true'
 OUT="$(HTTP_COOKIE="$COOKIE" REQUEST_METHOD=GET sh "$SESSION")"
 echo "$OUT" | grep -q 'unauthorized'
 
+echo "security: idle expiry"
 OUT="$(printf 'username=admin&password=Correct-Horse-123!' | REQUEST_METHOD=POST sh "$LOGIN")"
 COOKIE2="$(printf '%s\n' "$OUT" | sed -n 's/^Set-Cookie: \(blaze_admin=[^;]*\).*/\1/p' | tr -d '\r')"
 export BP_AUTH_NOW=2000001802
