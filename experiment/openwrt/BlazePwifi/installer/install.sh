@@ -59,7 +59,7 @@ randhex(){
   bytes="${1:-18}"
   out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null || true)"
   [ "${#out}" -ge $((bytes*2)) ] || out="$(od -An -N "$bytes" -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
-  [ "${#out}" -ge $((bytes*2)) ] || out="$(printf '%s|%s' "$(date +%s)" "$" | sha256sum | awk '{print $1}')"
+  [ "${#out}" -ge $((bytes*2)) ] || out="$(printf '%s|%s' "$(date +%s)" "$$" | sha256sum | awk '{print $1}')"
   printf '%s' "$out" | cut -c1-$((bytes*2))
 }
 OLD_ADMIN="$(uci -q get blazepwifi.main.admin_key || true)"
