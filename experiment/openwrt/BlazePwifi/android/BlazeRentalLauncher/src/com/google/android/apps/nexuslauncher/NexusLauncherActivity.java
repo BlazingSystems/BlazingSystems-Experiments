@@ -91,6 +91,15 @@ public class NexusLauncherActivity extends Launcher {
     }
 
     @Override
+    public void finishBindingItems() {
+        super.finishBindingItems();
+        // Launcher3 may restore its saved/default Home page near the end of
+        // model binding. Make the fail-closed rental landing the final bound
+        // state for unpaid devices.
+        enforceRentalLanding(0);
+    }
+
+    @Override
     public void clearPendingExecutor(ViewOnDrawExecutor executor) {
         super.clearPendingExecutor(executor);
         if (mIsReload) {
