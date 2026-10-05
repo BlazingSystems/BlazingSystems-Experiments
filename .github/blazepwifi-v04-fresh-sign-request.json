@@ -1,0 +1,7 @@
+{
+  "run_id": "37268063117",
+  "candidate_sha": "1373eaa8ee8e95abbc2d0cbf5565d8ed28d2a750",
+  "requested_at": "2026-10-05T07:35:00Z",
+  "mode": "fresh-production",
+  "note": "Factory-reset / QR-provisioned production identity. v0.3 in-place updates still require recovery of the v0.3 signing key."
+}
