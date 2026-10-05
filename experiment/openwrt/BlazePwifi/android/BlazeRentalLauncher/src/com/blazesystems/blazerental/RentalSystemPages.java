@@ -83,8 +83,9 @@ public final class RentalSystemPages {
         rental.removeAllViews();
 
         RentalFixedPager pager = new RentalFixedPager(launcher);
-        pager.setId(PAGER_VIEW_ID);
-        attachFullPage(rental, pager, 0x740401);
+        // CellLayout assigns the child ID during insertion. Keep it identical
+        // to the ID used above to find and reuse the managed pager.
+        attachFullPage(rental, pager, PAGER_VIEW_ID);
         workspace.snapToPageImmediately(0);
         workspace.setCurrentPage(0);
 
@@ -523,6 +524,14 @@ public final class RentalSystemPages {
         public boolean onTouchEvent(MotionEvent event) {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_MOVE:
+                    // When a gesture starts on blank content, this pager owns
+                    // the stream directly and interception may not see MOVE.
+                    float moveX = event.getX() - downX;
+                    float moveY = event.getY() - downY;
+                    if (Math.abs(moveX) > dp(launcher, 40)
+                            && Math.abs(moveX) > Math.abs(moveY) * 1.25f) {
+                        horizontalGesture = true;
+                    }
                     return true;
                 case MotionEvent.ACTION_UP:
                     float dx = event.getX() - downX;
@@ -530,7 +539,10 @@ public final class RentalSystemPages {
                     if (horizontalGesture
                             && Math.abs(dx) > dp(launcher, 56)
                             && Math.abs(dx) > Math.abs(dy) * 1.25f) {
-                        showPage(page + (dx < 0f ? 1 : -1));
+                        // Stop at either endpoint; invalid saved preferences
+                        // still recover to Rental through sanitizePage().
+                        showPage(Math.max(FIXED_RENTAL, Math.min(FIXED_NOTIFICATIONS,
+                                page + (dx < 0f ? 1 : -1))));
                     }
                     horizontalGesture = false;
                     return true;
