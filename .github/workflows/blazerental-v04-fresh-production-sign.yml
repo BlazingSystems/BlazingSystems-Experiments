@@ -59,9 +59,11 @@ jobs:
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Preserve current signing gate before candidate checkout
+      - name: Preserve current signing helpers before candidate checkout
         shell: bash
-        run: cp experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh "$RUNNER_TEMP/v04_signing_gate.sh"
+        run: |
+          cp experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh "$RUNNER_TEMP/v04_signing_gate.sh"
+          cp .github/blazerental-v04-transfer-public.pem "$RUNNER_TEMP/blazerental-v04-transfer-public.pem"
 
       - uses: actions/checkout@v4
         with:
@@ -134,7 +136,7 @@ jobs:
           KEYHEX="$(xxd -p -c 256 "$RUNNER_TEMP/aes.key")"
           IVHEX="$(xxd -p -c 256 "$RUNNER_TEMP/aes.iv")"
           openssl enc -aes-256-cbc -K "$KEYHEX" -iv "$IVHEX"             -in "$RUNNER_TEMP/BlazeRental-v0.4-signing-backup.tar.gz"             -out "$OUT/BlazeRental-v0.4-signing-backup.enc"
-          openssl pkeyutl -encrypt -pubin             -inkey .github/blazerental-v04-transfer-public.pem             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256             -in "$RUNNER_TEMP/aes.key"             -out "$OUT/BlazeRental-v0.4-signing-aes-key.enc"
+          openssl pkeyutl -encrypt -pubin             -inkey "$RUNNER_TEMP/blazerental-v04-transfer-public.pem"             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256             -in "$RUNNER_TEMP/aes.key"             -out "$OUT/BlazeRental-v0.4-signing-aes-key.enc"
           cp "$RUNNER_TEMP/aes.iv" "$OUT/BlazeRental-v0.4-signing-aes-iv.bin"
 
           UNSIGNED_SHA="$(sha256sum "$UNSIGNED" | awk '{print $1}')"
