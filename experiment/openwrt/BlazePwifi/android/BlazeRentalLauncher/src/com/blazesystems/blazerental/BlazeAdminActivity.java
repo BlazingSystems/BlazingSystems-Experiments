@@ -17,6 +17,7 @@ import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -41,6 +42,10 @@ public class BlazeAdminActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        // Do not let the first password field force the IME open when the
+        // secret admin panel appears. The setup page is a dashboard first;
+        // administrators explicitly tap a field when they want to type.
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         route();
     }
 
@@ -491,6 +496,8 @@ public class BlazeAdminActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(18), dp(24), dp(18), dp(40));
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
         return root;
     }
 
