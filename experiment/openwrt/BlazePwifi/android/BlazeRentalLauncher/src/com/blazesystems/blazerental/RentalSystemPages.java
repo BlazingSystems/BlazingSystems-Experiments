@@ -56,6 +56,14 @@ public final class RentalSystemPages {
             return;
         }
 
+        // Model reloads can re-run this method after the user has already moved
+        // to Quick Controls or Notifications. Preserve that fixed-page identity
+        // across reconstruction instead of throwing the renter back to page 1.
+        long restoreScreenId = workspace.getScreenIdForPageIndex(workspace.getCurrentPage());
+        if (restoreScreenId != PAGE_QUICK && restoreScreenId != PAGE_NOTIFICATIONS) {
+            restoreScreenId = Workspace.FIRST_SCREEN_ID;
+        }
+
         workspace.removeAllWorkspaceScreens();
         CellLayout rental = workspace.getScreenWithId(Workspace.FIRST_SCREEN_ID);
         if (rental == null) rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
@@ -68,7 +76,11 @@ public final class RentalSystemPages {
         attachFullPage(rental, createRentalPage(launcher), 0x740401);
         attachFullPage(quick, createQuickPage(launcher), 0x740402);
         attachFullPage(notifications, createNotificationsPage(launcher), 0x740403);
-        workspace.setCurrentPage(0);
+
+        int restorePage = workspace.getPageIndexForScreenId(restoreScreenId);
+        if (restorePage < 0) restorePage = 0;
+        workspace.snapToPageImmediately(restorePage);
+        workspace.setCurrentPage(restorePage);
 
         reassertRestrictedChrome(launcher);
         workspace.post(new Runnable() {
