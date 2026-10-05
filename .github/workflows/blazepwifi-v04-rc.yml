@@ -157,7 +157,7 @@ jobs:
           TAG=v0.4.0-rc.1
           NOTES=experiment/openwrt/BlazePwifi/releases/0.4.0-rc.1/RELEASE_NOTES.md
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "${{ github.repository }}"               --target "$CANDIDATE_SHA" --prerelease               --title "BlazePwifi v0.4.0-rc.1 — Launcher Edition"               --notes-file "$NOTES"
+            echo "Existing prerelease $TAG found; preserving release metadata and refreshing assets."
           else
             gh release create "$TAG" --repo "${{ github.repository }}"               --target "$CANDIDATE_SHA" --prerelease               --title "BlazePwifi v0.4.0-rc.1 — Launcher Edition"               --notes-file "$NOTES"
           fi
