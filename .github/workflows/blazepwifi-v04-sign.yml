@@ -33,6 +33,7 @@ jobs:
       STORE_B64: ${{ secrets.BLAZERENTAL_KEYSTORE_B64 }}
       STORE_PASS: ${{ secrets.BLAZERENTAL_KEYSTORE_PASSWORD }}
       KEY_ALIAS_SECRET: ${{ secrets.BLAZERENTAL_KEY_ALIAS }}
+      TRANSFER_PRIVATE: ${{ secrets.BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,14 +73,64 @@ jobs:
         with:
           ref: ${{ steps.request.outputs.candidate_sha }}
 
-      - name: Require preserved production signing identity
+      - name: Restore preserved production signing identity
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$STORE_B64" || { echo "BLAZERENTAL_KEYSTORE_B64 is not configured"; exit 1; }
-          test -n "$STORE_PASS" || { echo "BLAZERENTAL_KEYSTORE_PASSWORD is not configured"; exit 1; }
-          printf '%s' "$STORE_B64" | base64 -d > "$RUNNER_TEMP/BlazeRental-production.p12"
-          test -s "$RUNNER_TEMP/BlazeRental-production.p12"
+
+          if [ -n "$STORE_B64" ] && [ -n "$STORE_PASS" ]; then
+            echo "Using repository-kept BlazeRental production keystore secret."
+            printf '%s' "$STORE_B64" | base64 -d > "$RUNNER_TEMP/BlazeRental-production.p12"
+            test -s "$RUNNER_TEMP/BlazeRental-production.p12"
+            exit 0
+          fi
+
+          if [ -z "$TRANSFER_PRIVATE" ]; then
+            echo "No BlazeRental production signing identity is available." >&2
+            echo "Configure either:" >&2
+            echo "  BLAZERENTAL_KEYSTORE_B64 + BLAZERENTAL_KEYSTORE_PASSWORD" >&2
+            echo "or the original recovery key:" >&2
+            echo "  BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM" >&2
+            echo "The encrypted v0.3 signing backup is still referenced by workflow run 37210720716." >&2
+            exit 1
+          fi
+
+          echo "Recovering the v0.3 production signing identity from its encrypted handoff."
+          REC="$RUNNER_TEMP/blazerental-v03-recovery"
+          mkdir -p "$REC/source" "$REC/plain"
+          gh run download "37210720716" --repo "${{ github.repository }}"             --name BlazeRental-production-signing-handoff --dir "$REC/source"
+
+          test -s "$REC/source/BlazeRental-signing-backup.enc"
+          test -s "$REC/source/BlazeRental-signing-aes-key.enc"
+          test -s "$REC/source/BlazeRental-signing-aes-iv.bin"
+
+          printf '%s' "$TRANSFER_PRIVATE" > "$REC/transfer-private.pem"
+          chmod 600 "$REC/transfer-private.pem"
+          openssl pkey -in "$REC/transfer-private.pem" -noout
+
+          openssl pkeyutl -decrypt             -inkey "$REC/transfer-private.pem"             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256             -in "$REC/source/BlazeRental-signing-aes-key.enc"             -out "$REC/aes.key"
+
+          KEYHEX="$(xxd -p -c 256 "$REC/aes.key")"
+          IVHEX="$(xxd -p -c 256 "$REC/source/BlazeRental-signing-aes-iv.bin")"
+          test -n "$KEYHEX" -a -n "$IVHEX"
+
+          openssl enc -d -aes-256-cbc             -K "$KEYHEX" -iv "$IVHEX"             -in "$REC/source/BlazeRental-signing-backup.enc"             -out "$REC/backup.tar.gz"
+
+          tar -xzf "$REC/backup.tar.gz" -C "$REC/plain"
+          P12="$(find "$REC/plain" -type f -name 'BlazeRental-production.p12' -print -quit)"
+          PASSFILE="$(find "$REC/plain" -type f -name 'keystore-password.txt' -print -quit)"
+          test -n "$P12" -a -s "$P12"
+          test -n "$PASSFILE" -a -s "$PASSFILE"
+
+          cp "$P12" "$RUNNER_TEMP/BlazeRental-production.p12"
+          RECOVERED_PASS="$(tr -d '\r\n' < "$PASSFILE")"
+          test -n "$RECOVERED_PASS"
+          printf 'STORE_PASS=%s\n' "$RECOVERED_PASS" >> "$GITHUB_ENV"
+
+          # Keep recovered plaintext only for this job.
+          rm -f "$REC/transfer-private.pem" "$REC/aes.key" "$REC/backup.tar.gz"
+          rm -rf "$REC/plain"
+          echo "Recovered production signing identity; fingerprint verification follows before signing."
 
       - name: Download exact unsigned v0.4 candidate
         shell: bash
