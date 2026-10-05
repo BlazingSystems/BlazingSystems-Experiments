@@ -115,7 +115,9 @@ with sync_playwright() as p:
     assert ("TailAdmin" in system_text
             or ("System & Security" in system_text and "Security posture" in system_text))
 
-    page.click('[data-page="dashboard"]')
+    # v0.5 moved voucher creation into its dedicated console module.
+    page.click('[data-page="vouchers"]')
+    page.wait_for_selector("#page-vouchers.active")
     page.click("#voucherBtn")
     page.wait_for_selector("text=BLAZE-DEMO")
 
