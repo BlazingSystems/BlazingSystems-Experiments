@@ -94,8 +94,12 @@ tap_text "$PFILE" "SET ADMIN PASSWORD"
 sleep 1
 
 # v0.5 must allow daily-driver setup without BlazePwifi enrollment.
-DFILE="$(scroll_find 06-daily-driver 'USE DEVICE AS IS' || true)"
-[ -n "$DFILE" ] || fail "daily-driver setup option missing"
+# showInitialSetup() returns to the top after saving the local password, so the
+# daily-driver control is intentionally above the fold. Verify it in place
+# instead of scrolling away from a visible button.
+dump_ui 06-daily-driver
+DFILE="$OUT/06-daily-driver.xml"
+assert_has "$DFILE" "USE DEVICE AS IS"
 tap_text "$DFILE" "USE DEVICE AS IS"
 sleep 4
 adb shell input keyevent 3
