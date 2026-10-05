@@ -241,6 +241,78 @@ case "$action" in
     body="$(printf '{"ok":true,"key":"%s","value":"%s"}' "$(bp_json_escape "$key")" "$(bp_json_escape "$value")")"
     bp_json "$body"
     ;;
+  system_info)
+    require_role viewer
+    model="$(cat /tmp/sysinfo/model 2>/dev/null || cat /proc/device-tree/model 2>/dev/null | tr -d '\000' || echo Unknown)"
+    kernel="$(uname -srmo 2>/dev/null || uname -a 2>/dev/null || echo Unknown)"
+    cpu="$(awk -F: '/model name|system type|Processor/ {gsub(/^[ \t]+/,"",$2); print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    [ -n "$cpu" ] || cpu="Unknown"
+    rootfs="$(df -Pk / 2>/dev/null | awk 'NR==2 {printf "%s/%s KB",$3,$2}')"
+    temp=""; for z in /sys/class/thermal/thermal_zone*/temp; do [ -r "$z" ] || continue; temp="$(cat "$z" 2>/dev/null)"; break; done
+    wifi=false; command -v iw >/dev/null 2>&1 && iw dev 2>/dev/null | grep -q 'Interface' && wifi=true
+    wireguard=false; command -v wg >/dev/null 2>&1 && wireguard=true
+    zerotier=false; command -v zerotier-cli >/dev/null 2>&1 && zerotier=true
+    usb=false; [ -d /sys/bus/usb/devices ] && find /sys/bus/usb/devices -mindepth 1 -maxdepth 1 -type l 2>/dev/null | grep -q . && usb=true
+    bp_json "$(printf '{"ok":true,"model":"%s","kernel":"%s","cpu":"%s","rootfs":"%s","temperature_milli_c":"%s","wifi":%s,"usb":%s,"wireguard":%s,"zerotier":%s}' \
+      "$(bp_json_escape "$model")" "$(bp_json_escape "$kernel")" "$(bp_json_escape "$cpu")" "$(bp_json_escape "${rootfs:-Unknown}")" "$(bp_json_escape "${temp:-}")" "$wifi" "$usb" "$wireguard" "$zerotier")"
+    ;;
+  storage_list)
+    require_role viewer
+    mounts="$(df -Pk 2>/dev/null | awk 'NR>1 {printf "%s|%s|%s|%s;",$1,$2,$3,$6}' | head -c 12000)"
+    bp_json "$(printf '{"ok":true,"mounts":"%s"}' "$(bp_json_escape "$mounts")")"
+    ;;
+  remote_status)
+    require_role viewer
+    wg_state="unavailable"; zt_state="unavailable"
+    if command -v wg >/dev/null 2>&1; then
+      ifaces="$(wg show interfaces 2>/dev/null || true)"
+      [ -n "$ifaces" ] && wg_state="online:$ifaces" || wg_state="installed"
+    fi
+    if command -v zerotier-cli >/dev/null 2>&1; then
+      zt="$(zerotier-cli info 2>/dev/null | head -n1 || true)"
+      [ -n "$zt" ] && zt_state="$zt" || zt_state="installed"
+    fi
+    bp_json "$(printf '{"ok":true,"recommended":"wireguard","wireguard":"%s","zerotier":"%s"}' "$(bp_json_escape "$wg_state")" "$(bp_json_escape "$zt_state")")"
+    ;;
+  tool_run)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    tool="$(bp_param tool)"; target="$(bp_param target)"
+    case "$target" in
+      *[!A-Za-z0-9._:-]* ) bp_fail "invalid diagnostic target" ;;
+    esac
+    [ "$(printf '%s' "$target" | wc -c)" -le 253 ] || bp_fail "diagnostic target too long"
+    output=""; rc=0
+    case "$tool" in
+      ping)
+        [ -n "$target" ] || target="1.1.1.1"
+        output="$(ping -c 4 -W 2 "$target" 2>&1 | head -c 12000)" || rc=$?
+        ;;
+      traceroute)
+        [ -n "$target" ] || target="1.1.1.1"
+        if command -v traceroute >/dev/null 2>&1; then output="$(traceroute -m 12 "$target" 2>&1 | head -c 12000)" || rc=$?; else output="traceroute is not installed on this target"; rc=127; fi
+        ;;
+      dns)
+        [ -n "$target" ] || target="openai.com"
+        if command -v nslookup >/dev/null 2>&1; then output="$(nslookup "$target" 2>&1 | head -c 12000)" || rc=$?; else output="nslookup is not installed on this target"; rc=127; fi
+        ;;
+      routes) output="$(ip route 2>&1 | head -c 12000)" || rc=$? ;;
+      interfaces) output="$(ip addr 2>&1 | head -c 12000)" || rc=$? ;;
+      wifi)
+        if command -v iw >/dev/null 2>&1; then output="$(iw dev 2>&1 | head -c 12000)" || rc=$?; else output="iw is not installed / no Wi-Fi capability"; rc=127; fi
+        ;;
+      storage) output="$(df -h 2>&1 | head -c 12000)" || rc=$? ;;
+      uptime) output="$(uptime 2>&1 | head -c 12000)" || rc=$? ;;
+      speedtest)
+        if command -v speedtest >/dev/null 2>&1; then output="$(timeout 45 speedtest 2>&1 | head -c 12000)" || rc=$?;
+        elif command -v librespeed-cli >/dev/null 2>&1; then output="$(timeout 45 librespeed-cli 2>&1 | head -c 12000)" || rc=$?;
+        else output="No local speed-test helper is installed. Use Ping/latency now or install a supported speed-test package on this target."; rc=127; fi
+        ;;
+      *) bp_fail "unsupported safe command" ;;
+    esac
+    bp_auth_audit tool_run "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$tool"
+    bp_json "$(printf '{"ok":true,"tool":"%s","exit_code":%s,"output":"%s"}' "$(bp_json_escape "$tool")" "${rc:-0}" "$(bp_json_escape "$output")")"
+    ;;
   status)
     require_role viewer
     sessions="$(awk -F '\t' -v n="$now" '$5!=1 && $3>n {c++} END{print c+0}' "$BP_ACCOUNTS")"
