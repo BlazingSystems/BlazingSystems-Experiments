@@ -1,26 +1,33 @@
 # BlazePwifi v0.4.0 — Launcher Edition
 
-BlazePwifi v0.4.0 is the major Launcher Edition update. The Android rental client is rebuilt as a Launcher3 derivative rather than a dedicated intent-launcher activity.
+BlazePwifi v0.4.0 is the major Launcher Edition update. BlazeRental is rebuilt around the preserved Launcher3 codebase rather than the earlier stripped-down browser/intent-launcher approach.
 
-## Required production outputs
+## Production outputs
 
-- `BlazeRental.apk` — signed Android Launcher Edition package.
-- ESP8266 and ESP32 controller firmware (`.bin` plus source `.ino`).
-- Ruijie RG-EW1200G Pro v1.1 OpenWrt firmware/sysupgrade artifact.
-- x86_64 OpenWrt disk images suitable for BIOS and UEFI deployment.
-- Orange Pi Zero 3 image.
-- Orange Pi One image.
-- Orange Pi PC image.
+The v0.4.0 release contains:
+
+- `BlazeRental.apk` — signed Launcher3-based rental launcher.
+- QR/Device Owner provisioning helper files.
+- ESP8266 and ESP32 controller firmware (`.bin` + `.ino`).
+- Ruijie RG-EW1200G Pro v1.1 sysupgrade and recovery image.
+- x86_64 OpenWrt BIOS/UEFI images.
+- Orange Pi Zero 3, One and PC images.
+- Additional validated Orange Pi family images: Zero, Zero 2, Zero 2W, PC2, PC Plus and One Plus.
 - SHA256 manifests and simulation/audit evidence.
+- Encrypted BlazeRental signing-key recovery material.
 
-Optional Orange Pi family targets are published only after their own build/validation succeeds.
+## BlazeRental behavior
 
-## Android behavior
+Rental Mode provides three fixed Launcher3 workspace pages: rental/timer, safe quick controls, and mirrored notifications. The app drawer is lease-gated and package-policy filtered. Device Owner provisioning is the strongest deployment mode; manual APK installation remains supported with lower anti-bypass strength.
 
-Rental Mode provides three fixed Launcher3 workspace pages: rental/timer, safe quick controls, and mirrored notifications. The app drawer is lease-gated and package-policy filtered. Device Owner provisioning is the strongest deployment mode; manual APK installation remains supported with lower security and optional legacy Device Admin defence.
+The on-device admin supports app allow/hide policy, binding/enrollment, administrator password, secret admin access, initial-setup transfer and “use device as is” mode. The BlazePwifi server admin uses the local TailAdmin-based interface and generates QR enrollment payloads.
 
-Launcher3 upstream provenance is pinned in `android/BlazeRentalLauncher/BLAZE_UPSTREAM.md` and an unmodified preservation copy is retained in `BlazingSystems/Forked-Projects`.
+## Signing compatibility
 
-## Release rule
+The final v0.4 production APK uses a new locked production certificate. It is intended for clean/factory-reset provisioning and is **not an in-place Android update over v0.3**. See `SIGNING.md` for the exact fingerprint and recovery rules.
 
-A build is not production-ready merely because it compiles. Required v0.4 validation, board identity checks, Android signing checks, and environment simulation must pass before final publication.
+## Validation scope
+
+A build is not called production-ready merely because it compiles. The release requires source/unit validation, Android emulator Device Owner testing, browser UI simulation, ESP binary/protocol checks, Ruijie firmware inspection, x86 BIOS/UEFI QEMU boots and Orange Pi image/rootfs/qemu-user audits.
+
+These automated checks do not pretend to be physical-board testing where no real board was attached.

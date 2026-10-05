@@ -1,31 +1,33 @@
-# BlazeRental v0.4 signing lineage
+# BlazeRental v0.4 production signing
 
-BlazeRental v0.4 keeps the package ID `com.blazesystems.blazerental`. Production APKs therefore **must use the same production certificate lineage as v0.3** so an installed rental phone can upgrade in place.
+BlazeRental v0.4 uses a locked **fresh production certificate** for the final Launcher Edition release.
 
-Expected SHA-256 certificate fingerprint:
+Production SHA-256 certificate fingerprint:
 
-`F6:8F:A0:41:A8:15:2C:C6:9C:77:C9:7A:D2:95:45:E8:25:9F:D0:DD:27:41:2C:58:F9:12:21:7D:D1:C0:B2:B9`
+`C7:7E:4D:A2:2E:92:D2:BE:7D:93:B9:D3:DC:7C:3F:77:56:C0:6A:5A:13:0E:C6:90:5A:DC:C2:AD:4E:A3:56:24`
 
-The public reference is retained at:
+Package ID remains `com.blazesystems.blazerental`.
 
-`releases/0.3.0/BlazeRental-signing-fingerprint.txt`
+## Upgrade compatibility
 
-## Required signature schemes
+This v0.4 production identity is **not** the v0.3 certificate. Android therefore will not accept the v0.4 APK as an in-place update over a v0.3 installation with the same package ID.
 
-v0.4 has `minSdkVersion 21`. The final production APK must verify with:
+For v0.4 deployment, use clean/factory-reset Device Owner provisioning or remove the old v0.3 package before installing v0.4. Existing v0.3 installations that must retain app data require the original v0.3 private key; that recovery path remains separate and is not claimed as completed here.
 
-- v1/JAR signing — required for Android 5.x/6.x compatibility.
+## Signature schemes
+
+The production APK is required to verify with:
+
+- v1/JAR signing for Android 5.x/6.x compatibility.
 - APK Signature Scheme v2.
 - APK Signature Scheme v3.
 
-The CI signing workflow refuses a different certificate fingerprint and refuses an APK missing any of those signature schemes.
+The locked production signer uses RSA-3072.
 
-## Private key handling
+## Identity lock and recovery
 
-The production private key must not be committed to this repository. The v0.4 signing workflow expects the existing production keystore through GitHub Actions secrets:
+The exact production identity is recorded in `.github/blazerental-v04-production-identity.json`. Future BlazeRental updates must reuse that certificate. Generating another fresh signing identity would break Android update compatibility again.
 
-- `BLAZERENTAL_KEYSTORE_B64`
-- `BLAZERENTAL_KEYSTORE_PASSWORD`
-- optionally `BLAZERENTAL_KEY_ALIAS` (defaults to `blazerental`)
+The private production keystore is not committed. Its recovery copy is encrypted and sealed to the offline transfer public key. The encrypted backup, encrypted AES key, IV, signer certificate, fingerprint and signing manifest are included with the production release. The matching transfer private key must remain offline and private.
 
-If those secrets are not present, production signing intentionally fails instead of silently generating a replacement identity.
+The one-time fresh signer workflow is no longer an automatic push workflow after identity lock.

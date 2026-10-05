@@ -1,12 +1,6 @@
 name: BlazeRental v0.4 fresh production signing
 
 on:
-  push:
-    branches: [blazepwifi-v0.4.0-implementation]
-    paths:
-      - '.github/blazepwifi-v04-fresh-sign-request.json'
-      - '.github/blazerental-v04-transfer-public.pem'
-      - '.github/workflows/blazerental-v04-fresh-production-sign.yml'
   workflow_dispatch:
     inputs:
       run_id:
@@ -34,6 +28,16 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Refuse accidental production identity rotation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .github/blazerental-v04-production-identity.json ]; then
+            echo "BlazeRental v0.4 production identity is already locked." >&2
+            echo "Do not generate another fresh signer; recover/reuse the locked identity instead." >&2
+            exit 1
+          fi
 
       - name: Resolve exact validated candidate
         id: request
