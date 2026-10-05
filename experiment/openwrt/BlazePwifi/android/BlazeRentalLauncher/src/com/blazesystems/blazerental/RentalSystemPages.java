@@ -412,6 +412,48 @@ public final class RentalSystemPages {
             render();
         }
 
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            // Launcher3 Workspace is itself a horizontal PagedView. Without
+            // temporarily reserving the gesture here it can intercept MOVE
+            // before this managed pager sees enough motion to classify the
+            // renter's swipe. Reserve on DOWN, then hand vertical gestures
+            // back quickly so the normal paid app-drawer gesture can still
+            // be recognized by Launcher3.
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getX();
+                    downY = event.getY();
+                    horizontalGesture = false;
+                    setOuterInterceptionBlocked(true);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (Math.abs(dy) > dp(launcher, 12)
+                            && Math.abs(dy) > Math.abs(dx) * 1.15f) {
+                        setOuterInterceptionBlocked(false);
+                    } else if (Math.abs(dx) > dp(launcher, 12)
+                            && Math.abs(dx) > Math.abs(dy) * 1.15f) {
+                        setOuterInterceptionBlocked(true);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    setOuterInterceptionBlocked(false);
+                    break;
+                default:
+                    break;
+            }
+            return super.dispatchTouchEvent(event);
+        }
+
+        private void setOuterInterceptionBlocked(boolean blocked) {
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(blocked);
+            }
+        }
+
         void refreshPolicy() {
             render();
         }
