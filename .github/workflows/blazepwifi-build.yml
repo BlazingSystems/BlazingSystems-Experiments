@@ -37,8 +37,10 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: BlazeRental source validation
         run: sh experiment/openwrt/BlazePwifi/tests/android.sh
-      - name: BlazeRental v0.4 launcher source validation
+      - name: BlazeRental v0.4 compatibility source validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_android_source.sh
+      - name: BlazeRental v0.5 launcher source validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v05_android_source.sh
       - name: BlazeRental PC QR tool validation
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
       - name: BlazeRental server validation
@@ -211,13 +213,13 @@ jobs:
           RELEASE_APK="$(find build/outputs/apk/aosp/release -type f -name '*.apk' | head -n1)"
           test -n "$DEBUG_APK" -a -f "$DEBUG_APK"
           test -n "$RELEASE_APK" -a -f "$RELEASE_APK"
-          cp "$DEBUG_APK" ../../dist/android/BlazeRental-v0.4.0-ci.apk
-          cp "$RELEASE_APK" ../../dist/android/BlazeRental-v0.4.0-release-unsigned.apk
+          cp "$DEBUG_APK" ../../dist/android/BlazeRental-v0.5.0-ci.apk
+          cp "$RELEASE_APK" ../../dist/android/BlazeRental-v0.5.0-release-unsigned.apk
           cp BLAZE_UPSTREAM.md ../../dist/android/Launcher3-UPSTREAM.txt
-          (cd ../../dist/android && sha256sum BlazeRental-v0.4.0-ci.apk BlazeRental-v0.4.0-release-unsigned.apk > SHA256SUMS)
+          (cd ../../dist/android && sha256sum BlazeRental-v0.5.0-ci.apk BlazeRental-v0.5.0-release-unsigned.apk > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental-v0.4
+          name: BlazePwifi-android-BlazeRental-v0.5
           path: experiment/openwrt/BlazePwifi/dist/android/
 
 
@@ -237,7 +239,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-browser-simulation
+          name: BlazePwifi-v0.5-browser-simulation
           path: simulation-out/browser/
           if-no-files-found: warn
 
@@ -249,13 +251,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental-v0.4
+          name: BlazePwifi-android-BlazeRental-v0.5
           path: candidate/android
       - name: Select exact built APK
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find candidate/android -type f -name 'BlazeRental-v0.4.0-ci.apk' -print -quit)"
+          APK="$(find candidate/android -type f -name 'BlazeRental-v0.5.0-ci.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
           echo "APK=$APK" >> "$GITHUB_ENV"
           mkdir -p simulation-out/android
@@ -277,11 +279,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
           emulator-boot-timeout: 300
-          script: timeout 180s bash experiment/openwrt/BlazePwifi/simulation/android_v04_audit.sh "$APK" simulation-out/android
+          script: timeout 180s bash experiment/openwrt/BlazePwifi/simulation/android_v05_audit.sh "$APK" simulation-out/android
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-android-simulation
+          name: BlazePwifi-v0.5-android-simulation
           path: simulation-out/android/
           if-no-files-found: warn
 
@@ -308,7 +310,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-${{ matrix.kind }}-simulation
+          name: BlazePwifi-v0.5-${{ matrix.kind }}-simulation
           path: simulation-out/${{ matrix.kind }}/
           if-no-files-found: warn
 
@@ -327,7 +329,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-ruijie-simulation
+          name: BlazePwifi-v0.5-ruijie-simulation
           path: simulation-out/ruijie/
           if-no-files-found: warn
 
@@ -350,7 +352,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-${{ matrix.target }}-simulation
+          name: BlazePwifi-v0.5-${{ matrix.target }}-simulation
           path: simulation-out/${{ matrix.target }}/
           if-no-files-found: warn
 
@@ -369,7 +371,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlazePwifi-v0.4-x86-simulation
+          name: BlazePwifi-v0.5-x86-simulation
           path: simulation-out/x86/
           if-no-files-found: warn
 
@@ -395,7 +397,7 @@ jobs:
           mkdir -p candidate-gate
           cat > candidate-gate/CANDIDATE-GATE.json <<JSON
           {
-            "release": "0.4.0",
+            "release": "0.5.0",
             "commit": "${GITHUB_SHA}",
             "status": "passed",
             "required_targets": ["android","esp8266","esp32","ruijie","x86_64","orangepi_zero3","orangepi_one","orangepi_pc"],
@@ -404,7 +406,7 @@ jobs:
           JSON
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-v0.4-candidate-gate
+          name: BlazePwifi-v0.5-candidate-gate
           path: candidate-gate/CANDIDATE-GATE.json
           if-no-files-found: error
 
