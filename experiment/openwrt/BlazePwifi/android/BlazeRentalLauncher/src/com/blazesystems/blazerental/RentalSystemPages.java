@@ -108,10 +108,19 @@ public final class RentalSystemPages {
                     adminHandler.postDelayed(openAdmin, holdMs);
                     return true;
                 }
-                if (event.getAction() == MotionEvent.ACTION_UP
-                        || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                if (event.getAction() == MotionEvent.ACTION_UP) {
                     adminHandler.removeCallbacks(openAdmin);
-                    adminGesture.onUp(SystemClock.elapsedRealtime());
+                    // Fallback for busy/old UI threads: if the delayed runnable
+                    // was not dispatched before finger-up, honor a completed
+                    // hold here instead of silently losing the admin gesture.
+                    if (adminGesture.onUp(SystemClock.elapsedRealtime())) {
+                        launcher.startActivity(new Intent(launcher, BlazeAdminActivity.class));
+                    }
+                    return true;
+                }
+                if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+                    adminHandler.removeCallbacks(openAdmin);
+                    adminGesture.cancel();
                     return true;
                 }
                 return true;
