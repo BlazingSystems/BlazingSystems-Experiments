@@ -64,6 +64,31 @@ swipe_drawer_up() {
   sleep 1
 }
 
+tap_text() {
+  local xml="$1" text="$2"
+  local xy
+  xy="$(python3 - "$xml" "$text" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+path, needle=sys.argv[1],sys.argv[2]
+raw=open(path,'rb').read().decode('utf-8','ignore')
+start=raw.find('<?xml')
+if start > 0: raw=raw[start:]
+root=ET.fromstring(raw)
+for node in root.iter('node'):
+    if node.attrib.get('text') == needle:
+        m=re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.attrib.get('bounds',''))
+        if m:
+            x1,y1,x2,y2=map(int,m.groups())
+            print((x1+x2)//2,(y1+y2)//2)
+            raise SystemExit(0)
+raise SystemExit(2)
+PY
+)" || fail "cannot locate UI node '$text'"
+  read -r x y <<<"$xy"
+  adb shell input tap "$x" "$y"
+  sleep 1
+}
+
 long_press_text() {
   local xml="$1" text="$2" duration="${3:-4500}"
   local xy
@@ -127,8 +152,10 @@ swipe_drawer_up
 dump_ui "02-unpaid-drawer-block"
 assert_ui "$OUT/02-unpaid-drawer-block.xml" "INSERT COIN"
 
-# Page 2: safe controls only.
-swipe_page_left
+# Page 2: safe controls only. Rental Mode supports swipe paging, plus
+# explicit compact navigation buttons for old launchers/touch stacks where a
+# full-page child consumes synthetic or edge-case gestures.
+tap_text "$OUT/02-unpaid-drawer-block.xml" "QUICK CONTROLS >"
 dump_ui "03-quick-controls"
 assert_ui "$OUT/03-quick-controls.xml" "QUICK CONTROLS"
 assert_ui "$OUT/03-quick-controls.xml" "BLUETOOTH"
@@ -143,14 +170,19 @@ sleep 1
 dump_ui "03b-quick-controls-scrolled"
 assert_ui "$OUT/03b-quick-controls-scrolled.xml" "FLOATING TIMER"
 
-# Page 3: notification mirror replaces notification shade.
-swipe_page_left
+# Return the ScrollView to its top navigation row, then open Page 3.
+adb shell input swipe $((qw/2)) $((qh/3)) $((qw/2)) $((qh*4/5)) 450
+sleep 1
+dump_ui "03c-quick-controls-top"
+tap_text "$OUT/03c-quick-controls-top.xml" "NOTIFICATIONS >"
 dump_ui "04-notifications"
 assert_ui "$OUT/04-notifications.xml" "NOTIFICATIONS"
 
-# Return to Page 1 and open the secret native admin via the timer long-press.
-swipe_page_right
-swipe_page_right
+# Return to Page 1 through the same guaranteed navigation fallback and open
+# the secret native admin via the timer long-press.
+tap_text "$OUT/04-notifications.xml" "< QUICK CONTROLS"
+dump_ui "04b-quick-controls-return"
+tap_text "$OUT/04b-quick-controls-return.xml" "< RENTAL"
 dump_ui "05-before-admin"
 assert_ui "$OUT/05-before-admin.xml" "00:00:00"
 long_press_text "$OUT/05-before-admin.xml" "00:00:00" 4500

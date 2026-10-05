@@ -110,6 +110,8 @@ public final class RentalSystemPages {
 
     private static View createRentalPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
+        root.addView(pageNavigation(launcher, -1, null, 1, "QUICK CONTROLS >"),
+                rowMargins(launcher));
         final TextView state = headline(launcher, "BLAZERENTAL");
         final TextView timer = headline(launcher, "00:00:00");
         timer.setTextSize(42f);
@@ -184,6 +186,8 @@ public final class RentalSystemPages {
 
     private static View createQuickPage(final Launcher launcher) {
         LinearLayout root = basePage(launcher);
+        root.addView(pageNavigation(launcher, 0, "< RENTAL", 2, "NOTIFICATIONS >"),
+                rowMargins(launcher));
         root.addView(headline(launcher, "QUICK CONTROLS"));
 
         final AudioManager audio = (AudioManager) launcher.getSystemService(Context.AUDIO_SERVICE);
@@ -287,6 +291,8 @@ public final class RentalSystemPages {
 
     private static View createNotificationsPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
+        root.addView(pageNavigation(launcher, 1, "< QUICK CONTROLS", -1, null),
+                rowMargins(launcher));
         root.addView(headline(launcher, "NOTIFICATIONS"));
         if (!RentalUiPolicy.notificationsEnabled(launcher)) {
             root.addView(infoCard(launcher, "Notification page disabled by operator policy."));
@@ -399,6 +405,62 @@ public final class RentalSystemPages {
             }
         });
         return root;
+    }
+
+    private static LinearLayout pageNavigation(final Launcher launcher,
+            int leftPage, String leftText, int rightPage, String rightText) {
+        LinearLayout row = horizontal(launcher);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        if (leftPage >= 0 && leftText != null) {
+            final int target = leftPage;
+            Button left = navButton(launcher, leftText);
+            left.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    Workspace workspace = launcher.getWorkspace();
+                    if (workspace != null && target < workspace.getPageCount()) {
+                        workspace.snapToPage(target);
+                    }
+                }
+            });
+            row.addView(left, weight());
+        } else {
+            View spacer = new View(launcher);
+            row.addView(spacer, weight());
+        }
+
+        if (rightPage >= 0 && rightText != null) {
+            final int target = rightPage;
+            Button right = navButton(launcher, rightText);
+            right.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    Workspace workspace = launcher.getWorkspace();
+                    if (workspace != null && target < workspace.getPageCount()) {
+                        workspace.snapToPage(target);
+                    }
+                }
+            });
+            row.addView(right, weight());
+        } else {
+            View spacer = new View(launcher);
+            row.addView(spacer, weight());
+        }
+        return row;
+    }
+
+    private static Button navButton(Context c, String text) {
+        Button b = new Button(c);
+        b.setText(text);
+        b.setTextSize(11f);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTextColor(Color.rgb(226, 232, 240));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(30, 41, 59));
+        bg.setCornerRadius(dp(c, 12));
+        b.setBackground(bg);
+        b.setMinHeight(dp(c, 40));
+        b.setPadding(dp(c, 8), 0, dp(c, 8), 0);
+        return b;
     }
 
     private static LinearLayout horizontal(Context context) {
