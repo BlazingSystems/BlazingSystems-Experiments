@@ -262,8 +262,19 @@ public class BlazeAdminActivity extends Activity {
         content.addView(unrestricted, full());
         unrestricted.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                sendPatch("{\"launcher_mode\":\""
-                        + (unrestricted.isChecked() ? "unrestricted" : "rental") + "\"}");
+                String mode = unrestricted.isChecked()
+                        ? RentalPolicy.MODE_UNRESTRICTED : RentalPolicy.MODE_RENTAL;
+                if (!RentalLeaseStore.isEnrolled(BlazeAdminActivity.this)) {
+                    AndroidRentalPolicyRepository.setLocalLauncherMode(
+                            BlazeAdminActivity.this, mode);
+                    ManagedPolicyController.apply(BlazeAdminActivity.this);
+                    Toast.makeText(BlazeAdminActivity.this,
+                            unrestricted.isChecked() ? "Daily-driver mode enabled" :
+                                    "Rental mode enabled locally",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                sendPatch("{\"launcher_mode\":\"" + mode + "\"}");
             }
         });
 
