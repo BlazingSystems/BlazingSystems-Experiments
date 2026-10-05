@@ -14,8 +14,12 @@ public final class LauncherAccessController {
         return !AndroidRentalPolicyRepository.load(context).isUnrestricted();
     }
 
-    public static boolean canOpenAppDrawer(Context context) {
+    public static boolean canUseDevice(Context context) {
         return !isRentalRestricted(context) || RentalLeaseStore.isLeaseValid(context);
+    }
+
+    public static boolean canOpenAppDrawer(Context context) {
+        return canUseDevice(context);
     }
 
     public static boolean isPackageVisible(Context context, String packageName) {
