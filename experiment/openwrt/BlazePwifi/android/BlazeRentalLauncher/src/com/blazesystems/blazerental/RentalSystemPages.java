@@ -19,6 +19,7 @@ import android.text.TextUtils;
 import android.os.Handler;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -110,8 +111,6 @@ public final class RentalSystemPages {
 
     private static View createRentalPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
-        root.addView(pageNavigation(launcher, -1, null, 1, "QUICK CONTROLS >"),
-                rowMargins(launcher));
         final TextView state = headline(launcher, "BLAZERENTAL");
         final TextView timer = headline(launcher, "00:00:00");
         timer.setTextSize(42f);
@@ -181,13 +180,11 @@ public final class RentalSystemPages {
             }
         };
         root.post(refresh);
-        return root;
+        return withNavigation(launcher, root, -1, null, 1, "QUICK CONTROLS >");
     }
 
     private static View createQuickPage(final Launcher launcher) {
         LinearLayout root = basePage(launcher);
-        root.addView(pageNavigation(launcher, 0, "< RENTAL", 2, "NOTIFICATIONS >"),
-                rowMargins(launcher));
         root.addView(headline(launcher, "QUICK CONTROLS"));
 
         final AudioManager audio = (AudioManager) launcher.getSystemService(Context.AUDIO_SERVICE);
@@ -286,20 +283,18 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return scroll;
+        return withNavigation(launcher, scroll, 0, "< RENTAL", 2, "NOTIFICATIONS >");
     }
 
     private static View createNotificationsPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
-        root.addView(pageNavigation(launcher, 1, "< QUICK CONTROLS", -1, null),
-                rowMargins(launcher));
         root.addView(headline(launcher, "NOTIFICATIONS"));
         if (!RentalUiPolicy.notificationsEnabled(launcher)) {
             root.addView(infoCard(launcher, "Notification page disabled by operator policy."));
             ScrollView disabled = new ScrollView(launcher);
             disabled.setFillViewport(true);
             disabled.addView(root);
-            return disabled;
+            return withNavigation(launcher, disabled, 1, "< QUICK CONTROLS", -1, null);
         }
         final LinearLayout list = new LinearLayout(launcher);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -360,7 +355,7 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return scroll;
+        return withNavigation(launcher, scroll, 1, "< QUICK CONTROLS", -1, null);
     }
 
     private static LinearLayout basePage(final Launcher launcher) {
@@ -405,6 +400,21 @@ public final class RentalSystemPages {
             }
         });
         return root;
+    }
+
+    private static View withNavigation(final Launcher launcher, View content,
+            int leftPage, String leftText, int rightPage, String rightText) {
+        FrameLayout shell = new FrameLayout(launcher);
+        shell.addView(content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout nav = pageNavigation(launcher, leftPage, leftText, rightPage, rightText);
+        FrameLayout.LayoutParams navLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(launcher, 44), Gravity.TOP);
+        navLp.setMargins(dp(launcher, 24), dp(launcher, 8),
+                dp(launcher, 24), 0);
+        shell.addView(nav, navLp);
+        return shell;
     }
 
     private static LinearLayout pageNavigation(final Launcher launcher,
