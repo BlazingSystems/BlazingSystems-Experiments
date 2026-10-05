@@ -85,3 +85,35 @@ Before continuing implementation in a future chat:
 ## Logging rule
 
 Update this handover at meaningful state changes: requirements, decisions, code/config changes, commits, tests, failures, fixes, workflow/build/release results, artifacts, blockers and exact next steps. Do not log every tool call.
+
+### Mandatory success logging
+
+Every successful milestone must also record:
+
+- What changed and why.
+- Exact files/areas touched.
+- Commit SHA(s).
+- Tests/audits performed.
+- Successful workflow/build/release IDs when applicable.
+- Any remaining known risks or limitations.
+- Exact next recommended action.
+- A ready-to-copy **Audit & Reconcile prompt** for a new chat.
+
+Use this default prompt structure and specialize it to the latest milestone:
+
+```text
+@GitHub Reconcile and continue the BlazePwifi project from the repository state.
+
+1. Read experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md.
+2. Read the newest file under experiment/openwrt/BlazePwifi/docs/handover/.
+3. Inspect the recent Git history, current implementation branch, relevant workflow results, release/assets, and files changed by the latest milestone.
+4. Audit the latest successful change instead of assuming it is correct. Check for regressions, incomplete wiring, security/UX conflicts, stale documentation, and mismatches with approved requirements.
+5. Reconcile repository state with the approved project target and decisions in the handover logs.
+6. Preserve completed/approved decisions unless the owner explicitly changed them.
+7. If the latest success has a test/build/release artifact, verify the exact SHA/run/artifact before building on top of it.
+8. Continue from the exact NEXT ACTION recorded in the newest handover log.
+9. Update PROJECT_HANDOVER.md and add a new dated handover log after every meaningful success, failure, blocker, or design change.
+10. For every successful milestone, include a new Audit & Reconcile prompt in the handover log for the next chat.
+```
+
+Failures should also be logged when meaningful, including reproduction/evidence, suspected cause, what was tried, and the safest next action.
