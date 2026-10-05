@@ -255,7 +255,8 @@ jobs:
           open(out,'wb').write(data[off:])
           PY
           rm -rf "$RUNNER_TEMP/ruijie-root"
-          unsquashfs -f -d "$RUNNER_TEMP/ruijie-root" "$RUNNER_TEMP/ruijie-root.squashfs" >/dev/null
+          sudo unsquashfs -f -d "$RUNNER_TEMP/ruijie-root" "$RUNNER_TEMP/ruijie-root.squashfs" >/dev/null
+          sudo chmod -R a+rX "$RUNNER_TEMP/ruijie-root"
           test -d "$RUNNER_TEMP/ruijie-root/etc/config"
           tar -C "$RUNNER_TEMP/ruijie-root" -czf             "$OUT/BlazePwifi-EW1200G-Pro-v1.1-default-config-backup.tar.gz" etc/config
 
