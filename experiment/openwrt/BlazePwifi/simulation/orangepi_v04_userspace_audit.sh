@@ -30,9 +30,11 @@ trap cleanup EXIT
 read -r ROOT_START ROOT_SECTORS <<EOF
 $(fdisk -l "$IMG" | awk '$NF=="Linux" {print $2, $4; exit}')
 EOF
-case "$ROOT_START:$ROOT_SECTORS" in
-  ''*|*:*[!0-9]*|*[!0-9]*:*) echo "could not parse OpenWrt Linux rootfs partition" >&2; exit 1;;
-esac
+if ! [[ "$ROOT_START" =~ ^[0-9]+$ && "$ROOT_SECTORS" =~ ^[0-9]+$ ]]; then
+  echo "could not parse OpenWrt Linux rootfs partition" >&2
+  cat "$OUT/fdisk.txt" >&2 || true
+  exit 1
+fi
 ROOT_OFFSET=$((ROOT_START * 512))
 ROOT_LIMIT=$((ROOT_SECTORS * 512))
 sudo mount -o "ro,loop,offset=$ROOT_OFFSET,sizelimit=$ROOT_LIMIT" "$IMG" "$MNT"

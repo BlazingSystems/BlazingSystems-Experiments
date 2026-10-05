@@ -44,13 +44,17 @@ screen_size() {
 
 swipe_page_left() {
   read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w*9/10)) $((h/2)) $((w/10)) $((h/2)) 180
+  # Swipe through the quiet upper portion of the fixed page. The rental timer
+  # deliberately consumes touch for its secret admin long-press, so a
+  # center-screen synthetic swipe can be captured by that control instead of
+  # exercising Launcher3 paging.
+  adb shell input swipe $((w*9/10)) $((h/6)) $((w/10)) $((h/6)) 320
   sleep 1
 }
 
 swipe_page_right() {
   read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w/10)) $((h/2)) $((w*9/10)) $((h/2)) 180
+  adb shell input swipe $((w/10)) $((h/6)) $((w*9/10)) $((h/6)) 320
   sleep 1
 }
 
