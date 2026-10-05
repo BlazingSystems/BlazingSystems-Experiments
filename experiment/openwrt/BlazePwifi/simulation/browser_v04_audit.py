@@ -4,7 +4,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1] / "openwrt" / "rootfs" / "www" / "blazepwifi"
-OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "browser-v04-audit")
+OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "browser-v04-audit").resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
