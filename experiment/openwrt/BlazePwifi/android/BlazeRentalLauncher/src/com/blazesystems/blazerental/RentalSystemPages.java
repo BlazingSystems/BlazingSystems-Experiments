@@ -83,8 +83,9 @@ public final class RentalSystemPages {
         rental.removeAllViews();
 
         RentalFixedPager pager = new RentalFixedPager(launcher);
-        pager.setId(PAGER_VIEW_ID);
-        attachFullPage(rental, pager, 0x740401);
+        // CellLayout assigns the child ID during insertion. Keep it identical
+        // to the ID used above to find and reuse the managed pager.
+        attachFullPage(rental, pager, PAGER_VIEW_ID);
         workspace.snapToPageImmediately(0);
         workspace.setCurrentPage(0);
 
@@ -411,6 +412,47 @@ public final class RentalSystemPages {
             render();
         }
 
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            // Launcher3 Workspace is itself a horizontal PagedView. Reserve
+            // the touch stream on DOWN so it cannot steal a renter's page
+            // swipe before this managed pager can classify it. Hand clearly
+            // vertical motion back quickly so the paid app-drawer gesture
+            // remains available to Launcher3.
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getX();
+                    downY = event.getY();
+                    horizontalGesture = false;
+                    setOuterInterceptionBlocked(true);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (Math.abs(dy) > dp(launcher, 12)
+                            && Math.abs(dy) > Math.abs(dx) * 1.15f) {
+                        setOuterInterceptionBlocked(false);
+                    } else if (Math.abs(dx) > dp(launcher, 12)
+                            && Math.abs(dx) > Math.abs(dy) * 1.15f) {
+                        setOuterInterceptionBlocked(true);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    setOuterInterceptionBlocked(false);
+                    break;
+                default:
+                    break;
+            }
+            return super.dispatchTouchEvent(event);
+        }
+
+        private void setOuterInterceptionBlocked(boolean blocked) {
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(blocked);
+            }
+        }
+
         void refreshPolicy() {
             render();
         }
@@ -523,6 +565,15 @@ public final class RentalSystemPages {
         public boolean onTouchEvent(MotionEvent event) {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_MOVE:
+                    // If this pager owns the stream directly (for example a
+                    // swipe beginning on non-clickable content), interception
+                    // may not have classified the MOVE yet.
+                    float moveX = event.getX() - downX;
+                    float moveY = event.getY() - downY;
+                    if (Math.abs(moveX) > dp(launcher, 40)
+                            && Math.abs(moveX) > Math.abs(moveY) * 1.25f) {
+                        horizontalGesture = true;
+                    }
                     return true;
                 case MotionEvent.ACTION_UP:
                     float dx = event.getX() - downX;
@@ -530,7 +581,8 @@ public final class RentalSystemPages {
                     if (horizontalGesture
                             && Math.abs(dx) > dp(launcher, 56)
                             && Math.abs(dx) > Math.abs(dy) * 1.25f) {
-                        showPage(page + (dx < 0f ? 1 : -1));
+                        showPage(Math.max(FIXED_RENTAL, Math.min(FIXED_NOTIFICATIONS,
+                                page + (dx < 0f ? 1 : -1))));
                     }
                     horizontalGesture = false;
                     return true;
