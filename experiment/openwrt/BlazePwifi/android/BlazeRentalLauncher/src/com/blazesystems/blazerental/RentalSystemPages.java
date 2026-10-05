@@ -180,7 +180,7 @@ public final class RentalSystemPages {
             }
         };
         root.post(refresh);
-        return withNavigation(launcher, root, -1, null, 1, "QUICK CONTROLS >");
+        return withNavigation(launcher, root, Long.MIN_VALUE, null, PAGE_QUICK, "QUICK CONTROLS >");
     }
 
     private static View createQuickPage(final Launcher launcher) {
@@ -283,7 +283,7 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return withNavigation(launcher, scroll, 0, "< RENTAL", 2, "NOTIFICATIONS >");
+        return withNavigation(launcher, scroll, Workspace.FIRST_SCREEN_ID, "< RENTAL", PAGE_NOTIFICATIONS, "NOTIFICATIONS >");
     }
 
     private static View createNotificationsPage(final Launcher launcher) {
@@ -294,7 +294,7 @@ public final class RentalSystemPages {
             ScrollView disabled = new ScrollView(launcher);
             disabled.setFillViewport(true);
             disabled.addView(root);
-            return withNavigation(launcher, disabled, 1, "< QUICK CONTROLS", -1, null);
+            return withNavigation(launcher, disabled, PAGE_QUICK, "< QUICK CONTROLS", Long.MIN_VALUE, null);
         }
         final LinearLayout list = new LinearLayout(launcher);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -355,7 +355,7 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return withNavigation(launcher, scroll, 1, "< QUICK CONTROLS", -1, null);
+        return withNavigation(launcher, scroll, PAGE_QUICK, "< QUICK CONTROLS", Long.MIN_VALUE, null);
     }
 
     private static LinearLayout basePage(final Launcher launcher) {
@@ -403,12 +403,12 @@ public final class RentalSystemPages {
     }
 
     private static View withNavigation(final Launcher launcher, View content,
-            int leftPage, String leftText, int rightPage, String rightText) {
+            long leftScreenId, String leftText, long rightScreenId, String rightText) {
         FrameLayout shell = new FrameLayout(launcher);
         shell.addView(content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        LinearLayout nav = pageNavigation(launcher, leftPage, leftText, rightPage, rightText);
+        LinearLayout nav = pageNavigation(launcher, leftScreenId, leftText, rightScreenId, rightText);
         FrameLayout.LayoutParams navLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(launcher, 44), Gravity.TOP);
         navLp.setMargins(dp(launcher, 24), dp(launcher, 8),
@@ -418,18 +418,21 @@ public final class RentalSystemPages {
     }
 
     private static LinearLayout pageNavigation(final Launcher launcher,
-            int leftPage, String leftText, int rightPage, String rightText) {
+            long leftScreenId, String leftText, long rightScreenId, String rightText) {
         LinearLayout row = horizontal(launcher);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        if (leftPage >= 0 && leftText != null) {
-            final int target = leftPage;
+        if (leftScreenId != Long.MIN_VALUE && leftText != null) {
+            final long targetScreenId = leftScreenId;
             Button left = navButton(launcher, leftText);
             left.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     Workspace workspace = launcher.getWorkspace();
-                    if (workspace != null && target < workspace.getPageCount()) {
-                        workspace.setCurrentPage(target);
+                    if (workspace != null) {
+                        int target = workspace.getPageIndexForScreenId(targetScreenId);
+                        if (target >= 0 && target < workspace.getPageCount()) {
+                            workspace.setCurrentPage(target);
+                        }
                     }
                 }
             });
@@ -439,14 +442,17 @@ public final class RentalSystemPages {
             row.addView(spacer, weight());
         }
 
-        if (rightPage >= 0 && rightText != null) {
-            final int target = rightPage;
+        if (rightScreenId != Long.MIN_VALUE && rightText != null) {
+            final long targetScreenId = rightScreenId;
             Button right = navButton(launcher, rightText);
             right.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     Workspace workspace = launcher.getWorkspace();
-                    if (workspace != null && target < workspace.getPageCount()) {
-                        workspace.setCurrentPage(target);
+                    if (workspace != null) {
+                        int target = workspace.getPageIndexForScreenId(targetScreenId);
+                        if (target >= 0 && target < workspace.getPageCount()) {
+                            workspace.setCurrentPage(target);
+                        }
                     }
                 }
             });
