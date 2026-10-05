@@ -5,7 +5,7 @@ APK="${1:?usage: android_v05_audit.sh /path/to/BlazeRental-v0.5.0-ci.apk [output
 OUT="${2:-android-v05-audit}"
 PKG="com.blazesystems.blazerental.debug"
 ADMIN="$PKG/com.blazesystems.blazerental.BlazeDeviceAdminReceiver"
-HOME="$PKG/com.google.android.apps.nexuslauncher.NexusLauncherActivity"
+HOME_COMPONENT="$PKG/com.google.android.apps.nexuslauncher.NexusLauncherActivity"
 mkdir -p "$OUT"
 
 fail(){ echo "ANDROID_V05_FAIL: $*" >&2; adb logcat -d >"$OUT/logcat.txt" 2>/dev/null||true; exit 1; }
@@ -56,7 +56,7 @@ adb logcat -c || true
 adb shell dpm set-device-owner "$ADMIN" >"$OUT/device-owner.txt" 2>&1 || { cat "$OUT/device-owner.txt"; fail "Device Owner provisioning failed"; }
 grep -Eqi 'Success|Active admin set' "$OUT/device-owner.txt" || fail "Device Owner not confirmed"
 
-timeout 20 adb shell am start -n "$HOME" >"$OUT/home-start.txt" 2>&1 || true
+timeout 20 adb shell am start -n "$HOME_COMPONENT" >"$OUT/home-start.txt" 2>&1 || true
 sleep 4
 dump_ui 01-locked
 assert_has "$OUT/01-locked.xml" "BLAZERENTAL"
