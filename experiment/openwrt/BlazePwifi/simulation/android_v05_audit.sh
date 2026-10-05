@@ -78,9 +78,11 @@ long_text "$OUT/03-unpaid-horizontal.xml" "00:00:00" 4500
 dump_ui 04-admin
 assert_has "$OUT/04-admin.xml" "BlazeRental Initial Setup"
 
-# Establish local administrator password.
-PFILE="$(scroll_find 05-password 'Create local admin password' || true)"
-[ -n "$PFILE" ] || fail "admin password field missing"
+# Establish local administrator password. The initial-setup layout keeps
+# this field above the fold; verify and tap the exact visible EditText instead
+# of scrolling the page away from it.
+PFILE="$OUT/04-admin.xml"
+assert_has "$PFILE" "Create local admin password"
 tap_text "$PFILE" "Create local admin password"
 adb shell input text 'BlazeTest123'
 adb shell input keyevent 4
