@@ -13,6 +13,7 @@ import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.util.ComponentKeyMapper;
 import com.android.launcher3.util.ViewOnDrawExecutor;
 import com.blazesystems.blazerental.ManagedPolicyController;
+import com.blazesystems.blazerental.LauncherAccessController;
 import com.google.android.libraries.gsa.launcherclient.LauncherClient;
 
 import java.util.List;
@@ -33,9 +34,9 @@ public class NexusLauncherActivity extends Launcher {
         mThemeHints = themeHints();
 
         SharedPreferences prefs = Utilities.getPrefs(this);
-        if (!PixelBridge.isInstalled(this)) {
-            prefs.edit().putBoolean(SettingsActivity.ENABLE_MINUS_ONE_PREF, false).apply();
-        }
+        // BlazeRental owns Launcher3's custom-left surface in v0.5.
+        // Keep the legacy external Google overlay disabled to avoid gesture conflicts.
+        prefs.edit().putBoolean(SettingsActivity.ENABLE_MINUS_ONE_PREF, false).apply();
 
         super.onCreate(savedInstanceState);
 
@@ -56,6 +57,13 @@ public class NexusLauncherActivity extends Launcher {
         super.onResume();
         ManagedPolicyController.apply(this);
         ManagedPolicyController.enforceLauncherTask(this);
+        if (!LauncherAccessController.canUseDevice(this)) {
+            getWorkspace().post(new Runnable() {
+                @Override public void run() {
+                    moveToCustomContentScreen(false);
+                }
+            });
+        }
     }
 
     @Override
