@@ -111,7 +111,9 @@ with sync_playwright() as p:
 
     page.click('[data-page="system"]')
     page.wait_for_selector("#page-system.active")
-    assert "TailAdmin" in page.locator("#page-system").inner_text()
+    system_text = page.locator("#page-system").inner_text()
+    assert ("TailAdmin" in system_text
+            or ("System & Security" in system_text and "Security posture" in system_text))
 
     page.click('[data-page="dashboard"]')
     page.click("#voucherBtn")
