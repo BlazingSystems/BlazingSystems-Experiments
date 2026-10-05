@@ -28,13 +28,15 @@ public final class BlazeLeftPanel extends FrameLayout {
     private float downX;
     private float downY;
     private boolean horizontal;
+    private boolean lastCanUseDevice;
 
     public BlazeLeftPanel(Launcher launcher) {
         super(launcher);
         this.launcher = launcher;
         setClickable(true);
         setFocusable(true);
-        page = canUseDevice() ? PAGE_NOTIFICATIONS : PAGE_RENTAL;
+        lastCanUseDevice = canUseDevice();
+        page = lastCanUseDevice ? PAGE_NOTIFICATIONS : PAGE_RENTAL;
         render();
     }
 
@@ -55,10 +57,19 @@ public final class BlazeLeftPanel extends FrameLayout {
     }
 
     public void refreshPolicy() {
-        if (!canUseDevice() && page != PAGE_RENTAL) {
+        boolean allowed = canUseDevice();
+        boolean pageChanged = !allowed && page != PAGE_RENTAL;
+        boolean policyChanged = allowed != lastCanUseDevice;
+        if (pageChanged) {
             page = PAGE_RENTAL;
         }
-        render();
+        lastCanUseDevice = allowed;
+        // Keep the current rental view alive while policy is unchanged.
+        // Rebuilding it on every Launcher3 onShow can cancel an in-progress
+        // secret timer hold and creates unnecessary visual churn.
+        if (pageChanged || policyChanged) {
+            render();
+        }
     }
 
     private boolean canUseDevice() {
