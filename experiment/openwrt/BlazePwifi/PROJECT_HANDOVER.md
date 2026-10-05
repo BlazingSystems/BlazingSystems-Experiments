@@ -73,6 +73,62 @@ Approved design direction:
 - Terminal access must never be exposed to captive-portal users.
 - On constrained OpenWrt devices, prefer a small streamed command runner rather than a heavy full browser terminal emulator.
 
+
+## Remote monitoring / remote management
+
+Approved design direction:
+
+- Add a dedicated **Remote Access / Fleet Management** section to the Management Console.
+- Do not hard-code a vendor, account, endpoint, address, key, subnet, route, or management scope. All remote-access parameters must be owner-configurable.
+- Remote access is **disabled by default** until the owner explicitly configures it.
+- When Remote Access is enabled, offer exactly two first-class modes:
+  1. **WireGuard VPN — Recommended/default selection**
+     - preferred for BlazePwifi because it is lightweight, OpenWrt-native/well-supported, owner-controlled, and suitable for site-to-site or outbound-to-hub management;
+     - support a BlazePwifi node behind NAT/CGNAT by allowing it to initiate an outbound WireGuard tunnel to an owner-controlled hub/VPS/router;
+     - configurable endpoint/FQDN, port, peer/public keys, optional preshared key, tunnel address, allowed IPs/routes, persistent keepalive, DNS, MTU, reconnect/health-check and management subnets;
+     - private keys remain local and are never displayed after creation/export unless the owner explicitly rotates/reprovisions them.
+  2. **ZeroTier — Easy-mesh alternative**
+     - intended for simpler NAT/CGNAT traversal and multi-site mesh enrollment;
+     - configurable Network ID, authorization state, managed IP/routes, local interface/firewall scope, low-bandwidth option where supported, and reconnect/health state;
+     - no hard-coded ZeroTier account/network dependency.
+
+- Monitoring and management permissions must be independently configurable:
+  - Remote Monitoring only (read-only metrics/status);
+  - Remote Management (configuration changes);
+  - Remote Terminal (separate advanced permission, off by default).
+- Remote-access scope should be configurable per service/module:
+  - Dashboard/status;
+  - alerts/events;
+  - clients/sessions;
+  - sales/reports;
+  - backups;
+  - portal/templates;
+  - rental devices;
+  - controllers;
+  - network/WAN/LAN/VLAN;
+  - system/firmware;
+  - tools;
+  - terminal.
+- Add optional fleet-style status:
+  - node name/site/location label;
+  - online/offline;
+  - last seen;
+  - WAN health;
+  - tunnel health/last handshake;
+  - public/overlay/tunnel IPs where appropriate;
+  - CPU/RAM/storage/temp;
+  - active clients/sessions;
+  - controller/rental-device health;
+  - firmware/version;
+  - alerts and backup status.
+- Configurable heartbeat/refresh interval, offline-alert threshold, reconnect behavior, telemetry retention and alert severity.
+- Remote management must bind to LAN/VPN/overlay interfaces only by default and must **not expose the Management Console directly to the public WAN**.
+- Support configurable allowlists for remote management source addresses/subnets.
+- Re-authentication should be required for high-risk actions such as firmware updates, factory reset, backup restore, credential/key changes and Advanced Terminal.
+- Maintain complete audit logging of remote sessions and state-changing actions.
+- Rate limits, session limits, timeouts and abuse controls apply equally to remote access.
+- If the VPN/overlay fails, local LAN management and the captive portal must continue working normally.
+
 ## Networking / operations requirements captured
 
 - Multiple WAN modes including Ethernet, WISP when Wi-Fi hardware is available, USB Ethernet, dual-WAN load balancing and failover.
