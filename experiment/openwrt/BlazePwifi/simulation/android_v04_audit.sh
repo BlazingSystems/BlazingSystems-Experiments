@@ -38,9 +38,9 @@ assert_ui() {
   grep -Fq "$needle" "$file" || fail "UI missing '$needle' in $file"
 }
 
-assert_ui_exact() {
+ui_has_exact() {
   local file="$1" needle="$2"
-  python3 - "$file" "$needle" <<'PY' || fail "UI missing exact node '$needle' in $file"
+  python3 - "$file" "$needle" <<'PY'
 import sys,xml.etree.ElementTree as ET
 path, needle=sys.argv[1],sys.argv[2]
 raw=open(path,'rb').read().decode('utf-8','ignore')
@@ -52,37 +52,53 @@ if not any(node.attrib.get('text') == needle for node in root.iter('node')):
 PY
 }
 
-assert_ui_after_scroll() {
-  local prefix="$1" needle="$2" tries="${3:-5}" i
-  for ((i=0; i<tries; i++)); do
-    dump_ui "$prefix-$i"
-    if grep -Fq "$needle" "$OUT/$prefix-$i.xml"; then
+assert_ui_exact() {
+  ui_has_exact "$1" "$2" || fail "UI missing exact node '$2' in $1"
+}
+
+# Keep each hierarchy and screenshot so a missing/off-screen control remains
+# diagnosable. Search is bounded and requires the real, exact runtime label.
+scroll_to_exact() {
+  local name="$1" needle="$2" attempt w h
+  read -r w h <<<"$(screen_size)"
+  for attempt in 0 1 2 3 4 5 6; do
+    dump_ui "$name-$attempt"
+    if ui_has_exact "$OUT/$name-$attempt.xml" "$needle"; then
       return 0
     fi
-    read -r w h <<<"$(screen_size)"
-    adb shell input swipe $((w/2)) $((h*4/5)) $((w/2)) $((h/4)) 350
-    sleep 1
+    if [ "$attempt" -lt 6 ]; then
+      adb shell input swipe $((w/2)) $((h*4/5)) $((w/2)) $((h/3)) 420
+      sleep 1
+    fi
   done
-  fail "UI missing '$needle' after scrolling $tries times"
+  fail "UI missing exact node '$needle' after bounded scrolling ($name)"
 }
 
 screen_size() {
   adb shell wm size | sed -n 's/.*Physical size: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -n1
 }
 
-swipe_page_left() {
+swipe_page() {
+  local xml="$1" heading="$2" direction="$3" w h y from to
   read -r w h <<<"$(screen_size)"
-  # Swipe through the quiet upper portion of the fixed page. The rental timer
-  # deliberately consumes touch for its secret admin long-press, so a
-  # center-screen synthetic swipe can be captured by that control instead of
-  # exercising Launcher3 paging.
-  adb shell input swipe $((w*9/10)) $((h/12)) $((w/10)) $((h/12)) 320
-  sleep 1
-}
-
-swipe_page_right() {
-  read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w/10)) $((h/12)) $((w*9/10)) $((h/12)) 320
+  # The headline is below the nav overlay and above the secret timer. Derive
+  # its actual position rather than swiping through a navigation button.
+  y="$(python3 - "$xml" "$heading" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+raw=open(sys.argv[1],encoding='utf-8').read()
+root=ET.fromstring(raw[raw.find('<?xml'):])
+for node in root.iter('node'):
+    if node.get('text') == sys.argv[2]:
+        bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
+        if len(bounds) == 4 and bounds[3] > bounds[1]:
+            print((bounds[1]+bounds[3])//2)
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+)" || fail "cannot locate swipe headline '$heading'"
+  from=$((w*9/10)); to=$((w/10))
+  if [ "$direction" = right ]; then from=$((w/10)); to=$((w*9/10)); fi
+  adb shell input swipe "$from" "$y" "$to" "$y" 320
   sleep 1
 }
 
@@ -180,10 +196,30 @@ swipe_drawer_up
 dump_ui "02-unpaid-drawer-block"
 assert_ui "$OUT/02-unpaid-drawer-block.xml" "INSERT COIN"
 
+# Exercise gestures independently of the button fallback, including both ends.
+swipe_page "$OUT/02-unpaid-drawer-block.xml" "BLAZERENTAL" right
+dump_ui "02a-rental-boundary"
+assert_ui_exact "$OUT/02a-rental-boundary.xml" "BLAZERENTAL"
+swipe_page "$OUT/02a-rental-boundary.xml" "BLAZERENTAL" left
+dump_ui "02b-swipe-quick"
+assert_ui_exact "$OUT/02b-swipe-quick.xml" "QUICK CONTROLS"
+swipe_page "$OUT/02b-swipe-quick.xml" "QUICK CONTROLS" left
+dump_ui "02c-swipe-notifications"
+assert_ui_exact "$OUT/02c-swipe-notifications.xml" "NOTIFICATIONS"
+swipe_page "$OUT/02c-swipe-notifications.xml" "NOTIFICATIONS" left
+dump_ui "02d-notifications-boundary"
+assert_ui_exact "$OUT/02d-notifications-boundary.xml" "NOTIFICATIONS"
+swipe_page "$OUT/02d-notifications-boundary.xml" "NOTIFICATIONS" right
+dump_ui "02e-swipe-quick-return"
+assert_ui_exact "$OUT/02e-swipe-quick-return.xml" "QUICK CONTROLS"
+swipe_page "$OUT/02e-swipe-quick-return.xml" "QUICK CONTROLS" right
+dump_ui "02f-swipe-rental-return"
+assert_ui_exact "$OUT/02f-swipe-rental-return.xml" "BLAZERENTAL"
+
 # Page 2: safe controls only. Rental Mode supports swipe paging, plus
 # explicit compact navigation buttons for old launchers/touch stacks where a
 # full-page child consumes synthetic or edge-case gestures.
-tap_text "$OUT/02-unpaid-drawer-block.xml" "QUICK CONTROLS >"
+tap_text "$OUT/02f-swipe-rental-return.xml" "QUICK CONTROLS >"
 dump_ui "03-quick-controls"
 assert_ui_exact "$OUT/03-quick-controls.xml" "QUICK CONTROLS"
 assert_ui "$OUT/03-quick-controls.xml" "BLUETOOTH"
@@ -211,12 +247,8 @@ assert_ui "$OUT/05-before-admin.xml" "00:00:00"
 long_press_text "$OUT/05-before-admin.xml" "00:00:00" 4500
 dump_ui "06-initial-admin"
 assert_ui "$OUT/06-initial-admin.xml" "BlazeRental Initial Setup"
-# The setup screen is intentionally a ScrollView; on the Pixel 2/API 27 gate,
-# QR binding and uninstall-defence controls are below the fold. Verify them by
-# actually scrolling the native screen instead of assuming UIAutomator exposes
-# off-screen descendants.
-assert_ui_after_scroll "06a-initial-admin-qr" "SCAN BLAZEPWIFI ENROLLMENT QR" 5
-assert_ui_after_scroll "06b-initial-admin-security" "Uninstall defence" 5
+scroll_to_exact "06a-enrollment-qr" "SCAN BLAZEPWIFI ENROLLMENT QR"
+scroll_to_exact "06b-uninstall-defence" "3 · Uninstall defence"
 
 # Device Owner must protect the production package from ordinary uninstall.
 set +e
@@ -249,6 +281,8 @@ json.dump({
     "unpaid_drawer_blocked":True,
     "quick_controls_page":True,
     "notifications_page":True,
+    "swipe_navigation_both_directions":True,
+    "swipe_endpoints_clamped":True,
     "secret_timer_admin":True,
     "initial_setup":True,
     "device_owner":True,
