@@ -18,6 +18,7 @@ import java.util.List;
 public final class ManagedPolicyController {
     private static final String LAUNCHER_ACTIVITY =
             "com.google.android.apps.nexuslauncher.NexusLauncherActivity";
+    private static volatile boolean launcherForeground;
 
     private ManagedPolicyController() {}
 
@@ -136,8 +137,16 @@ public final class ManagedPolicyController {
         }
     }
 
+    public static void setLauncherForeground(boolean foreground) {
+        launcherForeground = foreground;
+    }
+
+    public static boolean isLauncherForeground() {
+        return launcherForeground;
+    }
+
     public static void openHome(Context context) {
-        if (RentalLeaseStore.isAdminWindowActive(context)) return;
+        if (RentalLeaseStore.isAdminWindowActive(context) || launcherForeground) return;
         Intent home = new Intent(Intent.ACTION_MAIN);
         home.addCategory(Intent.CATEGORY_HOME);
         home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
