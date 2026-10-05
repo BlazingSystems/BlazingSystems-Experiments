@@ -425,17 +425,7 @@ public final class RentalSystemPages {
         if (leftScreenId != Long.MIN_VALUE && leftText != null) {
             final long targetScreenId = leftScreenId;
             Button left = navButton(launcher, leftText);
-            left.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) {
-                    Workspace workspace = launcher.getWorkspace();
-                    if (workspace != null) {
-                        int target = workspace.getPageIndexForScreenId(targetScreenId);
-                        if (target >= 0 && target < workspace.getPageCount()) {
-                            workspace.setCurrentPage(target);
-                        }
-                    }
-                }
-            });
+            bindNavigationButton(launcher, left, targetScreenId);
             row.addView(left, weight());
         } else {
             View spacer = new View(launcher);
@@ -445,23 +435,45 @@ public final class RentalSystemPages {
         if (rightScreenId != Long.MIN_VALUE && rightText != null) {
             final long targetScreenId = rightScreenId;
             Button right = navButton(launcher, rightText);
-            right.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) {
-                    Workspace workspace = launcher.getWorkspace();
-                    if (workspace != null) {
-                        int target = workspace.getPageIndexForScreenId(targetScreenId);
-                        if (target >= 0 && target < workspace.getPageCount()) {
-                            workspace.setCurrentPage(target);
-                        }
-                    }
-                }
-            });
+            bindNavigationButton(launcher, right, targetScreenId);
             row.addView(right, weight());
         } else {
             View spacer = new View(launcher);
             row.addView(spacer, weight());
         }
         return row;
+    }
+
+    private static void bindNavigationButton(final Launcher launcher,
+            final Button button, final long targetScreenId) {
+        final Runnable navigate = new Runnable() {
+            @Override public void run() {
+                Workspace workspace = launcher.getWorkspace();
+                if (workspace == null) return;
+                int target = workspace.getPageIndexForScreenId(targetScreenId);
+                if (target >= 0 && target < workspace.getPageCount()) {
+                    workspace.setCurrentPage(target);
+                }
+            }
+        };
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                navigate.run();
+            }
+        });
+        // ScrollView/old Launcher3 touch dispatch can cancel a Button click after
+        // ACTION_DOWN even though the control remains visibly clickable. Fixed
+        // rental page navigation is safety-critical, so honor a direct press
+        // immediately as well as the normal accessibility click path.
+        button.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    navigate.run();
+                    return true;
+                }
+                return true;
+            }
+        });
     }
 
     private static Button navButton(Context c, String text) {
