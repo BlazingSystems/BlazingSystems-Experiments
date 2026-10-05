@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.net.Uri;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.SurfaceHolder;
@@ -22,6 +24,7 @@ import org.json.JSONObject;
 public class QrEnrollmentScannerActivity extends Activity
         implements SurfaceHolder.Callback, Camera.PreviewCallback {
     private static final int CAMERA_PERMISSION = 742;
+    private FrameLayout root;
     private SurfaceView surface;
     private Camera camera;
     private boolean decoded;
@@ -29,10 +32,23 @@ public class QrEnrollmentScannerActivity extends Activity
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
         surface = new SurfaceView(this);
-        root.addView(surface, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams preview = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER);
+        root.addView(surface, preview);
+
+        View scanFrame = new View(this);
+        GradientDrawable frame = new GradientDrawable();
+        frame.setColor(Color.TRANSPARENT);
+        frame.setStroke(dp(3), 0xff52e4ff);
+        frame.setCornerRadius(dp(18));
+        scanFrame.setBackground(frame);
+        int side = Math.round(getResources().getDisplayMetrics().widthPixels * 0.72f);
+        FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(side, side, Gravity.CENTER);
+        root.addView(scanFrame, fp);
         TextView hint = new TextView(this);
         hint.setText("Scan BlazePwifi enrollment QR");
         hint.setTextSize(18f);
@@ -59,6 +75,7 @@ public class QrEnrollmentScannerActivity extends Activity
     @Override public void surfaceCreated(SurfaceHolder holder) {
         try {
             camera = Camera.open();
+            camera.setDisplayOrientation(90);
             camera.setPreviewDisplay(holder);
             camera.setPreviewCallback(this);
             camera.startPreview();
@@ -69,7 +86,28 @@ public class QrEnrollmentScannerActivity extends Activity
         }
     }
 
-    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {}
+    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        if (camera == null || root == null) return;
+        try {
+            Camera.Size size = camera.getParameters().getPreviewSize();
+            // Portrait display rotates the camera preview 90 degrees, so the
+            // visible aspect is height:width. Fit it inside the screen without
+            // stretching; black bars are preferable to a distorted scanner.
+            float aspect = (float) size.height / (float) size.width;
+            int availableW = root.getWidth();
+            int availableH = root.getHeight();
+            if (availableW <= 0 || availableH <= 0) return;
+            int previewW = availableW;
+            int previewH = Math.round(previewW / aspect);
+            if (previewH > availableH) {
+                previewH = availableH;
+                previewW = Math.round(previewH * aspect);
+            }
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    Math.max(1, previewW), Math.max(1, previewH), Gravity.CENTER);
+            surface.setLayoutParams(lp);
+        } catch (Exception ignored) {}
+    }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { stopCamera(); }
 
     @Override public void onPreviewFrame(byte[] data, Camera source) {
