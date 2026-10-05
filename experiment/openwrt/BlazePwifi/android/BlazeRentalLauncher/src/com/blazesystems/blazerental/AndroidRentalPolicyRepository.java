@@ -45,6 +45,16 @@ public final class AndroidRentalPolicyRepository {
         return true;
     }
 
+    public static void setLocalLauncherMode(Context context, String mode) {
+        String normalized = RentalPolicy.MODE_UNRESTRICTED.equals(mode)
+                ? RentalPolicy.MODE_UNRESTRICTED : RentalPolicy.MODE_RENTAL;
+        SharedPreferences p = prefs(context);
+        p.edit()
+                .putLong("revision", Math.max(0L, p.getLong("revision", 0L)))
+                .putString("launcher_mode", normalized)
+                .apply();
+    }
+
     public static void clear(Context context) {
         prefs(context).edit().clear().apply();
     }
