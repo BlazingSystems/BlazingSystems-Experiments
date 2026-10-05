@@ -357,13 +357,47 @@ public final class RentalSystemPages {
         return scroll;
     }
 
-    private static LinearLayout basePage(Context context) {
-        LinearLayout root = new LinearLayout(context);
+    private static LinearLayout basePage(final Launcher launcher) {
+        final LinearLayout root = new LinearLayout(launcher);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        int p = dp(context, 24);
-        root.setPadding(p, dp(context, 54), p, p);
+        int p = dp(launcher, 24);
+        root.setPadding(p, dp(launcher, 54), p, p);
         root.setBackgroundColor(Color.rgb(10, 16, 29));
+
+        // Launcher3 paging can be intercepted by full-page rental content on
+        // some old Android builds. Keep native PagedView handling, but add a
+        // content-level fallback so a normal horizontal swipe across blank
+        // page space always reaches the adjacent fixed Rental Mode page.
+        final float[] down = new float[2];
+        root.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        down[0] = event.getX();
+                        down[1] = event.getY();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        float dx = event.getX() - down[0];
+                        float dy = event.getY() - down[1];
+                        float threshold = dp(launcher, 48);
+                        if (Math.abs(dx) >= threshold
+                                && Math.abs(dx) > Math.abs(dy) * 1.15f) {
+                            Workspace workspace = launcher.getWorkspace();
+                            if (workspace != null && workspace.getPageCount() > 1) {
+                                int target = workspace.getCurrentPage() + (dx < 0f ? 1 : -1);
+                                target = Math.max(0, Math.min(workspace.getPageCount() - 1, target));
+                                workspace.snapToPage(target);
+                            }
+                        }
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        return false;
+                    default:
+                        return true;
+                }
+            }
+        });
         return root;
     }
 

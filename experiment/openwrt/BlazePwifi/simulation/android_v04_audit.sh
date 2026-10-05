@@ -48,13 +48,13 @@ swipe_page_left() {
   # deliberately consumes touch for its secret admin long-press, so a
   # center-screen synthetic swipe can be captured by that control instead of
   # exercising Launcher3 paging.
-  adb shell input swipe $((w*9/10)) $((h/6)) $((w/10)) $((h/6)) 320
+  adb shell input swipe $((w*9/10)) $((h/12)) $((w/10)) $((h/12)) 320
   sleep 1
 }
 
 swipe_page_right() {
   read -r w h <<<"$(screen_size)"
-  adb shell input swipe $((w/10)) $((h/6)) $((w*9/10)) $((h/6)) 320
+  adb shell input swipe $((w/10)) $((h/12)) $((w*9/10)) $((h/12)) 320
   sleep 1
 }
 
