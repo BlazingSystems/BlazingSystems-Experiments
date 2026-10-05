@@ -105,7 +105,18 @@ public final class RentalSystemPages {
             @Override public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     adminGesture.onDown(SystemClock.elapsedRealtime());
+                    adminHandler.removeCallbacks(openAdmin);
                     adminHandler.postDelayed(openAdmin, holdMs);
+                    return true;
+                }
+                if (event.getAction() == MotionEvent.ACTION_MOVE) {
+                    // Re-check elapsed wall-clock time during a held pointer.
+                    // This makes the secret entry resilient when Launcher/Device
+                    // Owner activity churn delays a Handler callback.
+                    if (adminGesture.shouldTrigger(SystemClock.elapsedRealtime())) {
+                        adminHandler.removeCallbacks(openAdmin);
+                        openAdmin.run();
+                    }
                     return true;
                 }
                 if (event.getAction() == MotionEvent.ACTION_UP) {
