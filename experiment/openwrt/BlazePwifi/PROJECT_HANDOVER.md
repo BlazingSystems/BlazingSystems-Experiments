@@ -6,12 +6,14 @@
 
 ## Current target
 
-BlazePwifi is being developed as a complete PisoWiFi + Android rental-device platform with a full management console, customizable captive portal system, coin/Vendo controllers, vouchers, sales, networking/WAN/LAN/VLAN management, backups, and BlazeRental Launcher3 integration.
+BlazePwifi is being developed as a complete PisoWiFi + Android rental-device platform with a full management console, customizable captive portal system, coin/Vendo controllers, vouchers, sales, networking/WAN/LAN/VLAN management, backups, multimedia, BlazeGames management, and BlazeRental Launcher3 integration.
 
 ## Current BlazeRental direction
 
 Approved redesign direction:
 
+- Rename the launcher/app from Rootless Pixel Launcher branding to **BlazeRental**.
+- Use the approved LCM/BlazeRental icon family for APK/app branding and wider Blaze ecosystem branding where appropriate.
 - Restore normal Launcher3 behavior instead of the current three-page rental replacement.
 - Far-left page: BlazeRental / Insert Coin portal.
 - Next page: Notifications.
@@ -32,6 +34,8 @@ Approved redesign direction:
 - LPB-style behavior should be supported through a compatibility layer without copying LPB visual design.
 - Default portal must be child-friendly at first glance and expose richer safe network/device/system details when scrolled.
 - Management Console should become a complete operating console, not a small admin page.
+- Console richness includes Alerts, Scheduler/Automation, Announcements, Theme/Branding management, Audit Logs, Role-based Accounts, Import/Export, Template Sandbox/Safe Preview, API/Webhooks, Hardware Capability page, File/Asset Manager, Recovery/Fallback tools, Data Usage/Quota, Reports, Search/Quick Actions, Notes/Tags, and Multi-profile/Presets.
+- Add a dedicated **Tools** module: ping, traceroute, DNS test, speed test, WAN reachability, port check, NTP test, Wi-Fi scan, interface diagnostics, controller tests, latency/jitter/packet-loss testing, safe local discovery, logs, service tools, storage cleanup, and diagnostics export.
 
 ## Networking / operations requirements captured
 
@@ -44,6 +48,64 @@ Approved redesign direction:
 - Device management.
 - Manual/automatic backups with retention limits, download/import/restore.
 - Sessions, rates, controllers, diagnostics, system/security and hardware-capability-aware controls.
+
+## Wi-Fi portal multimedia / games direction
+
+Approved portal additions:
+
+- Wi-Fi portal may expose **Movies/Multimedia** and **Games** sections.
+- These sections apply to the Wi-Fi portal, not the BlazeRental launcher unless explicitly added later.
+- Multimedia page contents are entirely controlled by the administrator.
+- Each media item can be configured as:
+  - free to view, or
+  - requires an active paid session with time actively running (paused time does not qualify).
+- Add a **Multimedia Manager** to the Management Console:
+  - detect removable USB storage when available;
+  - allow supported internal/SSD/SD storage on larger builds;
+  - choose multimedia storage target;
+  - upload/import/delete/rename media;
+  - folders/categories/collections;
+  - poster/thumbnail/metadata management;
+  - free-vs-paid-session access policy per item/category;
+  - storage capacity/free-space/health view;
+  - rescan/index storage;
+  - safe eject/remount where supported;
+  - media preview;
+  - browser-native streaming with HTTP range support where practical;
+  - no mandatory server-side transcoding on Lite targets.
+- Add a **BlazeGames Manager** using the existing BlazeGames/offline arcade-emulator HTML project:
+  - manage ROMs/content made available to users;
+  - add/remove/enable/disable games;
+  - categories/favorites/order/cover art/metadata;
+  - storage target selection;
+  - free-vs-active-session access policy;
+  - emulator/core compatibility metadata;
+  - per-game launch/test;
+  - save-state/storage policy where supported;
+  - keep Lite targets lightweight.
+- Only administrator-supplied/licensed media and ROMs should be distributed; BlazePwifi should not ship copyrighted third-party content by default.
+
+## Security / abuse-resistance requirements
+
+The system must be designed to strongly resist brute-force and denial-of-service abuse, while avoiding claims of being literally “brute-force free” or “DDoS proof.”
+
+Required controls include:
+
+- escalating admin/login lockouts and rate limits;
+- persistent lockout state where appropriate;
+- strong password verification and secure secret storage;
+- role/session controls, CSRF protection, nonces on state-changing APIs;
+- request/body/upload size limits;
+- connection/concurrency limits suitable for the hardware;
+- per-client/IP/session token-bucket throttling for sensitive endpoints;
+- login/API backoff and abuse detection;
+- upload quotas and storage quotas;
+- bounded logs and bounded backup/media retention;
+- timeouts against slow/idle connections;
+- fail-closed rental and policy behavior;
+- static asset caching and lightweight portal rendering for constrained devices;
+- audit/security event logging;
+- safe recovery path for the owner.
 
 ## Last validated application candidate
 
