@@ -2,7 +2,30 @@
 
 **Last updated:** 2026-10-05  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
-**Development state:** v0.5.0 implementation and release in progress on `blazepwifi-v0.5.0-implementation`.
+**Development state:** BlazePwifi v0.5.0 prerelease is published and validated. Android production signing remains blocked only by unavailable locked v0.4 private signing material.
+
+## Current v0.5.0 release status
+
+- GitHub Release: `v0.5.0` — **published prerelease**
+- Release ID: `403831689`
+- Release page: `https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0`
+- Exact validated candidate: `66e159b65b6d8fb5f74dd981dc73d46db7229adc`
+- Candidate branch: `blazepwifi-v0.5.0-rc9`
+- Validated build run: `37326542666` — PASS
+- Final candidate gate: PASS
+- Release workflow run: `37327843195` — PASS
+- Release-stage artifact: `11352224246`
+- Tag `v0.5.0` points exactly to the validated RC9 commit.
+- `RELEASE-MANIFEST.json`: `candidate_gate=passed`, `production_signed=false`, `signing_run_id=0`.
+- Android release assets currently include:
+  - `BlazeRental-v0.5.0-TEST.apk`
+  - `BlazeRental-v0.5.0-release-unsigned.apk`
+- A production `BlazeRental.apk` is intentionally absent until the locked v0.4 signer is restored.
+- Locked signing run `37327439782` failed safely because `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` / exact keystore was unavailable; it refused certificate rotation.
+- Locked production fingerprint remains:
+  `C7:7E:4D:A2:2E:92:D2:BE:7D:93:B9:D3:DC:7C:3F:77:56:C0:6A:5A:13:0E:C6:90:5A:DC:C2:AD:4E:A3:56:24`
+- Canonical final release log:
+  `docs/handover/2026-10-05-v050-release-published.md`
 
 ## Current target
 
@@ -225,17 +248,18 @@ Next: complete v0.5 tests/emulator flow, QR scanner/native admin polish, rich Ma
 
 ## Last validated application candidate
 
-Application candidate: `d2ee5e0c0493500ce6a0578b9cad5da0775be65e`
+BlazePwifi v0.5.0 RC9:
 
-Build run: `37287301792` — PASS  
-Model gate: `37287301976` — PASS
+- Candidate SHA: `66e159b65b6d8fb5f74dd981dc73d46db7229adc`
+- Build run: `37326542666` — PASS
+- Candidate gate: PASS
+- Android Device Owner emulator: PASS
+- Browser/platform simulations: PASS
+- Published as GitHub prerelease `v0.5.0`.
 
-The corrected candidate is uploaded to GitHub Release `v0.4.0` as:
+Previous v0.4 validated candidate remains `d2ee5e0c0493500ce6a0578b9cad5da0775be65e` with build run `37287301792`.
 
-- `BlazeRental-v0.4.0-d2ee-TEST.apk`
-- `BlazeRental-v0.4.0-d2ee-TEST.apk.sha256`
-
-Do not replace the production `BlazeRental.apk` with a differently signed APK. The production v0.4 certificate is locked and must be preserved.
+Do not replace or relabel the v0.5 TEST APK as production-signed. Production Android upgrade compatibility requires the existing locked v0.4 signing certificate.
 
 ## Latest preview artifact
 
