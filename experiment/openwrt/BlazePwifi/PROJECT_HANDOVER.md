@@ -37,6 +37,42 @@ Approved redesign direction:
 - Console richness includes Alerts, Scheduler/Automation, Announcements, Theme/Branding management, Audit Logs, Role-based Accounts, Import/Export, Template Sandbox/Safe Preview, API/Webhooks, Hardware Capability page, File/Asset Manager, Recovery/Fallback tools, Data Usage/Quota, Reports, Search/Quick Actions, Notes/Tags, and Multi-profile/Presets.
 - Add a dedicated **Tools** module: ping, traceroute, DNS test, speed test, WAN reachability, port check, NTP test, Wi-Fi scan, interface diagnostics, controller tests, latency/jitter/packet-loss testing, safe local discovery, logs, service tools, storage cleanup, and diagnostics export.
 
+
+## Management Console terminal / command tools
+
+Approved design direction:
+
+- Add a **Terminal / CMD** area to the Management Console.
+- Do **not** expose an unrestricted web shell by default.
+- Provide two levels:
+  - **Safe Commands**: curated/allowlisted commands and guided tools for common admin tasks.
+  - **Advanced Terminal**: optional owner-only shell with explicit enablement, re-authentication, timeout, audit logging, and strong rate/concurrency limits.
+- Safe Commands should cover common operations such as:
+  - ping, traceroute, nslookup/dig, route/ip status;
+  - interface/WAN/LAN/VLAN status;
+  - Wi-Fi scan/status;
+  - storage/mount/USB status;
+  - process/service status;
+  - log viewing/tailing;
+  - package/version checks;
+  - network diagnostics;
+  - controller diagnostics;
+  - read-only hardware/runtime inspection.
+- Dangerous/destructive actions should use dedicated Management Console controls or guarded command wrappers rather than raw arbitrary shell wherever practical.
+- Advanced Terminal must be owner/admin-role restricted, disabled by default on Lite/public-facing deployments, and protected with:
+  - fresh password re-authentication;
+  - short-lived terminal session;
+  - CSRF/session binding;
+  - command audit history;
+  - output/time limits;
+  - idle timeout;
+  - concurrent terminal/session limits;
+  - brute-force/rate-limit protections;
+  - no anonymous or portal-side access;
+  - optional LAN-only/local-management restriction.
+- Terminal access must never be exposed to captive-portal users.
+- On constrained OpenWrt devices, prefer a small streamed command runner rather than a heavy full browser terminal emulator.
+
 ## Networking / operations requirements captured
 
 - Multiple WAN modes including Ethernet, WISP when Wi-Fi hardware is available, USB Ethernet, dual-WAN load balancing and failover.
