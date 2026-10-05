@@ -46,79 +46,35 @@ public final class RentalSystemPages {
     private RentalSystemPages() {}
 
     public static void apply(final Launcher launcher) {
-        Workspace workspace = launcher.getWorkspace();
-        if (workspace == null) return;
-        boolean restricted = LauncherAccessController.isRentalRestricted(launcher);
+        if (launcher == null) return;
         ManagedPolicyController.apply(launcher);
         ManagedPolicyController.enforceLauncherTask(launcher);
-
-        View existing = workspace.findViewById(PAGER_VIEW_ID);
-        if (!restricted) {
-            // "Use device as is" must restore Launcher3's ordinary workspace once.
-            // Avoid a reload loop by only forcing the model when our managed pager
-            // is actually still attached.
-            if (existing != null) launcher.getModel().forceReload();
-            Hotseat hotseat = launcher.getHotseat();
-            if (hotseat != null) hotseat.setVisibility(View.VISIBLE);
-            return;
-        }
-
-        if (existing instanceof RentalFixedPager) {
-            ((RentalFixedPager) existing).refreshPolicy();
-            reassertRestrictedChrome(launcher);
-            return;
-        }
-
-        // Use one Launcher3 workspace screen containing a native managed pager.
-        // Old Launcher3 page reconstruction was able to reorder/reset sibling
-        // workspace screens during model callbacks. Keeping the three operator
-        // surfaces inside one fixed managed view makes rental/quick/notification
-        // navigation independent of Launcher3 database screen reconciliation while
-        // preserving horizontal page gestures and the normal paid app-drawer gesture.
-        workspace.removeAllWorkspaceScreens();
-        CellLayout rental = workspace.getScreenWithId(Workspace.FIRST_SCREEN_ID);
-        if (rental == null) {
-            rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
-        }
-        rental.removeAllViews();
-
-        RentalFixedPager pager = new RentalFixedPager(launcher);
-        // CellLayout assigns the child ID during insertion. Keep it identical
-        // to the ID used above to find and reuse the managed pager.
-        attachFullPage(rental, pager, PAGER_VIEW_ID);
-        workspace.snapToPageImmediately(0);
-        workspace.setCurrentPage(0);
-
         reassertRestrictedChrome(launcher);
-        workspace.post(new Runnable() {
-            @Override public void run() { reassertRestrictedChrome(launcher); }
-        });
-        workspace.postDelayed(new Runnable() {
-            @Override public void run() { reassertRestrictedChrome(launcher); }
-        }, 750L);
     }
 
     public static void reassertRestrictedChrome(final Launcher launcher) {
-        if (launcher == null || !LauncherAccessController.isRentalRestricted(launcher)) return;
+        if (launcher == null) return;
+        boolean locked = !LauncherAccessController.canUseDevice(launcher);
+        int visibility = locked ? View.GONE : View.VISIBLE;
         Hotseat hotseat = launcher.getHotseat();
         if (hotseat != null) {
-            hotseat.setVisibility(View.GONE);
-            hotseat.setEnabled(false);
+            hotseat.setVisibility(visibility);
+            hotseat.setEnabled(!locked);
         }
         View hotseatView = launcher.findViewById(com.android.launcher3.R.id.hotseat);
         if (hotseatView != null) {
-            hotseatView.setVisibility(View.GONE);
-            hotseatView.setEnabled(false);
+            hotseatView.setVisibility(visibility);
+            hotseatView.setEnabled(!locked);
         }
         View pageIndicator = launcher.findViewById(com.android.launcher3.R.id.page_indicator);
         if (pageIndicator != null) {
-            pageIndicator.setVisibility(View.GONE);
-            pageIndicator.setEnabled(false);
+            pageIndicator.setVisibility(visibility);
+            pageIndicator.setEnabled(!locked);
         }
         View allAppsHandle = launcher.findViewById(com.android.launcher3.R.id.all_apps_handle);
         if (allAppsHandle != null) {
-            allAppsHandle.setVisibility(View.GONE);
-            allAppsHandle.setEnabled(false);
+            allAppsHandle.setVisibility(visibility);
+            allAppsHandle.setEnabled(!locked);
         }
     }
 
@@ -129,7 +85,7 @@ public final class RentalSystemPages {
         page.addViewToCellLayout(view, 0, id, lp, true);
     }
 
-    private static View createRentalPage(final Launcher launcher) {
+    public static View createRentalPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
         final TextView state = headline(launcher, "BLAZERENTAL");
         final TextView timer = headline(launcher, "00:00:00");
@@ -306,7 +262,7 @@ public final class RentalSystemPages {
         return scroll;
     }
 
-    private static View createNotificationsPage(final Launcher launcher) {
+    public static View createNotificationsPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
         root.addView(headline(launcher, "NOTIFICATIONS"));
         if (!RentalUiPolicy.notificationsEnabled(launcher)) {
@@ -316,6 +272,16 @@ public final class RentalSystemPages {
             disabled.addView(root);
             return disabled;
         }
+        final Button clearAll = smallButton(launcher, "CLEAR ALL");
+        root.addView(clearAll, rowMargins(launcher));
+        clearAll.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                boolean ok = RentalNotificationService.dismissAll();
+                Toast.makeText(launcher, ok ? "Notifications cleared" :
+                        "Notification access is unavailable", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         final LinearLayout list = new LinearLayout(launcher);
         list.setOrientation(LinearLayout.VERTICAL);
         root.addView(list, new LinearLayout.LayoutParams(
