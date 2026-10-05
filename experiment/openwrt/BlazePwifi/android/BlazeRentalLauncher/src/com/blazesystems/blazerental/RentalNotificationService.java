@@ -92,4 +92,16 @@ public class RentalNotificationService extends NotificationListenerService {
             return false;
         }
     }
+
+    public static boolean dismissAll() {
+        RentalNotificationService current = instance;
+        if (current == null) return false;
+        try {
+            current.cancelAllNotifications();
+            ACTIVE.clear();
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
 }
