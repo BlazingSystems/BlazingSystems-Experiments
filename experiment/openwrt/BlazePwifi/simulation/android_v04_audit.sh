@@ -38,6 +38,20 @@ assert_ui() {
   grep -Fq "$needle" "$file" || fail "UI missing '$needle' in $file"
 }
 
+assert_ui_exact() {
+  local file="$1" needle="$2"
+  python3 - "$file" "$needle" <<'PY' || fail "UI missing exact node '$needle' in $file"
+import sys,xml.etree.ElementTree as ET
+path, needle=sys.argv[1],sys.argv[2]
+raw=open(path,'rb').read().decode('utf-8','ignore')
+start=raw.find('<?xml')
+if start > 0: raw=raw[start:]
+root=ET.fromstring(raw)
+if not any(node.attrib.get('text') == needle for node in root.iter('node')):
+    raise SystemExit(1)
+PY
+}
+
 screen_size() {
   adb shell wm size | sed -n 's/.*Physical size: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -n1
 }
@@ -143,7 +157,7 @@ grep -Fq "$LAUNCHER_COMPONENT" "$OUT/activity-after-home.txt" \
   || fail "Launcher3 HOME activity did not become active"
 
 dump_ui "01-rental-page"
-assert_ui "$OUT/01-rental-page.xml" "BLAZERENTAL"
+assert_ui_exact "$OUT/01-rental-page.xml" "BLAZERENTAL"
 assert_ui "$OUT/01-rental-page.xml" "TIME FINISHED"
 assert_ui "$OUT/01-rental-page.xml" "INSERT COIN"
 
@@ -157,7 +171,7 @@ assert_ui "$OUT/02-unpaid-drawer-block.xml" "INSERT COIN"
 # full-page child consumes synthetic or edge-case gestures.
 tap_text "$OUT/02-unpaid-drawer-block.xml" "QUICK CONTROLS >"
 dump_ui "03-quick-controls"
-assert_ui "$OUT/03-quick-controls.xml" "QUICK CONTROLS"
+assert_ui_exact "$OUT/03-quick-controls.xml" "QUICK CONTROLS"
 assert_ui "$OUT/03-quick-controls.xml" "BLUETOOTH"
 assert_ui "$OUT/03-quick-controls.xml" "FLASHLIGHT"
 
@@ -171,7 +185,7 @@ grep -Fq '"FLOATING TIMER: OFF"' "$PAGE_SOURCE" || fail "floating timer OFF cont
 # Page 3: notification mirror replaces notification shade.
 tap_text "$OUT/03-quick-controls.xml" "NOTIFICATIONS >"
 dump_ui "04-notifications"
-assert_ui "$OUT/04-notifications.xml" "NOTIFICATIONS"
+assert_ui_exact "$OUT/04-notifications.xml" "NOTIFICATIONS"
 
 # Return to Page 1 through the same guaranteed navigation fallback and open
 # the secret native admin via the timer long-press.

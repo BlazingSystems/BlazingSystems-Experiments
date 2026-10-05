@@ -388,7 +388,7 @@ public final class RentalSystemPages {
                             if (workspace != null && workspace.getPageCount() > 1) {
                                 int target = workspace.getCurrentPage() + (dx < 0f ? 1 : -1);
                                 target = Math.max(0, Math.min(workspace.getPageCount() - 1, target));
-                                workspace.snapToPage(target);
+                                workspace.setCurrentPage(target);
                             }
                         }
                         return true;
@@ -429,7 +429,7 @@ public final class RentalSystemPages {
                 @Override public void onClick(View v) {
                     Workspace workspace = launcher.getWorkspace();
                     if (workspace != null && target < workspace.getPageCount()) {
-                        workspace.snapToPage(target);
+                        workspace.setCurrentPage(target);
                     }
                 }
             });
@@ -446,7 +446,7 @@ public final class RentalSystemPages {
                 @Override public void onClick(View v) {
                     Workspace workspace = launcher.getWorkspace();
                     if (workspace != null && target < workspace.getPageCount()) {
-                        workspace.snapToPage(target);
+                        workspace.setCurrentPage(target);
                     }
                 }
             });
