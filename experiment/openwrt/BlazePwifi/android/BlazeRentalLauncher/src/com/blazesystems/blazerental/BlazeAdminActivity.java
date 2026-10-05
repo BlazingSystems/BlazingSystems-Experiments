@@ -65,8 +65,8 @@ public class BlazeAdminActivity extends Activity {
     private void showInitialSetup() {
         content = page();
         content.addView(title("BlazeRental Initial Setup"));
-        content.addView(label("Configure administrator protection, bind this phone to BlazePwifi, "
-                + "and enable the strongest protection available."));
+        content.addView(label("Choose daily-driver or rental operation, configure administrator "
+                + "protection, and optionally bind this phone to BlazePwifi."));
 
         section("1 · Administrator");
         final EditText localPassword = field("Create local admin password (8+ characters)", true);
@@ -89,7 +89,29 @@ public class BlazeAdminActivity extends Activity {
             }
         });
 
-        section("2 · BlazePwifi binding");
+        section("2 · Usage mode");
+        content.addView(label("Daily-driver mode keeps normal Launcher3 available without requiring "
+                + "BlazePwifi enrollment. Rental mode can be enabled later from the admin panel."));
+        Button dailyDriver = primary("USE DEVICE AS IS · NORMAL LAUNCHER");
+        content.addView(dailyDriver, full());
+        dailyDriver.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!RentalLeaseStore.hasAdminVerifier(BlazeAdminActivity.this)) {
+                    Toast.makeText(BlazeAdminActivity.this,
+                            "Set the administrator password first", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                AndroidRentalPolicyRepository.setLocalLauncherMode(
+                        BlazeAdminActivity.this, RentalPolicy.MODE_UNRESTRICTED);
+                RentalLeaseStore.markInitialSetupComplete(BlazeAdminActivity.this, true);
+                ManagedPolicyController.apply(BlazeAdminActivity.this);
+                RentalLeaseStore.endAdminWindow(BlazeAdminActivity.this);
+                ManagedPolicyController.openHome(BlazeAdminActivity.this);
+                finish();
+            }
+        });
+
+        section("3 · BlazePwifi binding");
         addStatus("Server", emptyAs(RentalLeaseStore.server(this), "Not bound"));
         addStatus("Enrollment", RentalLeaseStore.isEnrolled(this)
                 ? "ENROLLED" : RentalLeaseStore.hasEnrollmentConfig(this)
@@ -109,7 +131,7 @@ public class BlazeAdminActivity extends Activity {
             @Override public void onClick(View v) { syncNow(true); }
         });
 
-        section("3 · Uninstall defence");
+        section("4 · Uninstall defence");
         addStatus("Managed security", ManagedPolicyController.isDeviceOwner(this)
                 ? "DEVICE OWNER · STRONGEST"
                 : ManagedPolicyController.isAdminActive(this)
@@ -132,7 +154,7 @@ public class BlazeAdminActivity extends Activity {
             });
         }
 
-        section("4 · Rental special access");
+        section("5 · Rental special access");
         specialAccessButtons();
 
         Button finish = primary("FINISH INITIAL SETUP");
@@ -184,7 +206,7 @@ public class BlazeAdminActivity extends Activity {
     private void showDashboard() {
         content = page();
         content.addView(title("BlazeRental Control Center"));
-        content.addView(label("Native Launcher3 administration · v0.4 Launcher Edition"));
+        content.addView(label("Native BlazeRental administration · v0.5 Launcher Edition"));
 
         section("Dashboard");
         addStatus("Security", ManagedPolicyController.isDeviceOwner(this)
