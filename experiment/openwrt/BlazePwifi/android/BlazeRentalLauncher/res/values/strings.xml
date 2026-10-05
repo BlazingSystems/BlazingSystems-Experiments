@@ -22,7 +22,7 @@
     <skip />
 
     <!-- Application name -->
-    <string name="app_name">Launcher3</string>
+    <string name="app_name">BlazeRental</string>
     <!-- Default folder name -->
     <string name="folder_name"></string>
     <!-- Work folder name -->
@@ -337,7 +337,7 @@
     <string name="about_app_version">Version</string>
     <string name="app_releases_url">https://play.google.com/store/apps/details?id=amirz.rootless.nexuslauncher</string>
     <string name="app_donate_url">https://play.google.com/store/apps/details?id=amirz.donation</string>
-    <string name="app_name_pixel_launcher">Pixel Launcher</string>
+    <string name="app_name_pixel_launcher">BlazeRental</string>
     <string name="title_disable_suggestions_prompt">Turn off app suggestions?</string>
     <string name="msg_disable_suggestions_prompt">"Suggestions won't appear at the top of your apps list, and the usage data used to create them will be permanently erased."</string>
     <string name="label_turn_off_suggestions">TURN OFF</string>
@@ -358,11 +358,11 @@
     <string name="pref_open_source_licenses_title">Open source licenses</string>
 
     <!-- Custom -->
-    <string name="app_name_rootless_pixel_launcher">Rootless Pixel Launcher</string>
+    <string name="app_name_rootless_pixel_launcher">BlazeRental</string>
     <string name="about_donate">Donate</string>
-    <string name="bridge_missing_title">Rootless Pixel Bridge</string>
+    <string name="bridge_missing_title">Optional Google Feed Bridge</string>
     <string name="bridge_missing_message">
-        The bridge to connect to the Google Feed could not be found,
+        The optional bridge used for the Google Feed could not be found,
         or needs to be updated.
     </string>
 </resources>
