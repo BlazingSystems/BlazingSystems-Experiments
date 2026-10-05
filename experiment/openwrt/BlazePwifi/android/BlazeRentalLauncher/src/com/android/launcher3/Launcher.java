@@ -2753,7 +2753,7 @@ public class Launcher extends BaseActivity
 
     @Override
     public boolean onLongClick(View v) {
-        if (LauncherAccessController.isRentalRestricted(this)) return true;
+        if (!LauncherAccessController.canUseDevice(this)) return true;
         if (!isDraggingEnabled()) return false;
         if (isWorkspaceLocked()) return false;
         if (mState != State.WORKSPACE) return false;
