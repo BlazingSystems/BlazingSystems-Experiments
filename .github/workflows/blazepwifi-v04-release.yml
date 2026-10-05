@@ -87,6 +87,10 @@ jobs:
           test "$(printf '%s' "$B" | jq -r .head_sha)" = "$CANDIDATE_SHA"
           test "$(printf '%s' "$S" | jq -r .conclusion)" = success
 
+      - name: Preserve current signing gate before candidate checkout
+        shell: bash
+        run: cp experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh "$RUNNER_TEMP/v04_signing_gate.sh"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.request.outputs.candidate_sha }}
@@ -141,7 +145,7 @@ jobs:
           set -euo pipefail
           APK="$(find artifacts/signed -type f -name BlazeRental.apk -print -quit)"
           test -n "$APK" -a -s "$APK"
-          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh             "$APK"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
+          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash "$RUNNER_TEMP/v04_signing_gate.sh"             "$APK"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
 
       - name: Stage production release assets
         shell: bash

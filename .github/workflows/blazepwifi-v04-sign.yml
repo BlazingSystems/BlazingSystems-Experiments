@@ -69,6 +69,10 @@ jobs:
           test "$(printf '%s' "$B" | jq -r .conclusion)" = success
           test "$(printf '%s' "$B" | jq -r .head_sha)" = "$CANDIDATE_SHA"
 
+      - name: Preserve current signing gate before candidate checkout
+        shell: bash
+        run: cp experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh "$RUNNER_TEMP/v04_signing_gate.sh"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.request.outputs.candidate_sha }}
@@ -194,7 +198,7 @@ jobs:
           keytool -exportcert -rfc -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" -file "$OUT/BlazeRental-signing-cert.pem"
           keytool -list -v -alias "$ALIAS"             -keystore "$RUNNER_TEMP/BlazeRental-production.p12" -storetype PKCS12             -storepass "$STORE_PASS" | sed -n '/SHA256:/p'             > "$OUT/BlazeRental-signing-fingerprint.txt"
 
-          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh             "$OUT/BlazeRental.apk"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
+          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash "$RUNNER_TEMP/v04_signing_gate.sh"             "$OUT/BlazeRental.apk"             experiment/openwrt/BlazePwifi/releases/0.3.0/BlazeRental-signing-fingerprint.txt
 
           UNSIGNED_SHA="$(sha256sum "$UNSIGNED" | awk '{print $1}')"
           SIGNED_SHA="$(sha256sum "$OUT/BlazeRental.apk" | awk '{print $1}')"

@@ -16,7 +16,13 @@ grep -Fq 'Verified using v1 scheme (JAR signing): true' "$VERIFY"
 grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "$VERIFY"
 grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' "$VERIFY"
 
-EXPECTED="$(tr -cd 'A-Fa-f0-9' < "$FPFILE" | tr 'A-F' 'a-f' | tail -c 65 | tr -d '\n')"
+EXPECTED="$(sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' "$FPFILE" | head -n1 | tr -d ':' | tr 'A-F' 'a-f')"
+if [ -z "$EXPECTED" ]; then
+  EXPECTED="$(grep -Eo '([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}' "$FPFILE" | head -n1 | tr -d ':' | tr 'A-F' 'a-f' || true)"
+fi
+if [ -z "$EXPECTED" ]; then
+  EXPECTED="$(grep -Eo '(^|[^A-Fa-f0-9])([A-Fa-f0-9]{64})([^A-Fa-f0-9]|$)' "$FPFILE" | head -n1 | tr -cd 'A-Fa-f0-9' | tail -c 65 | tr 'A-F' 'a-f' || true)"
+fi
 ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$VERIFY" | tr 'A-F' 'a-f' | head -n1)"
 [ -n "$EXPECTED" -a -n "$ACTUAL" ]
 [ "$ACTUAL" = "$EXPECTED" ] || {

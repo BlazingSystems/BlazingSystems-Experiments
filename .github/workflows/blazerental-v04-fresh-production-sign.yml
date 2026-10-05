@@ -59,6 +59,10 @@ jobs:
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Preserve current signing gate before candidate checkout
+        shell: bash
+        run: cp experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh "$RUNNER_TEMP/v04_signing_gate.sh"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.request.outputs.candidate_sha }}
@@ -113,7 +117,7 @@ jobs:
           keytool -exportcert -rfc -alias blazerental             -keystore "$OUT/BlazeRental-v0.4-production.p12" -storetype PKCS12             -storepass "$PASS" -file "$OUT/BlazeRental-signing-cert.pem"
           keytool -list -v -alias blazerental             -keystore "$OUT/BlazeRental-v0.4-production.p12" -storetype PKCS12             -storepass "$PASS" | sed -n '/SHA256:/p'             > "$OUT/BlazeRental-signing-fingerprint.txt"
 
-          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash experiment/openwrt/BlazePwifi/tests/v04_signing_gate.sh             "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-fingerprint.txt"
+          APKSIGNER="$APKSIGNER" AAPT="$AAPT"             bash "$RUNNER_TEMP/v04_signing_gate.sh"             "$OUT/BlazeRental.apk" "$OUT/BlazeRental-signing-fingerprint.txt"
 
           cp "$OUT/BlazeRental-v0.4-production.p12" "$SECRET/"
           printf '%s\n' "$PASS" > "$SECRET/keystore-password.txt"
