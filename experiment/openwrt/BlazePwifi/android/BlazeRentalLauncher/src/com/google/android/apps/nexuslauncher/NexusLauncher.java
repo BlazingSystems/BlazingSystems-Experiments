@@ -19,6 +19,7 @@ import com.android.launcher3.dynamicui.WallpaperColorInfo;
 import com.android.launcher3.graphics.DrawableFactory;
 import com.android.launcher3.util.ComponentKeyMapper;
 import com.android.launcher3.util.Themes;
+import com.blazesystems.blazerental.BlazeLeftPanel;
 import com.google.android.apps.nexuslauncher.search.ItemInfoUpdateReceiver;
 import com.google.android.apps.nexuslauncher.smartspace.SmartspaceView;
 import com.google.android.apps.nexuslauncher.smartspace.SmartspaceController;
@@ -53,6 +54,7 @@ public class NexusLauncher {
 
     class NexusLauncherCallbacks implements LauncherCallbacks, SharedPreferences.OnSharedPreferenceChangeListener, WallpaperColorInfo.OnChangeListener {
         private SmartspaceView mSmartspace;
+        private BlazeLeftPanel mBlazePanel;
         private final FeedReconnector mFeedReconnector = new FeedReconnector();
 
         private ItemInfoUpdateReceiver getUpdateReceiver() {
@@ -87,7 +89,7 @@ public class NexusLauncher {
         }
 
         public boolean hasCustomContentToLeft() {
-            return false;
+            return true;
         }
 
         public boolean hasSettings() {
@@ -198,6 +200,7 @@ public class NexusLauncher {
 
         public void onResume() {
             mRunning = true;
+            if (mBlazePanel != null) mBlazePanel.refreshPolicy();
             if (mStarted) {
                 mFeedRunning = true;
             }
@@ -242,6 +245,11 @@ public class NexusLauncher {
         }
 
         public void populateCustomContentContainer() {
+            mBlazePanel = new BlazeLeftPanel(mLauncher);
+            mLauncher.addToCustomContentPage(
+                    mBlazePanel,
+                    BlazeLeftPanel.callbacks(mLauncher, mBlazePanel),
+                    "BlazeRental");
         }
 
         @Override
