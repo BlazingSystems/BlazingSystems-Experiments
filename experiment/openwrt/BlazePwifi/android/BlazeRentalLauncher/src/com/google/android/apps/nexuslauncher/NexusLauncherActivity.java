@@ -55,6 +55,7 @@ public class NexusLauncherActivity extends Launcher {
     @Override
     protected void onResume() {
         super.onResume();
+        ManagedPolicyController.setLauncherForeground(true);
         ManagedPolicyController.apply(this);
         ManagedPolicyController.enforceLauncherTask(this);
         if (!LauncherAccessController.canUseDevice(this)) {
@@ -64,6 +65,12 @@ public class NexusLauncherActivity extends Launcher {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onPause() {
+        ManagedPolicyController.setLauncherForeground(false);
+        super.onPause();
     }
 
     @Override
