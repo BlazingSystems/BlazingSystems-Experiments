@@ -16,6 +16,7 @@ import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Log;
 import android.os.Handler;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -388,6 +389,7 @@ public final class RentalSystemPages {
                             if (workspace != null && workspace.getPageCount() > 1) {
                                 int target = workspace.getCurrentPage() + (dx < 0f ? 1 : -1);
                                 target = Math.max(0, Math.min(workspace.getPageCount() - 1, target));
+                                workspace.snapToPageImmediately(target);
                                 workspace.setCurrentPage(target);
                             }
                         }
@@ -451,7 +453,24 @@ public final class RentalSystemPages {
                 Workspace workspace = launcher.getWorkspace();
                 if (workspace == null) return;
                 int target = workspace.getPageIndexForScreenId(targetScreenId);
+                if (target < 0) {
+                    // Launcher3 can asynchronously reconcile workspace screens after
+                    // model binding. Recreate the three operator-owned pages if one
+                    // disappeared, then resolve by stable screen id again.
+                    RentalSystemPages.apply(launcher);
+                    workspace = launcher.getWorkspace();
+                    if (workspace == null) return;
+                    target = workspace.getPageIndexForScreenId(targetScreenId);
+                }
+                Log.i("BlazeRentalNav", "screen=" + targetScreenId
+                        + " target=" + target
+                        + " current=" + workspace.getCurrentPage()
+                        + " pages=" + workspace.getPageCount()
+                        + " order=" + workspace.getScreenOrder());
                 if (target >= 0 && target < workspace.getPageCount()) {
+                    // Immediate snap updates both PagedView's scroll position and next-page
+                    // bookkeeping. setCurrentPage then commits mCurrentPage for old Launcher3.
+                    workspace.snapToPageImmediately(target);
                     workspace.setCurrentPage(target);
                 }
             }
