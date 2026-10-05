@@ -33,7 +33,7 @@ grep -Fq 'detailSpeed' "$PORTAL"
 grep -Fq 'detailLoad' "$PORTAL"
 grep -Fq 'detailRam' "$PORTAL"
 grep -Fq 'detailUptime' "$PORTAL"
-grep -Fq 'active, unpaused paid session' "$W/media.html"
+grep -Fq 'active, unpaused paid time' "$W/media.html"
 grep -Fq 'active, unpaused paid time' "$W/games.html"
 
 ! grep -Eq 'https?://[^" ]+\.(css|js)' "$ADMIN"
