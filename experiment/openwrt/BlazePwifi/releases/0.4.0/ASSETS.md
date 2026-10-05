@@ -20,3 +20,17 @@
 The final release also contains `SHA256SUMS`, `RELEASE-MANIFEST.json`, `CANDIDATE-GATE.json`, compressed validation evidence, and the encrypted BlazeRental signing-key recovery payload.
 
 Simulation evidence includes machine-readable audit output plus screenshots/logs where the environment supports them. Structural or QEMU validation is not described as physical-board boot testing.
+
+
+## Direct flashable IMG assets
+
+The production release exposes the commonly requested raw EXT4 disk images directly, without requiring extraction from the target bundles:
+
+- `openwrt-25.12.5-x86-64-generic-ext4-combined.img` — x86_64 legacy BIOS.
+- `openwrt-25.12.5-x86-64-generic-ext4-combined-efi.img` — x86_64 UEFI.
+- `openwrt-25.12.5-sunxi-cortexa7-xunlong_orangepi-one-ext4-sdcard.img` — Orange Pi One.
+- `openwrt-25.12.5-sunxi-cortexa7-xunlong_orangepi-pc-ext4-sdcard.img` — Orange Pi PC.
+- `openwrt-25.12.5-sunxi-cortexa53-xunlong_orangepi-zero3-ext4-sdcard.img` — Orange Pi Zero 3.
+- `DIRECT-IMAGES-SHA256SUMS` — SHA-256 checksums for the direct raw image assets.
+
+The target tarballs remain available because they carry the complete image variants used by the validated build pipeline.

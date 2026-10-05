@@ -11,7 +11,8 @@ The v0.4.0 release contains:
 - ESP8266 and ESP32 controller firmware (`.bin` + `.ino`).
 - Ruijie RG-EW1200G Pro v1.1 sysupgrade and recovery image.
 - x86_64 OpenWrt BIOS/UEFI images.
-- Orange Pi Zero 3, One and PC images.
+- Direct raw `.img` assets for x86 BIOS/UEFI, Orange Pi Zero 3, Orange Pi One and Orange Pi PC, plus `DIRECT-IMAGES-SHA256SUMS`.
+- Orange Pi Zero 3, One and PC image bundles.
 - Additional validated Orange Pi family images: Zero, Zero 2, Zero 2W, PC2, PC Plus and One Plus.
 - SHA256 manifests and simulation/audit evidence.
 - Encrypted BlazeRental signing-key recovery material.
