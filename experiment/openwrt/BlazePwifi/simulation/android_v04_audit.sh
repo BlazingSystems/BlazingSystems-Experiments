@@ -52,6 +52,20 @@ if not any(node.attrib.get('text') == needle for node in root.iter('node')):
 PY
 }
 
+assert_ui_after_scroll() {
+  local prefix="$1" needle="$2" tries="${3:-5}" i
+  for ((i=0; i<tries; i++)); do
+    dump_ui "$prefix-$i"
+    if grep -Fq "$needle" "$OUT/$prefix-$i.xml"; then
+      return 0
+    fi
+    read -r w h <<<"$(screen_size)"
+    adb shell input swipe $((w/2)) $((h*4/5)) $((w/2)) $((h/4)) 350
+    sleep 1
+  done
+  fail "UI missing '$needle' after scrolling $tries times"
+}
+
 screen_size() {
   adb shell wm size | sed -n 's/.*Physical size: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -n1
 }
@@ -197,8 +211,12 @@ assert_ui "$OUT/05-before-admin.xml" "00:00:00"
 long_press_text "$OUT/05-before-admin.xml" "00:00:00" 4500
 dump_ui "06-initial-admin"
 assert_ui "$OUT/06-initial-admin.xml" "BlazeRental Initial Setup"
-assert_ui "$OUT/06-initial-admin.xml" "SCAN BLAZEPWIFI ENROLLMENT QR"
-assert_ui "$OUT/06-initial-admin.xml" "Uninstall defence"
+# The setup screen is intentionally a ScrollView; on the Pixel 2/API 27 gate,
+# QR binding and uninstall-defence controls are below the fold. Verify them by
+# actually scrolling the native screen instead of assuming UIAutomator exposes
+# off-screen descendants.
+assert_ui_after_scroll "06a-initial-admin-qr" "SCAN BLAZEPWIFI ENROLLMENT QR" 5
+assert_ui_after_scroll "06b-initial-admin-security" "Uninstall defence" 5
 
 # Device Owner must protect the production package from ordinary uninstall.
 set +e
