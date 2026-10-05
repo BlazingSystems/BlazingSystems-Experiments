@@ -36,6 +36,13 @@ public final class RentalSystemPages {
     public static final long PAGE_QUICK = -402L;
     public static final long PAGE_NOTIFICATIONS = -403L;
 
+    private static final int PAGER_VIEW_ID = 0x740400;
+    private static final int FIXED_RENTAL = 0;
+    private static final int FIXED_QUICK = 1;
+    private static final int FIXED_NOTIFICATIONS = 2;
+    private static final String UI_PREFS = "blaze_rental_ui";
+    private static final String UI_FIXED_PAGE = "fixed_page";
+
     private RentalSystemPages() {}
 
     public static void apply(final Launcher launcher) {
@@ -45,42 +52,41 @@ public final class RentalSystemPages {
         ManagedPolicyController.apply(launcher);
         ManagedPolicyController.enforceLauncherTask(launcher);
 
+        View existing = workspace.findViewById(PAGER_VIEW_ID);
         if (!restricted) {
-            if (workspace.getScreenWithId(PAGE_RENTAL) != null
-                    || workspace.getScreenWithId(PAGE_QUICK) != null
-                    || workspace.getScreenWithId(PAGE_NOTIFICATIONS) != null) {
-                launcher.getModel().forceReload();
-            }
+            // "Use device as is" must restore Launcher3's ordinary workspace once.
+            // Avoid a reload loop by only forcing the model when our managed pager
+            // is actually still attached.
+            if (existing != null) launcher.getModel().forceReload();
             Hotseat hotseat = launcher.getHotseat();
             if (hotseat != null) hotseat.setVisibility(View.VISIBLE);
             return;
         }
 
-        // Model reloads can re-run this method after the user has already moved
-        // to Quick Controls or Notifications. Preserve that fixed-page identity
-        // across reconstruction instead of throwing the renter back to page 1.
-        long restoreScreenId = workspace.getScreenIdForPageIndex(workspace.getCurrentPage());
-        if (restoreScreenId != PAGE_QUICK && restoreScreenId != PAGE_NOTIFICATIONS) {
-            restoreScreenId = Workspace.FIRST_SCREEN_ID;
+        if (existing instanceof RentalFixedPager) {
+            ((RentalFixedPager) existing).refreshPolicy();
+            reassertRestrictedChrome(launcher);
+            return;
         }
 
+        // Use one Launcher3 workspace screen containing a native managed pager.
+        // Old Launcher3 page reconstruction was able to reorder/reset sibling
+        // workspace screens during model callbacks. Keeping the three operator
+        // surfaces inside one fixed managed view makes rental/quick/notification
+        // navigation independent of Launcher3 database screen reconciliation while
+        // preserving horizontal page gestures and the normal paid app-drawer gesture.
         workspace.removeAllWorkspaceScreens();
         CellLayout rental = workspace.getScreenWithId(Workspace.FIRST_SCREEN_ID);
-        if (rental == null) rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
+        if (rental == null) {
+            rental = workspace.insertNewWorkspaceScreen(Workspace.FIRST_SCREEN_ID, 0);
+        }
         rental.removeAllViews();
-        workspace.insertNewWorkspaceScreen(PAGE_QUICK);
-        CellLayout quick = workspace.getScreenWithId(PAGE_QUICK);
-        workspace.insertNewWorkspaceScreen(PAGE_NOTIFICATIONS);
-        CellLayout notifications = workspace.getScreenWithId(PAGE_NOTIFICATIONS);
 
-        attachFullPage(rental, createRentalPage(launcher), 0x740401);
-        attachFullPage(quick, createQuickPage(launcher), 0x740402);
-        attachFullPage(notifications, createNotificationsPage(launcher), 0x740403);
-
-        int restorePage = workspace.getPageIndexForScreenId(restoreScreenId);
-        if (restorePage < 0) restorePage = 0;
-        workspace.snapToPageImmediately(restorePage);
-        workspace.setCurrentPage(restorePage);
+        RentalFixedPager pager = new RentalFixedPager(launcher);
+        pager.setId(PAGER_VIEW_ID);
+        attachFullPage(rental, pager, 0x740401);
+        workspace.snapToPageImmediately(0);
+        workspace.setCurrentPage(0);
 
         reassertRestrictedChrome(launcher);
         workspace.post(new Runnable() {
@@ -193,7 +199,7 @@ public final class RentalSystemPages {
             }
         };
         root.post(refresh);
-        return withNavigation(launcher, root, Long.MIN_VALUE, null, PAGE_QUICK, "QUICK CONTROLS >");
+        return root;
     }
 
     private static View createQuickPage(final Launcher launcher) {
@@ -296,7 +302,7 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return withNavigation(launcher, scroll, Workspace.FIRST_SCREEN_ID, "< RENTAL", PAGE_NOTIFICATIONS, "NOTIFICATIONS >");
+        return scroll;
     }
 
     private static View createNotificationsPage(final Launcher launcher) {
@@ -307,7 +313,7 @@ public final class RentalSystemPages {
             ScrollView disabled = new ScrollView(launcher);
             disabled.setFillViewport(true);
             disabled.addView(root);
-            return withNavigation(launcher, disabled, PAGE_QUICK, "< QUICK CONTROLS", Long.MIN_VALUE, null);
+            return disabled;
         }
         final LinearLayout list = new LinearLayout(launcher);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -368,143 +374,173 @@ public final class RentalSystemPages {
         ScrollView scroll = new ScrollView(launcher);
         scroll.setFillViewport(true);
         scroll.addView(root);
-        return withNavigation(launcher, scroll, PAGE_QUICK, "< QUICK CONTROLS", Long.MIN_VALUE, null);
+        return scroll;
     }
 
     private static LinearLayout basePage(final Launcher launcher) {
-        final LinearLayout root = new LinearLayout(launcher);
+        LinearLayout root = new LinearLayout(launcher);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
         int p = dp(launcher, 24);
         root.setPadding(p, dp(launcher, 54), p, p);
         root.setBackgroundColor(Color.rgb(10, 16, 29));
-
-        // Launcher3 paging can be intercepted by full-page rental content on
-        // some old Android builds. Keep native PagedView handling, but add a
-        // content-level fallback so a normal horizontal swipe across blank
-        // page space always reaches the adjacent fixed Rental Mode page.
-        final float[] down = new float[2];
-        root.setOnTouchListener(new View.OnTouchListener() {
-            @Override public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        down[0] = event.getX();
-                        down[1] = event.getY();
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        float dx = event.getX() - down[0];
-                        float dy = event.getY() - down[1];
-                        float threshold = dp(launcher, 48);
-                        if (Math.abs(dx) >= threshold
-                                && Math.abs(dx) > Math.abs(dy) * 1.15f) {
-                            Workspace workspace = launcher.getWorkspace();
-                            if (workspace != null && workspace.getPageCount() > 1) {
-                                int target = workspace.getCurrentPage() + (dx < 0f ? 1 : -1);
-                                target = Math.max(0, Math.min(workspace.getPageCount() - 1, target));
-                                workspace.snapToPageImmediately(target);
-                                workspace.setCurrentPage(target);
-                            }
-                        }
-                        return true;
-                    case MotionEvent.ACTION_CANCEL:
-                        return false;
-                    default:
-                        return true;
-                }
-            }
-        });
         return root;
     }
 
-    private static View withNavigation(final Launcher launcher, View content,
-            long leftScreenId, String leftText, long rightScreenId, String rightText) {
-        FrameLayout shell = new FrameLayout(launcher);
-        shell.addView(content, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    /**
+     * The three operator-owned Rental Mode surfaces live in this one native
+     * Launcher3 workspace child. This avoids old Launcher3 screen-db/model
+     * reconciliation racing the rental UI while still behaving as a horizontal
+     * three-page carousel to the renter.
+     */
+    private static final class RentalFixedPager extends FrameLayout {
+        private final Launcher launcher;
+        private int page;
+        private float downX;
+        private float downY;
+        private boolean horizontalGesture;
 
-        LinearLayout nav = pageNavigation(launcher, leftScreenId, leftText, rightScreenId, rightText);
-        FrameLayout.LayoutParams navLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(launcher, 44), Gravity.TOP);
-        navLp.setMargins(dp(launcher, 24), dp(launcher, 8),
-                dp(launcher, 24), 0);
-        shell.addView(nav, navLp);
-        return shell;
-    }
-
-    private static LinearLayout pageNavigation(final Launcher launcher,
-            long leftScreenId, String leftText, long rightScreenId, String rightText) {
-        LinearLayout row = horizontal(launcher);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        if (leftScreenId != Long.MIN_VALUE && leftText != null) {
-            final long targetScreenId = leftScreenId;
-            Button left = navButton(launcher, leftText);
-            bindNavigationButton(launcher, left, targetScreenId);
-            row.addView(left, weight());
-        } else {
-            View spacer = new View(launcher);
-            row.addView(spacer, weight());
+        RentalFixedPager(Launcher launcher) {
+            super(launcher);
+            this.launcher = launcher;
+            setClickable(true);
+            setFocusable(true);
+            int saved = launcher.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+                    .getInt(UI_FIXED_PAGE, FIXED_RENTAL);
+            page = sanitizePage(saved);
+            render();
         }
 
-        if (rightScreenId != Long.MIN_VALUE && rightText != null) {
-            final long targetScreenId = rightScreenId;
-            Button right = navButton(launcher, rightText);
-            bindNavigationButton(launcher, right, targetScreenId);
-            row.addView(right, weight());
-        } else {
-            View spacer = new View(launcher);
-            row.addView(spacer, weight());
+        void refreshPolicy() {
+            render();
         }
-        return row;
-    }
 
-    private static void bindNavigationButton(final Launcher launcher,
-            final Button button, final long targetScreenId) {
-        final Runnable navigate = new Runnable() {
-            @Override public void run() {
-                Workspace workspace = launcher.getWorkspace();
-                if (workspace == null) return;
-                int target = workspace.getPageIndexForScreenId(targetScreenId);
-                if (target < 0) {
-                    // Launcher3 can asynchronously reconcile workspace screens after
-                    // model binding. Recreate the three operator-owned pages if one
-                    // disappeared, then resolve by stable screen id again.
-                    RentalSystemPages.apply(launcher);
-                    workspace = launcher.getWorkspace();
-                    if (workspace == null) return;
-                    target = workspace.getPageIndexForScreenId(targetScreenId);
-                }
-                Log.i("BlazeRentalNav", "screen=" + targetScreenId
-                        + " target=" + target
-                        + " current=" + workspace.getCurrentPage()
-                        + " pages=" + workspace.getPageCount()
-                        + " order=" + workspace.getScreenOrder());
-                if (target >= 0 && target < workspace.getPageCount()) {
-                    // Immediate snap updates both PagedView's scroll position and next-page
-                    // bookkeeping. setCurrentPage then commits mCurrentPage for old Launcher3.
-                    workspace.snapToPageImmediately(target);
-                    workspace.setCurrentPage(target);
-                }
+        private int sanitizePage(int value) {
+            if (value < FIXED_RENTAL || value > FIXED_NOTIFICATIONS) {
+                return FIXED_RENTAL;
             }
-        };
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                navigate.run();
+            return value;
+        }
+
+        private void showPage(int next) {
+            int sanitized = sanitizePage(next);
+            if (page == sanitized && getChildCount() > 0) return;
+            page = sanitized;
+            launcher.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+                    .edit().putInt(UI_FIXED_PAGE, page).apply();
+            render();
+        }
+
+        private void render() {
+            removeAllViews();
+
+            View content;
+            if (page == FIXED_QUICK) {
+                content = createQuickPage(launcher);
+            } else if (page == FIXED_NOTIFICATIONS) {
+                content = createNotificationsPage(launcher);
+            } else {
+                page = FIXED_RENTAL;
+                content = createRentalPage(launcher);
             }
-        });
-        // ScrollView/old Launcher3 touch dispatch can cancel a Button click after
-        // ACTION_DOWN even though the control remains visibly clickable. Fixed
-        // rental page navigation is safety-critical, so honor a direct press
-        // immediately as well as the normal accessibility click path.
-        button.setOnTouchListener(new View.OnTouchListener() {
-            @Override public boolean onTouch(View v, MotionEvent event) {
-                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                    navigate.run();
+            addView(content, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+
+            LinearLayout nav = new LinearLayout(launcher);
+            nav.setOrientation(LinearLayout.HORIZONTAL);
+            nav.setGravity(Gravity.CENTER_VERTICAL);
+
+            if (page > FIXED_RENTAL) {
+                final int previous = page - 1;
+                Button left = navButton(launcher,
+                        page == FIXED_NOTIFICATIONS ? "< QUICK CONTROLS" : "< RENTAL");
+                bindPagerButton(left, previous);
+                nav.addView(left, weight());
+            } else {
+                nav.addView(new View(launcher), weight());
+            }
+
+            if (page < FIXED_NOTIFICATIONS) {
+                final int next = page + 1;
+                Button right = navButton(launcher,
+                        page == FIXED_RENTAL ? "QUICK CONTROLS >" : "NOTIFICATIONS >");
+                bindPagerButton(right, next);
+                nav.addView(right, weight());
+            } else {
+                nav.addView(new View(launcher), weight());
+            }
+
+            FrameLayout.LayoutParams navLp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(launcher, 44), Gravity.TOP);
+            navLp.setMargins(dp(launcher, 24), dp(launcher, 8), dp(launcher, 24), 0);
+            addView(nav, navLp);
+            Log.i("BlazeRentalPager", "page=" + page + " children=" + getChildCount());
+        }
+
+        private void bindPagerButton(Button button, final int target) {
+            button.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    showPage(target);
+                }
+            });
+            // ACTION_DOWN makes the fallback deterministic on old Android touch
+            // stacks where ScrollView can cancel the eventual Button click.
+            button.setOnTouchListener(new View.OnTouchListener() {
+                @Override public boolean onTouch(View v, MotionEvent event) {
+                    if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                        showPage(target);
+                        return true;
+                    }
                     return true;
                 }
-                return true;
+            });
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = event.getX();
+                    downY = event.getY();
+                    horizontalGesture = false;
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (Math.abs(dx) > dp(launcher, 40)
+                            && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                        horizontalGesture = true;
+                        return true;
+                    }
+                    return false;
+                default:
+                    return horizontalGesture;
             }
-        });
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_MOVE:
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (horizontalGesture
+                            && Math.abs(dx) > dp(launcher, 56)
+                            && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                        showPage(page + (dx < 0f ? 1 : -1));
+                    }
+                    horizontalGesture = false;
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    horizontalGesture = false;
+                    return true;
+                default:
+                    return true;
+            }
+        }
     }
 
     private static Button navButton(Context c, String text) {
