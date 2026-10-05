@@ -79,6 +79,9 @@ Approved design direction:
 Approved design direction:
 
 - Add a dedicated **Remote Access / Fleet Management** section to the Management Console.
+- The primary user goal is **true worldwide access**: the owner must be able to open and manage their BlazePwifi/PisoWiFi system from anywhere on the Internet (for example from mobile data, another city, or another country) without needing to be on the local LAN.
+- The preferred UX is a normal browser-accessible remote console reached through the configured private overlay/VPN path, not direct public-WAN exposure of the admin page.
+- Remote monitoring/management should work even when the BlazePwifi site is behind NAT/CGNAT, provided one of the supported outbound tunnel methods is configured.
 - Do not hard-code a vendor, account, endpoint, address, key, subnet, route, or management scope. All remote-access parameters must be owner-configurable.
 - Remote access is **disabled by default** until the owner explicitly configures it.
 - When Remote Access is enabled, offer exactly two first-class modes:
