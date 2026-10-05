@@ -154,10 +154,32 @@ public final class RentalLeaseStore {
         AndroidRentalPolicyRepository.clear(context);
     }
 
+    private static long adminLockDurationMs(int level) {
+        switch (Math.max(1, level)) {
+            case 1: return 60000L;
+            case 2: return 300000L;
+            case 3: return 1800000L;
+            case 4: return 21600000L;
+            default: return 86400000L;
+        }
+    }
+
     public static boolean verifyAdminPassword(Context context, String password) {
         SharedPreferences p = prefs(context);
         long now = SystemClock.elapsedRealtime();
-        if (now < p.getLong("admin_locked_until", 0L)) return false;
+        int lockLevel = p.getInt("admin_lock_level", 0);
+        long previousElapsed = p.getLong("admin_last_elapsed", 0L);
+        long lockedUntil = p.getLong("admin_locked_until", 0L);
+
+        // elapsedRealtime resets at boot. Rebuild an active penalty after a
+        // reboot instead of letting repeated reboots clear brute-force delay.
+        if (lockLevel > 0 && previousElapsed > 0L && now < previousElapsed) {
+            lockedUntil = now + adminLockDurationMs(lockLevel);
+            p.edit().putLong("admin_locked_until", lockedUntil).apply();
+        }
+        p.edit().putLong("admin_last_elapsed", now).apply();
+        if (now < lockedUntil) return false;
+
         String salt = p.getString("admin_salt", "");
         String expected = p.getString("admin_hash", "");
         if (salt.length() == 0 || expected.length() == 0) return false;
@@ -165,19 +187,29 @@ public final class RentalLeaseStore {
         try {
             ok = expected.equals(Hmac.sha256Iter(password, salt, p.getInt("admin_rounds", 4096)));
         } catch (Exception ignored) {}
+
         SharedPreferences.Editor edit = p.edit();
         if (ok) {
             edit.putInt("admin_failures", 0)
+                    .putInt("admin_lock_level", 0)
                     .putLong("admin_locked_until", 0L)
+                    .putLong("admin_last_elapsed", now)
                     .putLong("admin_unlock_until", now + 300000L).apply();
             return true;
         }
+
         int failures = p.getInt("admin_failures", 0) + 1;
         if (failures >= 5) {
+            lockLevel = Math.min(5, lockLevel + 1);
             edit.putInt("admin_failures", 0)
-                    .putLong("admin_locked_until", now + 900000L).apply();
+                    .putInt("admin_lock_level", lockLevel)
+                    .putLong("admin_locked_until", now + adminLockDurationMs(lockLevel))
+                    .putLong("admin_last_elapsed", now)
+                    .apply();
         } else {
-            edit.putInt("admin_failures", failures).apply();
+            edit.putInt("admin_failures", failures)
+                    .putLong("admin_last_elapsed", now)
+                    .apply();
         }
         return false;
     }
