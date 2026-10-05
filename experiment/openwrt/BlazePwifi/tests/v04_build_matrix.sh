@@ -2,7 +2,7 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 WF="$ROOT/../../../.github/workflows/blazepwifi-build.yml"
-[ "$(cat "$ROOT/VERSION")" = "0.4.0" ]
+case "$(cat "$ROOT/VERSION")" in 0.4.0|0.5.0) ;; *) exit 1;; esac
 test -f "$ROOT/releases/0.4.0/README.md"
 test -f "$ROOT/releases/0.4.0/ASSETS.md"
 test -f "$ROOT/releases/0.4.0/manifest.json"
@@ -13,6 +13,6 @@ done
 grep -q 'BlazeRentalLauncher' "$WF"
 grep -q 'esp8266' "$WF"
 grep -q 'esp32' "$WF"
-grep -q 'BlazeRental-v0.4.0' "$WF"
+grep -Eq 'BlazeRental-v0\.(4|5)\.0' "$WF"
 grep -q '"release": "0.4.0"' "$ROOT/releases/0.4.0/manifest.json"
-echo "v0.4 build matrix contract passed"
+echo "v0.4 compatibility build matrix contract passed"
