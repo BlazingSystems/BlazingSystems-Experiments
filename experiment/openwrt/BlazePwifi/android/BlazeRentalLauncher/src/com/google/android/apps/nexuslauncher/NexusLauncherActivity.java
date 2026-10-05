@@ -58,13 +58,7 @@ public class NexusLauncherActivity extends Launcher {
         ManagedPolicyController.setLauncherForeground(true);
         ManagedPolicyController.apply(this);
         ManagedPolicyController.enforceLauncherTask(this);
-        if (!LauncherAccessController.canUseDevice(this)) {
-            getWorkspace().post(new Runnable() {
-                @Override public void run() {
-                    moveToCustomContentScreen(false);
-                }
-            });
-        }
+        enforceRentalLanding(0);
     }
 
     @Override
@@ -107,6 +101,29 @@ public class NexusLauncherActivity extends Launcher {
 
             // Strip empty At A Glance page
             getWorkspace().stripEmptyScreens();
+        }
+        // Workspace/custom-left creation completes during binding. Re-assert
+        // the unpaid landing boundary here as well as onResume so a cold boot
+        // cannot briefly settle on the ordinary Launcher3 Home screen.
+        enforceRentalLanding(0);
+    }
+
+    private void enforceRentalLanding(final int attempt) {
+        if (LauncherAccessController.canUseDevice(this) || getWorkspace() == null) return;
+        invalidateHasCustomContentToLeft();
+        if (getWorkspace().hasCustomContent()) {
+            moveToCustomContentScreen(false);
+            return;
+        }
+        // Binding can finish after onResume on slower/first-boot devices.
+        // Retry only a few times; every retry re-checks the authoritative
+        // access gate and stops immediately once custom content exists.
+        if (attempt < 8) {
+            getWorkspace().postDelayed(new Runnable() {
+                @Override public void run() {
+                    enforceRentalLanding(attempt + 1);
+                }
+            }, 250L + (attempt * 125L));
         }
     }
 
