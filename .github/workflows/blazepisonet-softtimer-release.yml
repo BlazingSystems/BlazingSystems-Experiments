@@ -36,12 +36,20 @@ jobs:
         id: expand
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           $bootstrap="$env:PROJECT_DIR/.bootstrap"
           if (Test-Path $bootstrap) {
             $b64=(Get-ChildItem "$bootstrap/part*" | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
             $archive=Join-Path $env:RUNNER_TEMP 'softtimer-source.tar.gz'
             [IO.File]::WriteAllBytes($archive,[Convert]::FromBase64String($b64))
             tar -xzf $archive -C .
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $override=Join-Path $bootstrap 'Theme.cs.override'
+            if (Test-Path $override) {
+              Copy-Item $override "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/Theme.cs" -Force
+            }
+
             "had_archive=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
             "had_archive=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -52,40 +60,75 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.expand.outputs.had_archive == 'true'
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           git config user.name "github-actions[bot]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git rm -r -f "$env:PROJECT_DIR/.bootstrap"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git add "$env:PROJECT_DIR"
-          if (git diff --cached --quiet) {
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          git diff --cached --quiet
+          $diffExit=$LASTEXITCODE
+          if ($diffExit -eq 0) {
             "did=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          } else {
+          } elseif ($diffExit -eq 1) {
             git commit -m "source: materialize BlazePisonet SoftTimer v$env:VERSION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git push origin HEAD:main
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             "did=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            exit $diffExit
           }
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.0.425'
 
-      - name: Restore
+      - name: Pin .NET 8 SDK
         shell: pwsh
         run: |
-          dotnet restore "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/BlazePisonet.SoftTimer.csproj"
-          dotnet restore "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj"
+          @'
+          {
+            "sdk": {
+              "version": "8.0.425",
+              "rollForward": "latestPatch"
+            }
+          }
+          '@ | Set-Content -Encoding utf8 global.json
+          dotnet --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build
+      - name: Restore win-x64
         shell: pwsh
         run: |
-          dotnet build "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/BlazePisonet.SoftTimer.csproj" -c Release --no-restore -warnaserror
-          dotnet build "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj" -c Release --no-restore -warnaserror
+          dotnet restore "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/BlazePisonet.SoftTimer.csproj" -r win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj" -r win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build with warnings as errors
+        shell: pwsh
+        run: |
+          dotnet build "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/BlazePisonet.SoftTimer.csproj" -c Release -r win-x64 --no-restore -warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj" -c Release -r win-x64 --no-restore -warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publish self-contained Windows x64
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           New-Item -ItemType Directory -Force out/app,out/watchdog,package/app,package/installer,package/docs | Out-Null
+
           dotnet publish "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer/BlazePisonet.SoftTimer.csproj" -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -o out/app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet publish "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj" -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -o out/watchdog
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           Copy-Item out/app/* package/app/ -Force
           Copy-Item out/watchdog/BlazePisonet.SoftTimer.Watchdog.exe package/app/ -Force
           Copy-Item "$env:PROJECT_DIR/installer/*" package/installer/ -Recurse -Force
@@ -96,6 +139,7 @@ jobs:
       - name: Package and checksum
         shell: pwsh
         run: |
+          $ErrorActionPreference='Stop'
           $zip="BlazePisonet-SoftTimer-v$env:VERSION-win-x64.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path package/* -DestinationPath $zip -CompressionLevel Optimal
@@ -124,6 +168,8 @@ jobs:
           $zip="BlazePisonet-SoftTimer-v$env:VERSION-win-x64.zip"
           if (gh release view $env:TAG *> $null) {
             gh release upload $env:TAG $zip SHA256SUMS --clobber
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
             gh release create $env:TAG $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.1.0.md" --target $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
