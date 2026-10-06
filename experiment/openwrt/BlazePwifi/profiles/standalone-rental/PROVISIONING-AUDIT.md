@@ -31,6 +31,9 @@ Two QR formats are intentionally separate and must never be treated as interchan
 - Android Setup Wizard may redeliver identical provisioning extras. RC6 preserves an in-progress enrollment request nonce/device identity instead of resetting state on the repeated callback.
 - Standard Enrollment on an already-bound phone fails closed. The working permanent identity remains intact until the administrator explicitly uses Transfer.
 - Standard Enrollment scanner state errors are no longer all reported as the wrong QR type; Device Provisioning QR, already-bound state, and local storage failure have distinct handling.
+- Expired or malformed abandoned enrollment rows are purged under the enrollment lock whenever a new QR token is created.
+- The active enrollment table is capped (default 512, bounded configurable range 16-4096) so repeated unused QR generation cannot grow R281 state without bound.
+- QR generation fails closed if token creation, durable persistence, or enrollment capacity checks fail; an empty token is never rendered into a QR.
 
 ## Corrected findings
 

@@ -128,6 +128,12 @@ case "$action" in
       https://*) [ -n "$cert_pin" ] || bp_fail "HTTPS Standard Enrollment requires the local Rental Server certificate pin" ;;
     esac
     token="$(bp_rental_enroll_create "$label" 600 2)"
+    token_rc=$?
+    case "$token_rc" in
+      0) [ -n "$token" ] || bp_fail "enrollment token creation returned empty" ;;
+      4) bp_fail "active enrollment capacity reached; wait for old QR tokens to expire" ;;
+      *) bp_fail "unable to create enrollment token" ;;
+    esac
     qr_payload="$(bp_admin_standard_qr_payload "$server" "$token" "$label" "$cert_pin")"
     bp_auth_audit rental_standard_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
     bp_json "$(printf '{"ok":true,"qr_type":"standard_enrollment","schema":"blazerental.enrollment.v2","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","server_cert_sha256":"%s","qr_payload":"%s"}' \
@@ -176,6 +182,12 @@ case "$action" in
       hidden=false
     fi
     token="$(bp_rental_enroll_create "$label" 3600 2)"
+    token_rc=$?
+    case "$token_rc" in
+      0) [ -n "$token" ] || bp_fail "enrollment token creation returned empty" ;;
+      4) bp_fail "active enrollment capacity reached; wait for old QR tokens to expire" ;;
+      *) bp_fail "unable to create enrollment token" ;;
+    esac
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s:%s:%s' "$apk_channel" "$apk_version" "$label" | cut -c1-120)"
     bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v2","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"server_cert_sha256":"%s","qr_payload":"%s"}' \

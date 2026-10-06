@@ -41,3 +41,9 @@ This RC remains TEST-signed and is not production-ready. Google-certified device
 ## Validation status
 
 This release remains a prerelease until factory-reset physical Android Setup Wizard testing is completed on representative supported devices. CI passing is necessary but does not substitute for physical Device Owner provisioning validation.
+
+
+Additional durability hardening:
+- expired/malformed abandoned enrollment rows are garbage-collected before new token creation;
+- active one-time enrollment rows are bounded to prevent storage exhaustion;
+- QR generation fails closed if token creation cannot be durably completed.

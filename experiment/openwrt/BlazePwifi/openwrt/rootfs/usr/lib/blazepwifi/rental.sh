@@ -4,6 +4,7 @@ BP_RENTAL_ENROLL="${BP_RENTAL_ENROLL:-$BP_STATE/rental-enroll.tsv}"
 BP_RENTAL_POLICY="${BP_RENTAL_POLICY:-$BP_STATE/rental-policy.tsv}"
 BP_RENTAL_INVENTORY="${BP_RENTAL_INVENTORY:-$BP_STATE/rental-inventory.tsv}"
 BP_RENTAL_EVENTS="${BP_RENTAL_EVENTS:-$BP_STATE/rental-events.tsv}"
+BP_RENTAL_ENROLL_MAX="${BP_RENTAL_ENROLL_MAX:-512}"
 
 bp_rental_init() {
   bp_init_dirs
@@ -31,6 +32,24 @@ bp_rental_enroll_unlock() {
   exec 7>&-
 }
 
+bp_rental_enroll_gc_locked() {
+  now="${1:-$(bp_now)}"
+  case "$now" in ''|*[!0-9]*) return 1;; esac
+  tmp="$BP_STATE/.rental-enroll-gc.$(bp_tmp_suffix)"
+  # Keep only structurally valid, unexpired rows. This bounds abandoned QR
+  # state without weakening retry semantics for still-valid protocol-v2 rows.
+  awk -F '\t' -v n="$now" '$3 ~ /^[0-9]+$/ && $3 >= n {print}'     "$BP_RENTAL_ENROLL" > "$tmp" || { rm -f "$tmp"; return 1; }
+  chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
+bp_rental_enroll_limit() {
+  max="$BP_RENTAL_ENROLL_MAX"
+  case "$max" in ''|*[!0-9]*) max=512;; esac
+  [ "$max" -ge 16 ] 2>/dev/null && [ "$max" -le 4096 ] 2>/dev/null || max=512
+  printf '%s' "$max"
+}
+
 bp_rental_hmac() {
   secret="$1"; data="$2"
   command -v openssl >/dev/null 2>&1 || return 2
@@ -43,6 +62,17 @@ bp_rental_enroll_create() {
   [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
   case "$min_protocol" in 1|2) ;; *) min_protocol=1;; esac
   bp_rental_enroll_lock || return 1
+  if ! bp_rental_enroll_gc_locked "$now"; then
+    bp_rental_enroll_unlock
+    return 1
+  fi
+  max="$(bp_rental_enroll_limit)"
+  rows="$(wc -l < "$BP_RENTAL_ENROLL" 2>/dev/null | tr -d ' ')"
+  case "$rows" in ''|*[!0-9]*) rows=0;; esac
+  if [ "$rows" -ge "$max" ] 2>/dev/null; then
+    bp_rental_enroll_unlock
+    return 4
+  fi
   tries=0; id=""
   while [ "$tries" -lt 8 ]; do
     candidate="$(bp_rental_hex 6)"
@@ -59,8 +89,16 @@ bp_rental_enroll_create() {
     bp_rental_enroll_unlock
     return 1
   fi
-  chmod 600 "$BP_RENTAL_ENROLL"
-  bp_durable_sync
+  chmod 600 "$BP_RENTAL_ENROLL" || {
+    bp_rental_enroll_consume "$id" >/dev/null 2>&1 || true
+    bp_rental_enroll_unlock
+    return 1
+  }
+  if ! bp_durable_sync; then
+    bp_rental_enroll_consume "$id" >/dev/null 2>&1 || true
+    bp_rental_enroll_unlock
+    return 1
+  fi
   bp_rental_enroll_unlock
   printf '%s\n' "$token"
 }

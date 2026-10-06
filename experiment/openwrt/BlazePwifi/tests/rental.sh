@@ -20,6 +20,36 @@ export BP_RENTAL_POLICY_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_poli
 . "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"
 bp_rental_init
 
+# Abandoned/expired QR rows are garbage-collected before a new token is issued.
+NOW_GC="$(bp_now)"
+FUTURE_GC=$((NOW_GC+3600))
+printf '000000000001\tdead-secret\t%s\tExpired QR\t2\t\t\n' "$((NOW_GC-1))" >> "$BP_RENTAL_ENROLL"
+printf '000000000002\tlive-secret\t%s\tLive QR\t2\t\t\n' "$FUTURE_GC" >> "$BP_RENTAL_ENROLL"
+printf '000000000003\tbad-secret\tnot-a-time\tMalformed QR\t2\t\t\n' >> "$BP_RENTAL_ENROLL"
+GC_TOKEN="$(bp_rental_enroll_create 'GC trigger' 600 2)"
+GC_EID="${GC_TOKEN%%.*}"
+[ -z "$(bp_rental_enroll_lookup 000000000001)" ]
+[ -z "$(bp_rental_enroll_lookup 000000000003)" ]
+[ -n "$(bp_rental_enroll_lookup 000000000002)" ]
+[ -n "$(bp_rental_enroll_lookup "$GC_EID")" ]
+bp_rental_enroll_consume 000000000002
+bp_rental_enroll_consume "$GC_EID"
+
+# Active one-time tokens are bounded even if an operator generates QRs rapidly.
+OLD_ENROLL_MAX="$BP_RENTAL_ENROLL_MAX"
+BP_RENTAL_ENROLL_MAX=16
+i=1
+while [ "$i" -le 16 ]; do
+  cap_id="$(printf '%012x' "$i")"
+  printf '%s\tcap-secret-%s\t%s\tCapacity QR\t2\t\t\n' "$cap_id" "$i" "$FUTURE_GC" >> "$BP_RENTAL_ENROLL"
+  i=$((i+1))
+done
+CAP_RC=0
+bp_rental_enroll_create 'Over capacity' 600 2 >/dev/null 2>&1 || CAP_RC=$?
+[ "$CAP_RC" -eq 4 ]
+: > "$BP_RENTAL_ENROLL"
+BP_RENTAL_ENROLL_MAX="$OLD_ENROLL_MAX"
+
 TOKEN="$(bp_rental_enroll_create 'Phone 01' 600)"
 EID="${TOKEN%%.*}"
 N=abcDEF123
