@@ -559,7 +559,11 @@ EOF
         case "$port" in ''|*[!0-9]*) bp_fail "invalid port";; esac
         [ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null || bp_fail "invalid port"
         if command -v nc >/dev/null 2>&1; then
-          output="$(nc -z -w 3 "$host" "$port" 2>&1; printf 'Port check completed for %s:%s\n' "$host" "$port")" || rc=$?
+          port_tmp="$BP_RUN/.port-check.$(bp_tmp_suffix)"
+          nc -z -w 3 "$host" "$port" >"$port_tmp" 2>&1
+          rc=$?
+          output="$(cat "$port_tmp" 2>/dev/null; printf 'Port check completed for %s:%s\n' "$host" "$port")"
+          rm -f "$port_tmp"
         else output="nc is not installed on this target"; rc=127; fi
         output="$(printf '%s' "$output" | head -c 12000)"
         ;;
