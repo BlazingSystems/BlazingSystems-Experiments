@@ -20,6 +20,10 @@ thread.start()
 mock_console_state={
     "terminal_enabled":False,
     "terminal_open":False,
+    "remote_runtime":{
+        "activation_state":"staged","apply_supported":True,"public_key":"",
+        "applied_at":0,"last_handshake":0,"last_error":""
+    },
     "remote_config":{
         "mode":"disabled","monitoring":1,"management":0,"terminal":0,
         "node_name":"BlazePwifi","site_label":"","source_allowlist":"",
@@ -65,10 +69,10 @@ def mock_admin(action, params=None):
         cfg=mock_console_state["remote_config"]
         return {"ok":True,"recommended":"wireguard","remote":{
             "mode":cfg["mode"],"ready":cfg["mode"]!="disabled",
-            "apply_supported":False,"activation_state":"staged",
             "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
-            "wireguard":"installed","zerotier":"unavailable"
+            "wireguard":"installed","zerotier":"unavailable",
+            "runtime":dict(mock_console_state["remote_runtime"])
         }}
     if action == "remote_config_get":
         return {"ok":True,"config":dict(mock_console_state["remote_config"])}
@@ -83,11 +87,40 @@ def mock_admin(action, params=None):
                     except Exception: cfg[key]=raw
                 else:
                     cfg[key]=raw
-        return {"ok":True,"apply_supported":False,"remote":{
-            "mode":cfg["mode"],"ready":cfg["mode"]!="disabled","activation_state":"staged",
+        rt=mock_console_state["remote_runtime"]
+        if rt["activation_state"]=="active":
+            rt["activation_state"]="active_staged_changes"
+        return {"ok":True,"remote":{
+            "mode":cfg["mode"],"ready":cfg["mode"]!="disabled",
             "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
-            "wireguard":"installed","zerotier":"unavailable"
+            "wireguard":"installed","zerotier":"unavailable","runtime":dict(rt)
+        }}
+    if action == "remote_wireguard_key":
+        rt=mock_console_state["remote_runtime"]
+        rt["public_key"]="CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+        return {"ok":True,"public_key":rt["public_key"]}
+    if action == "remote_wireguard_apply":
+        rt=mock_console_state["remote_runtime"]
+        rt.update({"activation_state":"active","apply_supported":True,
+                   "public_key":rt["public_key"] or "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+                   "applied_at":int(time.time()),"last_handshake":int(time.time()),"last_error":""})
+        cfg=mock_console_state["remote_config"]
+        return {"ok":True,"remote":{
+            "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
+            "management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"online:blazewg:last_handshake_age=0","zerotier":"unavailable","runtime":dict(rt)
+        }}
+    if action == "remote_wireguard_disable":
+        rt=mock_console_state["remote_runtime"]
+        rt.update({"activation_state":"staged","applied_at":int(time.time()),"last_handshake":0,"last_error":""})
+        cfg=mock_console_state["remote_config"]
+        return {"ok":True,"remote":{
+            "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
+            "management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"unavailable","runtime":dict(rt)
         }}
     if action == "terminal_status":
         return {"ok":True,"enabled":mock_console_state["terminal_enabled"],
@@ -289,7 +322,27 @@ with sync_playwright() as p:
     assert any(x["action"]=="remote_config_set" for x in admin_mutations), admin_mutations
     assert mock_console_state["remote_config"]["mode"]=="wireguard", mock_console_state["remote_config"]
     page.wait_for_function("document.getElementById('remoteModeState').textContent === 'wireguard'")
-    assert "live transport apply remains safety-locked" in page.locator("#remoteConfigState").inner_text().lower()
+
+    # dev.3 live WireGuard: explicit key generation, transactional apply, staged edits, safe disable.
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Generate / show key")')
+    page.wait_for_function("document.getElementById('wgLocalPublicKey').value.includes('CCCCCCCC')")
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Test & Apply WireGuard")')
+    page.wait_for_function("document.getElementById('wgActivationState').textContent === 'active'")
+    assert "Handshake" in page.locator("#wgHandshakeState").inner_text()
+
+    page.fill("#remoteSiteLabel","Audit Site staged edit")
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Validate & save profile")')
+    page.wait_for_function("document.getElementById('wgActivationState').textContent === 'active_staged_changes'")
+    assert "staged changes" in page.locator("#remoteReadyState").inner_text().lower()
+
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Disable live WireGuard")')
+    page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
 
     # dev.2 Advanced Terminal: enable -> fresh re-auth -> in-memory session -> bounded command -> close.
     page.click('[data-page="tools"]')
@@ -308,7 +361,8 @@ with sync_playwright() as p:
     page.click('button:has-text("Close session")')
     page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('closed')")
 
-    sensitive_actions={"remote_config_set","terminal_set_enabled","terminal_open","terminal_exec","terminal_close"}
+    sensitive_actions={"remote_config_set","remote_wireguard_key","remote_wireguard_apply","remote_wireguard_disable",
+                       "terminal_set_enabled","terminal_open","terminal_exec","terminal_close"}
     sensitive=[x for x in admin_mutations if x["action"] in sensitive_actions]
     assert sensitive_actions.issubset({x["action"] for x in sensitive})
     assert all(x["csrf_body"]=="browser-audit-csrf" and x["csrf_header"]=="browser-audit-csrf" for x in sensitive)
@@ -372,6 +426,9 @@ result={
         "system_page_rendered":True,
         "voucher_action_rendered":True,
         "remote_profile_saved":True,
+        "wireguard_live_apply":True,
+        "wireguard_staged_edit":True,
+        "wireguard_safe_disable":True,
         "advanced_terminal_session":True,
         "console_errors":False
     }
