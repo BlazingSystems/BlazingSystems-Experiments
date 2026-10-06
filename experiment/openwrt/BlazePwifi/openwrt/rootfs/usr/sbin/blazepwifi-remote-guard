@@ -5,12 +5,19 @@ set -eu
 . "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
 . "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
 . "${BP_REMOTE_APPLY_LIB:-/usr/lib/blazepwifi/remote_apply.sh}"
+[ ! -r "${BP_ZEROTIER_APPLY_LIB:-/usr/lib/blazepwifi/zerotier_apply.sh}" ] || . "${BP_ZEROTIER_APPLY_LIB:-/usr/lib/blazepwifi/zerotier_apply.sh}"
 bp_init_dirs
 bp_remote_apply_init
 
 case "${1:-}" in
   --boot)
     bp_remote_guard_boot
+    if command -v bp_zt_guard_boot >/dev/null 2>&1; then bp_zt_guard_boot; fi
+    ;;
+  --zerotier)
+    [ -n "${2:-}" ] || exit 2
+    command -v bp_zt_guard >/dev/null 2>&1 || exit 3
+    bp_zt_guard "$2"
     ;;
   "")
     exit 2
