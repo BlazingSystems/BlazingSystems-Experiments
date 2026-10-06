@@ -1,0 +1,62 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+W="$ROOT/openwrt/rootfs/www/blazepwifi"
+CORE="$W/admin/core.js"
+RENTAL_UI="$W/admin/rental.js"
+ADMIN_HTML="$W/admin.html"
+ADMIN="$W/cgi-bin/admin"
+PORTAL_API="$W/cgi-bin/api"
+RENTAL_API="$W/cgi-bin/rental"
+PORTAL="$W/index.html"
+LEASE="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/LeaseClient.java"
+PAGES="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalSystemPages.java"
+
+sh -n "$ADMIN"
+sh -n "$PORTAL_API"
+sh -n "$RENTAL_API"
+
+# Full-console CSRF must survive CGI stacks that strip custom headers.
+grep -Fq "credentials:'same-origin',cache:'no-store'" "$CORE"
+grep -Fq "Object.assign({action,csrf}" "$CORE"
+grep -Fq "'X-Blaze-CSRF':csrf" "$CORE"
+grep -Fq "refreshSessionToken" "$CORE"
+grep -Fq "return api(action,data,false)" "$CORE"
+
+# Binding and Device Owner provisioning are separate API/UI flows.
+grep -Fq 'rental_binding_qr' "$ADMIN"
+grep -Fq 'rental_provisioning_qr' "$ADMIN"
+grep -Fq 'PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME' "$ADMIN"
+grep -Fq 'PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION' "$ADMIN"
+grep -Fq 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$ADMIN"
+grep -Fq 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$ADMIN"
+grep -Fq 'Bind existing BlazeRental' "$ADMIN_HTML"
+grep -Fq 'Provision factory-reset phone' "$ADMIN_HTML"
+grep -Fq "api('rental_binding_qr'" "$RENTAL_UI"
+grep -Fq "api('rental_provisioning_qr'" "$RENTAL_UI"
+
+# Verify the shell checksum encoder against the frozen v0.5.2 production APK digest.
+eval "$(sed -n '/^bp_admin_sha256_b64url()/,/^}/p' "$ADMIN")"
+ENCODED="$(bp_admin_sha256_b64url d0ad20bed00ea304db9bff45928542fed574070d416ed65b4fbf3d8ba23d7102)"
+[ "$ENCODED" = '0K0gvtAOowTbm_9FkoVC_tV0Bw1BbtZbT789i6I9cQI' ]
+
+# Portal and Rental app must expose the authoritative insert-coin window.
+grep -Fq '"server_time":$now' "$PORTAL_API"
+grep -Fq '"coin_expires":' "$PORTAL_API"
+grep -Fq 'id="coinCountdown"' "$PORTAL"
+grep -Fq 'syncCoinWindow(x.server_time,x.coin_expires' "$PORTAL"
+grep -Fq 'setInterval(renderCoinWindow,500)' "$PORTAL"
+grep -Fq 'setInterval(renderSessionTimer,1000)' "$PORTAL"
+
+grep -Fq '"coin_window_expires_ms":' "$RENTAL_API"
+grep -Fq 'coin_stop)' "$RENTAL_API"
+grep -Fq 'SystemClock.elapsedRealtime()' "$LEASE"
+grep -Fq 'response.optLong("expires_ms", 0L)' "$LEASE"
+grep -Fq 'response.optLong("coin_window_expires_ms", 0L)' "$LEASE"
+grep -Fq 'public static String coinStop' "$LEASE"
+grep -Fq 'DONE INSERTING' "$PAGES"
+grep -Fq 'formatCoinDuration' "$PAGES"
+grep -Fq 'COIN WINDOW OPEN' "$PAGES"
+
+echo "post-v0.5.2 CSRF, QR, and coin-window hardening contracts passed"
