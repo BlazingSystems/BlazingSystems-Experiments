@@ -78,6 +78,16 @@ grep -Fq 'LeaseClient.post(context, base, body)' "$POLICY_CLIENT"
 grep -Fq 'server_cert_sha256' "$QR_TEMPLATE"
 grep -Fq 'server-cert-sha256' "$QR_JSON_TOOL"
 
+echo "hardening: retry-safe one-time Rental enrollment"
+grep -Fq 'bp_rental_enroll_mark_redeemed' "$RENTAL_API"
+grep -Fq 'bp_rental_enroll_consume_device' "$RENTAL_API"
+grep -Fq 'enrollment already claimed' "$RENTAL_API"
+grep -Fq '"reused":%s' "$RENTAL_API"
+grep -Fq 'enrollment redemption/device mismatch' "$RENTAL_API"
+grep -Fq 'same request nonce' "$RENTAL_API"
+grep -Fq 'enrollment_request_nonce' "$STORE"
+grep -Fq 'enrollmentRequestNonce(context)' "$LEASE"
+
 echo "hardening: portal and Rental coin-window contracts"
 # Portal and Rental app must expose the authoritative insert-coin window.
 grep -Fq '\"server_time\":$now' "$PORTAL_API"
