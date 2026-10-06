@@ -39,8 +39,35 @@ bp_admin_binding_payload() {
 
 bp_admin_sha256_b64url() {
   hex="$(printf '%s' "$1" | tr A-F a-f)"
-  printf '%s' "$hex" | grep -Eq '^[0-9a-f]{64}
-
+  [ "$(printf '%s' "$hex" | wc -c)" -eq 64 ] || return 1
+  case "$hex" in *[!0-9a-f]*) return 1;; esac
+  awk -v h="$hex" '
+    function nib(c) { return index("0123456789abcdef",c)-1 }
+    function byte_at(pos) { return nib(substr(h,pos,1))*16+nib(substr(h,pos+1,1)) }
+    BEGIN {
+      alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+      n=length(h)
+      for(pos=1;pos<=n;pos+=6){
+        b1=byte_at(pos)
+        have2=(pos+2<=n)
+        have3=(pos+4<=n)
+        b2=have2?byte_at(pos+2):0
+        b3=have3?byte_at(pos+4):0
+        c1=int(b1/4)
+        c2=(b1%4)*16+int(b2/16)
+        printf "%s%s",substr(alphabet,c1+1,1),substr(alphabet,c2+1,1)
+        if(have2){
+          c3=(b2%16)*4+int(b3/64)
+          printf "%s",substr(alphabet,c3+1,1)
+        }
+        if(have3){
+          c4=b3%64
+          printf "%s",substr(alphabet,c4+1,1)
+        }
+      }
+    }
+  '
+}
 bp_admin_provisioning_payload() {
   server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"
   printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"server_url":"%s","enrollment_token":"%s","device_name":"%s"}}' \
