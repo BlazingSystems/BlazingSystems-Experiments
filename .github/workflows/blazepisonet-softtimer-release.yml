@@ -116,9 +116,16 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
 
-          function Invoke-Schtasks([string[]]$TaskArgs) {
-            $proc=Start-Process -FilePath "$env:WINDIR\System32\schtasks.exe" -ArgumentList $TaskArgs -Wait -PassThru -WindowStyle Hidden
-            return $proc.ExitCode
+          function Test-ScheduledTaskExists([string]$TaskName) {
+            $service=New-Object -ComObject 'Schedule.Service'
+            $service.Connect()
+            $root=$service.GetFolder('\')
+            try {
+              $null=$root.GetTask($TaskName)
+              return $true
+            } catch {
+              return $false
+            }
           }
 
           $setup=(Resolve-Path "release/BlazePisonet-SoftTimer-Setup-v$env:VERSION.exe").Path
@@ -134,16 +141,16 @@ jobs:
           $verify=Start-Process -FilePath $app -ArgumentList @('--verify-system-integration') -Wait -PassThru
           if ($verify.ExitCode -ne 0) { throw "SoftTimer native system-integration verification failed with exit code $($verify.ExitCode)" }
 
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) { throw 'SoftTimer startup task was not created' }
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) { throw 'Watchdog startup task was not created' }
+          if (-not (Test-ScheduledTaskExists 'BlazePisonet SoftTimer')) { throw 'SoftTimer startup task was not created' }
+          if (-not (Test-ScheduledTaskExists 'BlazePisonet SoftTimer Watchdog')) { throw 'Watchdog startup task was not created' }
 
           $uninstaller=Join-Path $install 'Uninstall.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Native uninstaller EXE missing' }
           $u=Start-Process -FilePath $uninstaller -ArgumentList @('/S') -Wait -PassThru
           if ($u.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($u.ExitCode)" }
 
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -eq 0) { throw 'SoftTimer startup task remained after uninstall' }
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -eq 0) { throw 'Watchdog startup task remained after uninstall' }
+          if (Test-ScheduledTaskExists 'BlazePisonet SoftTimer') { throw 'SoftTimer startup task remained after uninstall' }
+          if (Test-ScheduledTaskExists 'BlazePisonet SoftTimer Watchdog') { throw 'Watchdog startup task remained after uninstall' }
           if (Test-Path $app) { throw 'SoftTimer executable remained after uninstall' }
           if (Test-Path $watchdog) { throw 'Watchdog executable remained after uninstall' }
 
