@@ -3,15 +3,15 @@
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.3 integrated development line** — transactional WireGuard live activation from current `main` plus centralized BlazePisonet SoftTimer member authority from PR #22. This integrated merge candidate must remain development-only until the combined validation matrix is green.  
+**Active development:** **v0.5.3-dev.4 member-migration development line** — dev.3 WireGuard + centralized SoftTimer member authority plus reviewed verifier-free member metadata export/import. Exact green application candidate `723c9c2191542e6f6867ee5fbbc31083590b49f2`, workflow `37527877646` — PASS. This remains development-only; no v0.5.3 production tag/signing action has been taken.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
 
 The post-v0.5.2 hardening work is implemented and artifact-validated. This is a **development line**, not a production v0.5.3 release.
 
-- Development identity: `0.5.3-dev.3`.
-- Android development versionCode: `50292`.
+- Development identity: `0.5.3-dev.4`.
+- Android development versionCode: `50293`.
 - Reserved development range: `50290–50298`.
 - Frozen v0.5.2 rollback rescue versionCode: `50299`.
 - Reserved final v0.5.3 production versionCode: `50300`.
@@ -65,7 +65,20 @@ The post-v0.5.2 hardening work is implemented and artifact-validated. This is a 
   - Console now exposes device public-key generation, staged profile save, Test & Apply, activation/handshake status and safe disable.
   - ZeroTier live activation remains staged-only in dev.3.
   - Exact branch workflow `37516557416` passed validation, browser runtime, Android build, Device Owner emulator, x86 QEMU, ESP8266/ESP32, Ruijie, required Orange Pi targets, update bundle and final candidate gate.
-- Current `main` has one newer **Standalone Rental RC4 documentation/audit** commit that does not overlap dev.3. Those Standalone files are not to be edited by Full BlazePwifi work.
+- **dev.4 Pisonet member metadata migration is green:**
+  - export is verifier-free: no plaintext password, password hash/verifier, salt, KDF scheme or rounds are present;
+  - strict portable `BLAZE_MEMBER_METADATA_V1` carries username, label/source metadata, enabled request, banked seconds and timestamps only;
+  - import is preview-first and Apply requires Admin + CSRF + fresh password re-authentication;
+  - preview tokens are TTL-limited, single-use, bound to admin session/IP and pinned to the central member revision;
+  - collisions are explicit: abort, skip, or metadata-only update; no silent overwrite;
+  - metadata-only collision updates preserve the existing central password verifier;
+  - new members are created disabled with `reset_required` state and need a normal admin password reset before enable/authentication;
+  - imports are transactional across member records, event history and global revision, with full rollback on injected mid-import failure;
+  - duplicate usernames, malformed fields and oversized files/member sets are rejected;
+  - the optional-empty-label member-store parsing bug was fixed across CRUD/auth/balance/transfer/public-list/snapshot/export paths;
+  - exact application candidate `723c9c2191542e6f6867ee5fbbc31083590b49f2`, workflow `37527877646`, passed validation, migration regression, Playwright, Android build, Device Owner emulator, x86 QEMU, ESP8266/ESP32, Ruijie, required Orange Pi targets, update bundle and final candidate gate;
+  - retained browser audit reports `member_metadata_export=true`, `member_import_preview=true`, `member_import_apply=true`, `dual_csrf_transport=true`, and `console_errors=false`.
+- Current Full BlazePwifi dev.4 branch has zero changes under `profiles/standalone-rental`.
 - No v0.5.3 production tag/release has been created.
 - No production signing key was rotated or exposed.
 - Frozen v0.5.2 release/tag and dedicated signing/recovery workflows remain unchanged.
@@ -131,16 +144,16 @@ Minimum console actions:
 - inspect revision / last update / source;
 - view recent member events;
 - transfer banked time between members;
-- export/import member metadata without plaintext passwords (**follow-up after dev.3; not implemented in the current dev.3 branch**).
+- export/import member metadata without plaintext passwords — **implemented in dev.4 with reviewed preview, collision policy, fresh re-authentication and transactional rollback**.
 
 Viewer role may read non-secret member status. Operator may create/edit ordinary member state and banked time within policy. Password reset, destructive delete/revoke and bulk import require Admin plus CSRF; high-risk bulk operations should require fresh re-authentication.
 
 ### Compatibility / migration
 
 - Existing v0.3.0 SoftTimer local members must not be silently destroyed.
-- dev.3 preserves existing local SoftTimer members but does **not** automatically migrate them.
-- A later explicit local→central migration/import workflow must show username collisions for operator resolution and must never silently overwrite a BlazePwifi member.
-- Local hashes that cannot be imported safely must require a password reset rather than attempting reversible conversion.
+- Existing local SoftTimer members are still not silently auto-migrated.
+- dev.4 provides an explicit metadata-only local→central migration/import workflow with reviewed username-collision classification and no silent overwrite.
+- Password verifier/hash material is never imported through this workflow; new imported central members are disabled and require password reset before enable/authentication.
 - SoftTimer remains able to operate in **Local Members** mode when BlazePwifi member authority is disabled.
 
 ### Scope guard
