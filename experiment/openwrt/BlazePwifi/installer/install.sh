@@ -181,6 +181,7 @@ uci commit firewall
 /etc/init.d/blazepwifi enable
 /etc/init.d/blazepwifi-remote-guard enable 2>/dev/null || true
 /etc/init.d/blazepwifi-remote-admin enable 2>/dev/null || true
+/etc/init.d/blazepwifi-zerotier-finalize enable 2>/dev/null || true
 /etc/init.d/blazepwifi restart
 sleep 2
 
