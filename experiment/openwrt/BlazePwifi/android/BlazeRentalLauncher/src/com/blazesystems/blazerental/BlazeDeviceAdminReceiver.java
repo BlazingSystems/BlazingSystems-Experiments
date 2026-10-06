@@ -1,25 +1,32 @@
 package com.blazesystems.blazerental;
 
 import android.app.admin.DeviceAdminReceiver;
-import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.Intent;
-import android.os.PersistableBundle;
+import android.os.Build;
 
 public class BlazeDeviceAdminReceiver extends DeviceAdminReceiver {
     @Override
     public void onProfileProvisioningComplete(Context context, Intent intent) {
-        PersistableBundle extras = intent.getParcelableExtra(
-                DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE);
-        RentalLeaseStore.acceptProvisioningExtras(context, extras);
+        BlazeProvisioningContract.capture(context, intent);
         ManagedPolicyController.apply(context);
         final Context app = context.getApplicationContext();
         new Thread(new Runnable() {
             @Override public void run() {
-                if (RentalLeaseStore.hasEnrollmentConfig(app)) LeaseClient.sync(app);
+                boolean ok = false;
+                if (RentalLeaseStore.hasEnrollmentConfig(app)) {
+                    ok = LeaseClient.sync(app) && RentalLeaseStore.isEnrolled(app);
+                    if (ok) LeaseClient.sync(app);
+                }
+                ManagedPolicyController.apply(app);
+                if (ok) RentalLeaseStore.markInitialSetupComplete(app, true);
+                // Android 8+ has provisioning-success/compliance activities.
+                // Older devices need this callback to return to the managed launcher.
+                if (ok && Build.VERSION.SDK_INT < 26) {
+                    ManagedPolicyController.openHome(app);
+                }
             }
         }).start();
-        ManagedPolicyController.openHome(context);
     }
 
     @Override

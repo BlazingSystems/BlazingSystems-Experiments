@@ -51,7 +51,7 @@ bp_admin_local_cert_pin() {
 }
 bp_admin_binding_payload() {
   server="$1"; token="$2"; label="$3"; cert_pin="$4"
-  printf '{"server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
+  printf '{"schema":"blazerental.enrollment.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
     "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
 }
 
@@ -89,7 +89,7 @@ bp_admin_sha256_b64url() {
 
 bp_admin_provisioning_payload() {
   server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"; cert_pin="$7"
-  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}}' \
+  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}}' \
     "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$checksum")" "${version_code:-0}" \
     "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
 }
