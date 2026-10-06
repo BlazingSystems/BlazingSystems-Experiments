@@ -163,12 +163,7 @@ jobs:
           APK="$(find android-artifact -type f -name 'BlazeRental-v0.5.2-rental.2-TEST.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
           APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
-          APK_CHECKSUM="$(python3 - "$APK" <<'PY'
-import base64, hashlib, pathlib, sys
-p=pathlib.Path(sys.argv[1])
-print(base64.urlsafe_b64encode(hashlib.sha256(p.read_bytes()).digest()).decode().rstrip("="))
-PY
-)"
+          APK_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode().rstrip("="))' "$APK")"
           test "${#APK_SHA256}" -eq 64
           test "${#APK_CHECKSUM}" -eq 43
           cat > "$OUT/rental-provisioning.env" <<EOF
@@ -470,7 +465,7 @@ EOF
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-Rental-v0.5.2-rental.2-rc.1-rc1-release-stage
+          name: BlazePwifi-Rental-v0.5.2-rental.2-rc.1-release-stage
           path: release-out/
           retention-days: 90
           if-no-files-found: error
@@ -482,10 +477,10 @@ EOF
           NOTES=experiment/openwrt/BlazePwifi/releases/0.5.2-rental.2-rc.1/README.md
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             gh release edit "$TAG" --repo "${{ github.repository }}" --target "$GITHUB_SHA" \
-              --title "BlazePwifi Standalone Rental Server v0.5.2-rental.2-rc.1" --notes-file "$NOTES" --prerelease --prerelease
+              --title "BlazePwifi Standalone Rental Server v0.5.2-rental.2-rc.1" --notes-file "$NOTES" --prerelease
           else
             gh release create "$TAG" --repo "${{ github.repository }}" --target "$GITHUB_SHA" \
-              --title "BlazePwifi Standalone Rental Server v0.5.2-rental.2-rc.1" --notes-file "$NOTES"
+              --title "BlazePwifi Standalone Rental Server v0.5.2-rental.2-rc.1" --notes-file "$NOTES" --prerelease
           fi
           find release-out -maxdepth 1 -type f -print0 | xargs -0 -r gh release upload "$TAG" --repo "${{ github.repository }}" --clobber
 
