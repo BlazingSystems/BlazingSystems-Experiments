@@ -8,6 +8,9 @@ cat > "$T/bin/uci" <<'UCI'
 case "$*" in
  *'get blazepwifi.main.durable_sync') echo 0;;
  *'get blazepwifi.main.rental_seconds_per_pulse') echo 600;;
+ *'get blazepwifi.main.pulse_value_centavos') echo 100;;
+ *'get blazepwifi.main.vendo_port') echo 4455;;
+ *'get blazepwifi.main.vendo_key') echo rental-test-vendo-secret;;
  *) exit 1;;
 esac
 UCI
@@ -17,7 +20,8 @@ export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
 export BP_RENTAL_POLICY_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_policy.sh"
-. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"
+export BP_CONTROLLER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
+. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"; . "$BP_CONTROLLER_LIB"
 bp_rental_init
 
 TOKEN="$(bp_rental_enroll_create 'Phone 01' 600)"
@@ -63,9 +67,31 @@ CS="$(printf '%s' "$COIN" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
 CE="$(printf '%s' "$COIN" | sed -n 's/.*"expires_ms":\([0-9]*\).*/\1/p')"
 CG="$(printf '%s' "$COIN" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
 [ -n "$CS" ] && [ -n "$CE" ] && [ "$CE" -gt "$CS" ]
-[ "$CG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$CS|$CE|vendo-02")" ]
+[ "$CG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$CS|$CE|vendo-02|0|0")" ]
 [ -f "$BP_TARGET_DIR/vendo-02.tsv" ]
+[ -f "$BP_TARGET_DIR/vendo-02.progress" ]
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 0 ]
 [ "$(cut -f6 "$BP_TARGET_DIR/vendo-02.tsv")" = rental ]
+
+# Send one signed 2-pulse coin event through the real Vendo CGI, then replay
+# the exact same event. Only the first may increase lease/progress.
+VENDO_CGI="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
+TARGET="$(printf '%s' "$COIN" | sed -n 's/.*"target_nonce":"\([^"]*\)".*/\1/p')"
+VN=aabbccdd
+VSIG="$(bp_vendo_sig_expected coin vendo-02 "$VN" 2 "$TARGET")"
+V1="$(printf 'action=coin&id=vendo-02&nonce=%s&pulses=2&target=%s&sig=%s' "$VN" "$TARGET" "$VSIG" | REQUEST_METHOD=POST SERVER_PORT=4455 sh "$VENDO_CGI")"
+echo "$V1" | grep -q '"ok":true'
+echo "$V1" | grep -q '"duplicate":false'
+echo "$V1" | grep -q '"received_pulses":2'
+echo "$V1" | grep -q '"received_cents":200'
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 2 ]
+
+V2="$(printf 'action=coin&id=vendo-02&nonce=%s&pulses=2&target=%s&sig=%s' "$VN" "$TARGET" "$VSIG" | REQUEST_METHOD=POST SERVER_PORT=4455 sh "$VENDO_CGI")"
+echo "$V2" | grep -q '"ok":true'
+echo "$V2" | grep -q '"duplicate":true'
+echo "$V2" | grep -q '"received_pulses":2'
+echo "$V2" | grep -q '"received_cents":200'
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 2 ]
 
 NS=coinstatus123
 SIGS="$(bp_rental_hmac "$DSEC" "status|$NS|$DSEC")"
@@ -73,19 +99,28 @@ COINSTATUS="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$NS" "
 SS="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
 SE="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_expires_ms":\([0-9]*\).*/\1/p')"
 SV="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_vendo":"\([^"]*\)".*/\1/p')"
+SP="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_received_pulses":\([0-9]*\).*/\1/p')"
+SC="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_received_cents":\([0-9]*\).*/\1/p')"
 SG="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
 [ "$SE" = "$CE" ] && [ "$SV" = vendo-02 ]
-[ "$SG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$SS|$SE|$SV")" ]
+[ "$SP" -eq 2 ] && [ "$SC" -eq 200 ]
+[ "$SG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$SS|$SE|$SV|$SP|$SC")" ]
 
 NX=coinstop123
 SIGX="$(bp_rental_hmac "$DSEC" "coin_stop|$NX|$DSEC")"
 STOP="$(printf 'action=coin_stop&device_id=%s&nonce=%s&sig=%s' "$DID" "$NX" "$SIGX" | REQUEST_METHOD=POST sh "$CGI")"
 echo "$STOP" | grep -q '"ok":true'
 XS="$(printf '%s' "$STOP" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+XP="$(printf '%s' "$STOP" | sed -n 's/.*"received_pulses":\([0-9]*\).*/\1/p')"
+XC="$(printf '%s' "$STOP" | sed -n 's/.*"received_cents":\([0-9]*\).*/\1/p')"
 XG="$(printf '%s' "$STOP" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
-[ "$XG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$XS|0|")" ]
+[ "$XP" -eq 2 ] && [ "$XC" -eq 200 ]
+[ "$XG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$XS|0||$XP|$XC")" ]
 [ ! -f "$BP_TARGET_DIR/vendo-02.tsv" ]
+[ ! -f "$BP_TARGET_DIR/vendo-02.progress" ]
 
+# Reset the lease baseline before the lower-level library duplicate test.
+bp_rental_device_write "$DID" "$DSEC" 2000003600 'Phone 01' 2000000000
 R1="$(bp_rental_apply_coin "$DID" vendo-02 aabbccdd 11223344 2)"
 echo "$R1" | grep -q '^credited'
 LEASE="$(printf '%s' "$R1" | cut -f2)"
