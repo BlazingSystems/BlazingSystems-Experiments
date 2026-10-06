@@ -11,9 +11,17 @@ PLAYER="$SRC/BlazeAlarmPlayer.java"
 RECEIVER="$SRC/RentalAlarmReceiver.java"
 LCM_PNG="$L/res/drawable-nodpi/blaze_lcm_brand.png"
 
-[ "$(cat "$ROOT/VERSION")" = "0.5.2" ]
-grep -Fq 'versionCode 50200' "$GRADLE"
-grep -Fq 'versionName "0.5.2"' "$GRADLE"
+case "$(cat "$ROOT/VERSION")" in
+  0.5.2)
+    grep -Fq 'versionCode 50200' "$GRADLE"
+    grep -Fq 'versionName "0.5.2"' "$GRADLE"
+    ;;
+  0.5.3-dev.1)
+    grep -Fq 'versionCode 50300' "$GRADLE"
+    grep -Fq 'versionName "0.5.3-dev.1"' "$GRADLE"
+    ;;
+  *) exit 1 ;;
+esac
 grep -Fq 'android:icon="@drawable/blaze_lcm_brand"' "$MANIFEST"
 grep -Fq 'android.permission.MODIFY_AUDIO_SETTINGS' "$MANIFEST"
 grep -Fq 'android.permission.ACCESS_NOTIFICATION_POLICY' "$MANIFEST"
@@ -57,5 +65,5 @@ grep -Fq 'GRANT DND ALARM OVERRIDE' "$ADMIN"
 grep -Fq 'RingtoneManager.ACTION_RINGTONE_PICKER' "$ADMIN"
 grep -Fq 'RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false' "$ADMIN"
 grep -Fq 'Intent.ACTION_OPEN_DOCUMENT' "$ADMIN"
-grep -Fq 'v0.5.2 Launcher Edition' "$ADMIN"
-echo "v0.5.2 BlazeRental branding/alarm contracts passed"
+grep -Fq 'BuildConfig.VERSION_NAME' "$ADMIN"
+echo "v0.5.2 inherited BlazeRental branding/alarm contracts passed"
