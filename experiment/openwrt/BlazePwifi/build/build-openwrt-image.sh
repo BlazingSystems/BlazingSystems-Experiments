@@ -74,7 +74,7 @@ if [ "$KIND" = x86 ] || [ "$KIND" = sbc ]; then
   mkdir -p "$FILES_DIR"
   cp -a "$ROOT/openwrt/rootfs/." "$FILES_DIR/"
   sh "$ROOT/build/prepare-tabler.sh" "$FILES_DIR/www/blazepwifi/vendor/tabler"
-  PACKAGES="$PACKAGES openssl-util"
+  PACKAGES="$PACKAGES openssl-util zerotier"
 fi
 if [ "$KIND" = sbc ]; then
   mkdir -p "$FILES_DIR/usr/sbin" "$FILES_DIR/etc/init.d" "$FILES_DIR/usr/share/blazepwifi/orangepi"
