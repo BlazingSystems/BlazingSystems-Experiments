@@ -52,17 +52,17 @@ public final class RentalLeaseStore {
                 .remove("lease_sync_elapsed")
                 .remove("server_time_ms")
                 .remove("lease_until_ms")
-                .apply();
+                .commit();
         AndroidRentalPolicyRepository.clear(context);
     }
 
-    public static void setDeviceIdentity(Context context, String id, String secret) {
-        prefs(context).edit()
+    public static boolean setDeviceIdentity(Context context, String id, String secret) {
+        return prefs(context).edit()
                 .putString("device_id", safe(id))
                 .putString("device_secret", safe(secret))
                 .remove("enrollment")
                 .remove("enrollment_request_nonce")
-                .apply();
+                .commit();
     }
 
     public static synchronized String enrollmentRequestNonce(Context context) {
@@ -70,7 +70,7 @@ public final class RentalLeaseStore {
         String nonce = p.getString("enrollment_request_nonce", "");
         if (nonce.length() > 0) return nonce;
         nonce = Hmac.nonce();
-        p.edit().putString("enrollment_request_nonce", nonce).apply();
+        if (!p.edit().putString("enrollment_request_nonce", nonce).commit()) return "";
         return nonce;
     }
 
