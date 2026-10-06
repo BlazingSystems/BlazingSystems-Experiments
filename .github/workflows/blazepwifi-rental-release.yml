@@ -5,6 +5,7 @@ on:
     branches: [blazepwifi-rental-v0.5.2-hotfix2]
     paths:
       - 'experiment/openwrt/BlazePwifi/profiles/standalone-rental/**'
+      - '!experiment/openwrt/BlazePwifi/profiles/standalone-rental/PROVISIONING-AUDIT.md'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/**'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/admin'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/AndroidManifest.xml'
@@ -575,8 +576,32 @@ jobs:
           set -euo pipefail
           NOTES=experiment/openwrt/BlazePwifi/releases/0.5.2-rental.2-rc.4/README.md
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release $TAG already exists. RC tags are immutable; bump the RC version instead of replacing assets." >&2
-            exit 1
+            TAG_COMMIT="$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" --jq '.object.sha')"
+            test -n "$TAG_COMMIT"
+
+            # RC tags are immutable. A later commit may keep this branch's
+            # audit documentation/release workflow current without changing
+            # the already-published RC payload. Any product/package delta
+            # still requires a new RC number.
+            CHANGED="$(gh api "repos/${{ github.repository }}/compare/$TAG_COMMIT...$GITHUB_SHA" --jq '.files[].filename')"
+            unsafe=0
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              case "$f" in
+                experiment/openwrt/BlazePwifi/profiles/standalone-rental/PROVISIONING-AUDIT.md|.github/workflows/blazepwifi-rental-release.yml)
+                  ;;
+                *)
+                  echo "Immutable $TAG has unreleased product/package delta: $f" >&2
+                  unsafe=1
+                  ;;
+              esac
+            done < <(printf '%s\n' "$CHANGED")
+            [ "$unsafe" -eq 0 ] || {
+              echo "Release $TAG already exists and product/package files changed. Bump the RC version." >&2
+              exit 1
+            }
+            echo "Release $TAG already exists at $TAG_COMMIT; current delta is audit/workflow-only. Leaving immutable release untouched."
+            exit 0
           fi
           ASSETS=(release-out/*)
           test "${#ASSETS[@]}" -gt 0
