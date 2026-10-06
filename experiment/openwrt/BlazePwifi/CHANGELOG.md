@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.3-dev.1 — development
+
+- Full BlazePwifi admin mutations now send CSRF through both the custom header and form body, use same-origin/no-store requests, refresh stale sessions and retry a CSRF mismatch once.
+- Rental setup is split into two explicit QR modes: low-security binding for an already-installed BlazeRental APK, and Android Device Owner provisioning for factory-reset Setup Wizard.
+- Device Owner provisioning binds to the published signed BlazeRental APK checksum and pins the local BlazePwifi self-signed TLS certificate for secure post-provision enrollment.
+- Enrollment is retry-safe across dropped responses: the same persisted request nonce returns the same issued identity, a different nonce is rejected, and the response is authenticated before BlazeRental commits the permanent identity.
+- BlazeRental and the PisoWiFi captive portal now expose separate server-authoritative purchased-time and insert-coin countdowns.
+- Rental coin windows track signed pulse count and centavo value, suppress replayed Vendo events, preserve the active target across repeated open requests, and remove expired/closed progress atomically.
+- BlazeRental displays received pulse/value progress and a real Done Inserting action while preventing overlapping coin-window opens.
+- Runtime validation now asserts the visible unpaid 00:00:00 / INSERT COIN gate, live portal timer ticks, both QR modes, dual CSRF transport, Device Owner behavior and exact installed development version.
+- Current CI artifacts use neutral development channels so post-v0.5.2 builds cannot be mistaken for the frozen v0.5.2 production release.
+- Rollback rescue for this development line is built from the exact frozen v0.5.2 production application candidate with a forward-only rescue versionCode.
+
 ## 0.3.0 — production
 
 - Production phone-rental enforcement: Device Owner lock-task allowlist, server-authoritative lease, coin targeting, app policy, phone-admin password verifier and PC QR provisioning.
