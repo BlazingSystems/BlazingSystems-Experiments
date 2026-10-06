@@ -73,6 +73,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v053_wireguard_apply.sh
       - name: BlazePwifi v0.5.3 centralized SoftTimer members
         run: sh experiment/openwrt/BlazePwifi/tests/v053_members.sh
+      - name: BlazePwifi v0.5.3-dev.4 member metadata migration
+        run: sh experiment/openwrt/BlazePwifi/tests/v054_member_migration.sh
       - name: BlazePwifi v0.4 build matrix validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation
