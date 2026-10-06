@@ -2,7 +2,9 @@
 
 ## Provisioning candidate
 
-### v0.5.2-rental.2-rc.1
+### v0.5.2-rental.2-rc.2
+
+Supersedes RC1 without modifying the RC1 tag or assets. Adds atomic one-time enrollment claims, immutable release tags, exact TEST APK package/signature validation, and executable provisioning/race CI.
 
 Audited QR architecture split:
 
@@ -12,6 +14,10 @@ Audited QR architecture split:
 - in-app scanner rejects provisioning payloads;
 - managed provisioning does not expose the manual first-run admin wizard;
 - test signing and physical Setup Wizard validation remain explicit blockers to stable promotion.
+
+### v0.5.2-rental.2-rc.1
+
+First published provisioning split candidate. Preserved unchanged for release integrity.
 
 ## Latest stable
 

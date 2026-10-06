@@ -55,13 +55,13 @@ python3 "$ROOT/tools/make-provisioning.py" \
   --server-url 'http://192.168.1.1' \
   --enrollment-token '0123456789ab.0123456789abcdef0123456789abcdef' \
   --device-name 'Audit phone' \
-  --version-code 50202 \
+  --version-code 50203 \
   --out "$TMP/provisioning.json"
 python3 - "$TMP/provisioning.json" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1],encoding="utf-8"))
 assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME"]=="com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"
-assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE"]==50202
+assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE"]==50203
 assert len(p["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM"])==43
 x=p["android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE"]
 assert x["blaze_schema"]=="blazerental.provisioning.v1"

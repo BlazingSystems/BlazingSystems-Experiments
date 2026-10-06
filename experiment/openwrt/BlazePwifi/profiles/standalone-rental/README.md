@@ -1,7 +1,7 @@
 # BlazePwifi Standalone Rental Server
 
 Latest stable server line: **v0.5.2-rental.1**  
-Provisioning architecture candidate: **v0.5.2-rental.2-rc.1**
+Provisioning architecture candidate: **v0.5.2-rental.2-rc.2** (RC1 remains immutable history)
 
 The provisioning candidate separates the two Android onboarding modes:
 
