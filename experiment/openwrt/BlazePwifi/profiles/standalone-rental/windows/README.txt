@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental.2-rc.6
+Version: v0.5.2-rental.2-rc.7
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -38,7 +38,7 @@ PASSWORD RESET:
   No manual file upload to the router is required.
 
 
-HOTFIX 0.5.2-rental.2-rc.6:
+HOTFIX 0.5.2-rental.2-rc.7:
 - Fixes CSRF validation failures on mutating Rental admin actions such as QR enrollment.
 - Sends CSRF in both HTTP header and POST body.
 - Refreshes the authenticated session and retries once if a CSRF token becomes stale.
@@ -49,10 +49,16 @@ PROVISIONING RC:
   Device Provisioning uses the exact APK/checksum shipped with this release candidate.
 
 
-DEVICE PROVISIONING RC6:
+DEVICE PROVISIONING RC7:
   Standard Enrollment QR and Android Device Provisioning QR are separate.
   Device Provisioning remains a release-candidate feature.
   The APK Setup Wizard checksum uses canonical padded Base64URL SHA-256.
   Google-certified Android may block a custom DPC that is not Android Enterprise approved.
-  RC6 metadata declares that state and the Rental UI requires an explicit warning acknowledgement.
+  RC7 metadata declares that state and the Rental UI requires an explicit warning acknowledgement.
   Use the custom-DPC test path only on AOSP/non-GMS or an explicitly supported test device unless approval is declared.
+
+
+RC7 ORIGIN HARDENING:
+- OpenWrt validates Rental Server authorities before generating either QR type.
+- Android independently re-validates the origin and TLS pin before persisting enrollment state.
+- Missing hosts, nonnumeric/out-of-range ports, malformed IPv6, userinfo, paths, queries, fragments and backslashes are rejected.

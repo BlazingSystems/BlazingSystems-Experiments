@@ -1,6 +1,6 @@
 # BlazeRental Provisioning / Enrollment Audit
 
-Audit target: BlazePwifi 0.5.2 Standalone Rental RC6 candidate and the active Launcher3-based BlazeRental DPC.
+Audit target: BlazePwifi 0.5.2 Standalone Rental RC7 candidate and the active Launcher3-based BlazeRental DPC.
 
 ## Security boundary
 
@@ -26,16 +26,23 @@ Two QR formats are intentionally separate and must never be treated as interchan
 - Rental Server URL must be HTTPS.
 - Provisioning is rejected if the local Rental Server certificate cannot be fingerprinted and pinned.
 
-## RC6 additional findings
+## RC6 safeguards retained by RC7
 
-- Android Setup Wizard may redeliver identical provisioning extras. RC6 preserves an in-progress enrollment request nonce/device identity instead of resetting state on the repeated callback.
+- Android Setup Wizard may redeliver identical provisioning extras. RC6 introduced and RC7 retains preservation of an in-progress enrollment request nonce/device identity instead of resetting state on the repeated callback.
 - Standard Enrollment on an already-bound phone fails closed. The working permanent identity remains intact until the administrator explicitly uses Transfer.
 - Standard Enrollment scanner state errors are no longer all reported as the wrong QR type; Device Provisioning QR, already-bound state, and local storage failure have distinct handling.
 - Expired or malformed abandoned enrollment rows are purged under the enrollment lock whenever a new QR token is created.
-- The active enrollment table is capped (default 512, bounded configurable range 16-4096) so repeated unused QR generation cannot grow R281 state without bound.
+- RC6 introduced and RC7 retains a capped active enrollment table (default 512, bounded configurable range 16-4096) so repeated unused QR generation cannot grow R281 state without bound.
 - QR generation fails closed if token creation, durable persistence, or enrollment capacity checks fail; an empty token is never rendered into a QR.
 - Rental Server URLs embedded in either QR contract are origin-only. Userinfo, non-root paths, query strings, and fragments are rejected so the client API path cannot be redirected by URL ambiguity.
 - Android repeats the same origin validation before persisting Standard Enrollment or Device Provisioning data.
+
+## RC7 origin-parity finding
+
+- The OpenWrt admin backend now validates a non-empty server host and a numeric port in the 1-65535 range when supplied.
+- Bracketed IPv6 origins are supported; malformed bracket forms and unbracketed multi-colon authorities are rejected.
+- Userinfo, path, query, fragment, backslash, whitespace and control-character authority forms are rejected before token/QR generation.
+- BlazeRental Standard Enrollment repeats origin and TLS-pin validation in the persistence layer so a future caller cannot bypass scanner validation.
 
 ## Corrected findings
 

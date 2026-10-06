@@ -2,6 +2,18 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.7
+
+RC7 supersedes RC6 for physical provisioning testing without modifying the immutable RC6 tag.
+
+Additional RC7 hardening:
+- strict OpenWrt Rental Server authority validation before either QR is generated;
+- numeric port bounds (1-65535) and bracketed IPv6 handling;
+- rejection of missing host, malformed IPv6, userinfo, path, query, fragment, backslash, whitespace and control-character origins;
+- BlazeRental repeats origin and TLS-pin checks inside the persistence boundary, independent of the scanner;
+- Android package identity is `0.5.2-rental.2-rc.7`, versionCode `50208`.
+
+
 ### v0.5.2-rental.2-rc.6
 
 RC6 supersedes RC5 for testing without modifying the immutable RC5 tag.

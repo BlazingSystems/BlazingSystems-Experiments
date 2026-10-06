@@ -14,6 +14,53 @@ action="$(bp_param action)"; now="$(bp_now)"
 bp_rental_init
 bp_rental_policy_v2_init
 
+bp_admin_origin_authority_ok() {
+  authority="$1"
+  [ -n "$authority" ] || return 1
+  printf '%s' "$authority" | grep -q '[[:space:][:cntrl:]]' && return 1
+  case "$authority" in
+    */*|*\?*|*#*|*@*|*\\*) return 1 ;;
+  esac
+
+  host=""; port=""
+  case "$authority" in
+    \[*)
+      case "$authority" in \[*\]*) ;; *) return 1;; esac
+      host="${authority#\[}"
+      host="${host%%\]*}"
+      tail="${authority#*\]}"
+      [ -n "$host" ] || return 1
+      case "$host" in *[!0-9A-Fa-f:.]*) return 1;; esac
+      case "$host" in *:*) ;; *) return 1;; esac
+      case "$tail" in
+        "") ;;
+        :*) port="${tail#:}" ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *)
+      case "$authority" in
+        *:*)
+          host="${authority%%:*}"
+          port="${authority#*:}"
+          case "$port" in *:*) return 1;; esac
+          ;;
+        *) host="$authority" ;;
+      esac
+      [ -n "$host" ] || return 1
+      case "$host" in *[!A-Za-z0-9._-]*) return 1;; esac
+      case "$host" in .*|*.|*..*) return 1;; esac
+      ;;
+  esac
+
+  if [ -n "$port" ]; then
+    case "$port" in *[!0-9]*) return 1;; esac
+    [ "$port" -ge 1 ] 2>/dev/null || return 1
+    [ "$port" -le 65535 ] 2>/dev/null || return 1
+  fi
+  return 0
+}
+
 bp_admin_rental_server_url() {
   supplied="$(bp_param server_url)"
   if [ -n "$supplied" ]; then
@@ -25,18 +72,14 @@ bp_admin_rental_server_url() {
     [ "$(printf '%s' "$supplied" | wc -c)" -le 256 ] || return 1
     normalized="$(printf '%s' "$supplied" | sed 's:/*$::')"
     authority="${normalized#*://}"
-    [ -n "$authority" ] || return 1
-    # Rental APIs are always relative to the origin. Never accept userinfo,
-    # path, query, fragment, or backslash forms that could change URL meaning.
-    case "$authority" in
-      */*|*\?*|*#*|*@*|*\\*) return 1 ;;
-    esac
+    bp_admin_origin_authority_ok "$authority" || return 1
     printf '%s' "$normalized"
     return 0
   fi
   host="${HTTP_HOST:-}"
   [ -n "$host" ] || host="${SERVER_NAME:-blazepwifi.local}"
   host="$(printf '%s' "$host" | sed 's/:443$//')"
+  bp_admin_origin_authority_ok "$host" || return 1
   printf 'https://%s' "$host"
 }
 

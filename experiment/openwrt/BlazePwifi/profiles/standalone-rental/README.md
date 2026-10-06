@@ -1,14 +1,14 @@
 # BlazePwifi Standalone Rental Server
 
 Latest stable server line: **v0.5.2-rental.1**  
-Provisioning architecture candidate: **v0.5.2-rental.2-rc.6**
+Provisioning architecture candidate: **v0.5.2-rental.2-rc.7**
 
 The provisioning candidate keeps two independent Android onboarding modes:
 
 - **Standard Enrollment QR** — BlazeRental already installed; scanned inside BlazeRental; server binding only; no Device Owner claim.
 - **Device Provisioning QR** — Android Setup Wizard on a factory-reset phone; exact APK/checksum; Device Owner only where the platform permits that DPC; then server binding.
 
-RC6 carries the RC5 protocol hardening and additionally adds:
+RC7 carries the RC5 protocol hardening and all RC6 durability/rebind safeguards, and additionally adds:
 
 - idempotent repeated Android provisioning callbacks without resetting in-progress nonce/device state;
 - protection against accidental Standard Enrollment rebinds: an already-bound phone must use the explicit Transfer action first;
@@ -30,8 +30,13 @@ Fresh Standalone Rental console credentials remain `admin / admin`. The Windows 
 Standalone OpenWrt installation remains network-neutral: it does not take ownership of `network`, `wireless`, or `firewall`.
 
 
-## RC6 target scope
+## RC7 target scope
 
-Android Device Provisioning QR is implemented on the **OpenWrt Rental Server** path in RC6.
+Android Device Provisioning QR is implemented on the **OpenWrt Rental Server** path in RC7.
 
 ESP8266/ESP32 Rental Server mode continues to support manual one-time server/token enrollment, but does not yet render Standard Enrollment QR or Android Device Provisioning QR. The release manifest declares this explicitly rather than implying OpenWrt/ESP feature parity.
+
+
+## RC7 origin-parity hardening
+
+OpenWrt now validates Rental Server authorities before QR creation with the same practical constraints enforced by BlazeRental: non-empty host, numeric 1-65535 port when present, bracketed IPv6, and no userinfo/path/query/fragment/backslash ambiguity. BlazeRental repeats origin and TLS-pin checks inside the persistence boundary, not only in the QR scanner.

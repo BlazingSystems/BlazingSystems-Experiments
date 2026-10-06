@@ -90,11 +90,18 @@ public final class RentalLeaseStore {
 
     public static synchronized boolean saveManualEnrollment(Context context, String server, String token,
                                                             String name, String certPin) {
+        // Validate again at the persistence boundary so a future caller cannot
+        // bypass scanner validation and store an ambiguous or malformed origin.
+        if (!isValidServerOrigin(server, false)) return false;
+        String normalizedPin = normalizePin(certPin);
+        if (isHttpsServerOrigin(server) && normalizedPin.length() != 64) return false;
+        if (!isHttpsServerOrigin(server) && normalizedPin.length() != 0) return false;
+
         // A working permanent identity must never be destroyed merely because a
         // second Standard Enrollment QR was scanned. Administrators must use the
         // explicit Transfer action first; prepareTransfer() clears the identity.
         if (isEnrolled(context)) return false;
-        return saveEnrollment(context, server, token, name, certPin, "standard_manual");
+        return saveEnrollment(context, server, token, name, normalizedPin, "standard_manual");
     }
 
     private static boolean saveEnrollment(Context context, String server, String token,
