@@ -21,6 +21,10 @@ find "$ROOT/openwrt/rootfs" -type f | sort | while IFS= read -r src; do
   mkdir -p "$(dirname "$dest")"
   cp "$src" "$dest"
   mode="$(stat -c '%a' "$src" 2>/dev/null || stat -f '%Lp' "$src")"
+  case "$rel" in
+    /usr/sbin/*|/etc/init.d/*|/www/blazepwifi/cgi-bin/*|/usr/lib/blazepwifi/*.sh)
+      mode=755 ;;
+  esac
   sha="$(sha256sum "$dest" | awk '{print $1}')"
   printf '%s\t%s\t%s\n' "$sha" "$mode" "$rel" >> "$WORK/manifest.tsv"
 done
