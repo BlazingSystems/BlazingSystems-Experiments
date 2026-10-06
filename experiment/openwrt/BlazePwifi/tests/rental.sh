@@ -93,6 +93,19 @@ echo "$V2" | grep -q '"received_pulses":2'
 echo "$V2" | grep -q '"received_cents":200'
 [ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 2 ]
 
+# Reopening while active must reuse the exact reservation and preserve progress.
+NR=coinretry123
+SIGR="$(bp_rental_hmac "$DSEC" "coin_start|$NR|$DSEC")"
+REOPEN="$(printf 'action=coin_start&device_id=%s&nonce=%s&sig=%s' "$DID" "$NR" "$SIGR" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$REOPEN" | grep -q '"ok":true'
+echo "$REOPEN" | grep -q '"reused":true'
+echo "$REOPEN" | grep -q '"received_pulses":2'
+echo "$REOPEN" | grep -q '"received_cents":200'
+RT="$(printf '%s' "$REOPEN" | sed -n 's/.*"target_nonce":"\([^"]*\)".*/\1/p')"
+RE="$(printf '%s' "$REOPEN" | sed -n 's/.*"expires_ms":\([0-9]*\).*/\1/p')"
+[ "$RT" = "$TARGET" ] && [ "$RE" = "$CE" ]
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 2 ]
+
 NS=coinstatus123
 SIGS="$(bp_rental_hmac "$DSEC" "status|$NS|$DSEC")"
 COINSTATUS="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$NS" "$SIGS" | REQUEST_METHOD=POST sh "$CGI")"
