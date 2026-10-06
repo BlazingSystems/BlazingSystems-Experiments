@@ -11,7 +11,12 @@ PORTAL_API="$W/cgi-bin/api"
 RENTAL_API="$W/cgi-bin/rental"
 PORTAL="$W/index.html"
 LEASE="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/LeaseClient.java"
+STORE="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalLeaseStore.java"
+SCANNER="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/QrEnrollmentScannerActivity.java"
+POLICY_CLIENT="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalPolicyClient.java"
 PAGES="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalSystemPages.java"
+QR_TEMPLATE="$ROOT/tools/BlazeRental-QR-Setup.template.html"
+QR_JSON_TOOL="$ROOT/tools/make-provisioning.py"
 
 sh -n "$ADMIN"
 sh -n "$PORTAL_API"
@@ -45,6 +50,33 @@ echo "hardening: Android provisioning checksum encoder"
 eval "$(sed -n '/^bp_admin_sha256_b64url()/,/^}/p' "$ADMIN")"
 ENCODED="$(bp_admin_sha256_b64url d0ad20bed00ea304db9bff45928542fed574070d416ed65b4fbf3d8ba23d7102)"
 [ "$ENCODED" = '0K0gvtAOowTbm_9FkoVC_tV0Bw1BbtZbT789i6I9cQI' ]
+
+echo "hardening: pinned self-signed BlazePwifi TLS enrollment"
+grep -Fq 'server_cert_sha256' "$ADMIN"
+grep -Fq 'bp_admin_cert_sha256()' "$ADMIN"
+grep -Fq 'Device Owner provisioning requires the local pinned admin certificate' "$ADMIN"
+eval "$(sed -n '/^bp_admin_cert_sha256()/,/^}/p' "$ADMIN")"
+TMP_CERT="$(mktemp)"
+trap 'rm -f "$TMP_CERT"' EXIT INT TERM
+cat >"$TMP_CERT" <<'EOF'
+-----BEGIN CERTIFICATE-----
+YWJj
+-----END CERTIFICATE-----
+EOF
+BP_ADMIN_CERT="$TMP_CERT"
+export BP_ADMIN_CERT
+[ "$(bp_admin_cert_sha256)" = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' ]
+
+grep -Fq 'server_cert_sha256' "$STORE"
+grep -Fq 'normalizePin' "$STORE"
+grep -Fq 'server_cert_sha256' "$SCANNER"
+grep -Fq 'HttpsURLConnection' "$LEASE"
+grep -Fq 'X509TrustManager' "$LEASE"
+grep -Fq 'BlazePwifi TLS certificate pin mismatch' "$LEASE"
+grep -Fq 'MessageDigest.getInstance("SHA-256")' "$LEASE"
+grep -Fq 'LeaseClient.post(context, base, body)' "$POLICY_CLIENT"
+grep -Fq 'server_cert_sha256' "$QR_TEMPLATE"
+grep -Fq 'server-cert-sha256' "$QR_JSON_TOOL"
 
 echo "hardening: portal and Rental coin-window contracts"
 # Portal and Rental app must expose the authoritative insert-coin window.
