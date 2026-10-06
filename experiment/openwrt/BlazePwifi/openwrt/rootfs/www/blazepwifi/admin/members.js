@@ -28,7 +28,8 @@ function decodeBase64Utf8(b64){
   return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
 }
 function encodeBytesBase64(bytes){
-  let out='',chunk=0x8000;
+  // Chunk size must be divisible by 3 so concatenated Base64 chunks have no mid-stream padding.
+  let out='',chunk=0x6000;
   for(let i=0;i<bytes.length;i+=chunk){
     const part=bytes.subarray(i,Math.min(bytes.length,i+chunk));
     let s='';for(let j=0;j<part.length;j++)s+=String.fromCharCode(part[j]);
