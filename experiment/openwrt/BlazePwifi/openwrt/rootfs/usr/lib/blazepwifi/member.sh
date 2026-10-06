@@ -62,7 +62,7 @@ bp_member_replay_line() {
 
 bp_member_hash_password() {
   pass="$1"
-  [ "${#pass}" -ge 4 ] || return 2
+  [ "${#pass}" -ge 8 ] || return 2
   command -v bp_auth_random_hex >/dev/null 2>&1 || return 1
   command -v bp_auth_sha256i >/dev/null 2>&1 || return 1
   salt="$(bp_auth_random_hex 12)" || return 1
