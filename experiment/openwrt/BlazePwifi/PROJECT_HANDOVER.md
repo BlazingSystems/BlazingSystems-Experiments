@@ -2,7 +2,20 @@
 
 **Last updated:** 2026-10-05  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
-**Development state:** BlazePwifi v0.5.0 prerelease is published and validated. Android production signing remains blocked only by unavailable locked v0.4 private signing material.
+**Development state:** BlazePwifi v0.5.0 prerelease is published, validated, and the full released implementation is now integrated into `main`. Android production signing remains blocked only by unavailable locked v0.4 private signing material.
+
+## Main branch integration status
+
+- Full BlazePwifi v0.5.0 implementation is integrated into `main`.
+- Conflict-resolved integration SHA: `09710a6d093f125a444c86bc686985edbfc89553`.
+- Integration CI run: `37396023917` — PASS, including Android Device Owner emulator and final candidate gate.
+- Pull request: `#12` — merged.
+- Main merge commit: `06ddc5909b178d316f0f4d6fb8104f64da9a1be9`.
+- The merge tree is exactly `d8fe2e6b6fca5ee3f619bc1d2e8ab35c4abcc850`, the same tree validated on the integration branch.
+- All 16 main-only paths were preserved byte-for-byte, including the offline preview artifacts, handover logs, and unrelated Easymode encrypted-release files.
+- Superseded conflicted PR `#11` was closed without merging.
+- The `v0.5.0` tag/release remains pinned to validated RC9 candidate `66e159b65b6d8fb5f74dd981dc73d46db7229adc`; integrating code into main did not move or rewrite the release tag.
+- Production Android signing remains intentionally blocked until the exact locked v0.4 signer is restored.
 
 ## Current v0.5.0 release status
 
