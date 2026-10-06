@@ -40,7 +40,16 @@ bp_update_path_allowed() {
 bp_update_lock() {
     bp_update_init
     exec 8>"$BP_UPDATE_LOCK"
-    flock -w 15 8
+    if command -v bp_flock_wait >/dev/null 2>&1; then
+        bp_flock_wait 8 15
+        return $?
+    fi
+    elapsed=0
+    while ! flock -n 8 2>/dev/null; do
+        [ "$elapsed" -ge 15 ] 2>/dev/null && return 1
+        sleep 1
+        elapsed=$((elapsed+1))
+    done
 }
 
 bp_update_unlock() { flock -u 8 2>/dev/null || true; exec 8>&-; }

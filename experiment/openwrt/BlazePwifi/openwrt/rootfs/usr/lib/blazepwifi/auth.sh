@@ -25,7 +25,7 @@ bp_auth_init() {
 bp_auth_lock() {
 	mkdir -p "$BP_RUN"
 	exec 8>"$BP_RUN/auth.lock"
-	flock -w 5 8 || { exec 8>&-; return 1; }
+	bp_flock_wait 8 5 || { exec 8>&-; return 1; }
 }
 
 bp_auth_unlock() {
@@ -94,7 +94,9 @@ bp_auth_set_password() {
 	printf '%s' "$user" | grep -Eq '^[A-Za-z0-9_.-]{1,32}$' || { echo "invalid username" >&2; return 2; }
 	case "$role" in admin|operator|viewer) ;; *) echo "invalid role" >&2; return 2;; esac
 	case "$must_change" in 0|1) ;; *) must_change=0;; esac
-	[ "${#pass}" -ge 12 ] || { echo "password must be at least 12 characters" >&2; return 2; }
+	min_len=12
+	[ "${BP_AUTH_ALLOW_WEAK_BOOTSTRAP:-0}" = 1 ] && min_len=1
+	[ "${#pass}" -ge "$min_len" ] || { echo "password must be at least $min_len characters" >&2; return 2; }
 	salt="$(bp_auth_random_hex 8)"
 	if command -v openssl >/dev/null 2>&1 && openssl passwd -6 -salt "$salt" "$pass" >/dev/null 2>&1; then
 		scheme=openssl6; rounds=0; hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)"
