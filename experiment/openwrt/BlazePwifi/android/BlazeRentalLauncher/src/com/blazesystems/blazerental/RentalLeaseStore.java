@@ -57,8 +57,12 @@ public final class RentalLeaseStore {
         return saveManualEnrollment(context, server, token, name, "");
     }
 
-    public static boolean saveManualEnrollment(Context context, String server, String token,
-                                               String name, String certPin) {
+    public static synchronized boolean saveManualEnrollment(Context context, String server, String token,
+                                                            String name, String certPin) {
+        // A working permanent identity must never be destroyed merely because a
+        // second Standard Enrollment QR was scanned. Administrators must use the
+        // explicit Transfer action first; prepareTransfer() clears the identity.
+        if (isEnrolled(context)) return false;
         return saveEnrollment(context, server, token, name, certPin, "standard_manual");
     }
 

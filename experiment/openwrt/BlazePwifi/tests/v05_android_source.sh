@@ -24,8 +24,8 @@ case "$(cat "$ROOT/VERSION")" in
     grep -Fq 'versionName "0.5.1"' "$GRADLE"
     ;;
   0.5.2)
-    grep -Fq 'versionCode 50206' "$GRADLE"
-    grep -Fq 'versionName "0.5.2-rental.2-rc.5"' "$GRADLE"
+    grep -Fq 'versionCode 50207' "$GRADLE"
+    grep -Fq 'versionName "0.5.2-rental.2-rc.6"' "$GRADLE"
     grep -Fq 'android.app.action.GET_PROVISIONING_MODE' "$MANIFEST"
     grep -Fq 'android.app.action.ADMIN_POLICY_COMPLIANCE' "$MANIFEST"
     grep -Fq 'android.app.action.PROVISIONING_SUCCESSFUL' "$MANIFEST"

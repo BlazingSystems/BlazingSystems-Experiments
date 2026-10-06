@@ -1,6 +1,6 @@
 # BlazeRental Provisioning / Enrollment Audit
 
-Audit target: BlazePwifi 0.5.2 Standalone Rental and the active Launcher3-based BlazeRental DPC.
+Audit target: BlazePwifi 0.5.2 Standalone Rental RC6 candidate and the active Launcher3-based BlazeRental DPC.
 
 ## Security boundary
 
@@ -25,6 +25,12 @@ Two QR formats are intentionally separate and must never be treated as interchan
 - Includes the exact DPC component, exact APK HTTPS download URL, canonical URL-safe Base64 SHA-256 APK checksum, minimum version code, one-time Rental Server enrollment material, server certificate SHA-256 pin, and optional Wi-Fi.
 - Rental Server URL must be HTTPS.
 - Provisioning is rejected if the local Rental Server certificate cannot be fingerprinted and pinned.
+
+## RC6 additional findings
+
+- Android Setup Wizard may redeliver identical provisioning extras. RC6 preserves an in-progress enrollment request nonce/device identity instead of resetting state on the repeated callback.
+- Standard Enrollment on an already-bound phone fails closed. The working permanent identity remains intact until the administrator explicitly uses Transfer.
+- Standard Enrollment scanner state errors are no longer all reported as the wrong QR type; Device Provisioning QR, already-bound state, and local storage failure have distinct handling.
 
 ## Corrected findings
 

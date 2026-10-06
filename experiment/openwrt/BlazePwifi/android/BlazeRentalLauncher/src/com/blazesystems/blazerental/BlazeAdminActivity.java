@@ -278,10 +278,20 @@ public class BlazeAdminActivity extends Activity {
         });
 
         section("Binding");
-        Button scan = secondary("SCAN NEW BLAZEPWIFI QR");
+        final boolean alreadyBound = RentalLeaseStore.isEnrolled(this);
+        Button scan = secondary(alreadyBound
+                ? "USE TRANSFER BEFORE SCANNING A NEW QR"
+                : "SCAN NEW BLAZEPWIFI STANDARD ENROLLMENT QR");
         content.addView(scan, full());
+        scan.setEnabled(!alreadyBound);
         scan.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
+                if (RentalLeaseStore.isEnrolled(BlazeAdminActivity.this)) {
+                    Toast.makeText(BlazeAdminActivity.this,
+                            "Use Transfer first so the current working binding is not destroyed.",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
                 startActivityForResult(new Intent(BlazeAdminActivity.this,
                         QrEnrollmentScannerActivity.class), REQUEST_QR);
             }

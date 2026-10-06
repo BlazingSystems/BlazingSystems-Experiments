@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.5
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.6
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -43,7 +43,7 @@ Password: admin
 Existing admin accounts are preserved. The normal password-change action still requires a stronger password.
 
 
-## 0.5.2-rental.2-rc.5 UI hotfix
+## 0.5.2-rental.2-rc.6 UI hotfix
 
 Rental mutations now submit CSRF through both the custom header and form body, with one authenticated token refresh/retry on mismatch. This specifically fixes QR enrollment creation on R281/uHTTPd paths where custom CGI headers may not be reliable.
 
@@ -58,7 +58,7 @@ This release candidate deliberately separates:
 Device Provisioning is fail-closed when exact APK metadata is not installed.
 
 
-## RC5 provisioning boundary
+## RC6 provisioning boundary
 
 Standard Enrollment and Device Provisioning are independent contracts. Device Provisioning uses an exact release APK/checksum and is still a prerelease path.
 
@@ -67,6 +67,11 @@ The provisioning metadata includes `GMS_DPC_APPROVED`. When it is `0`, the serve
 The Setup Wizard package checksum is canonical padded Base64URL SHA-256 and is cross-checked against the exact published APK.
 
 
-## RC5 secure enrollment
+## RC6 secure enrollment
 
-RC5 QR generators use schema v2 and the RC5 APK requests enrollment protocol 2. The server no longer transmits the new long-lived device secret to an RC5 client. Both peers derive it from the one-time enrollment secret, request nonce and server-issued device ID, and the phone verifies the server's HMAC-signed enrollment response before persisting identity.
+RC6 QR generators use schema v2 and the RC6 APK requests enrollment protocol 2. The server no longer transmits the new long-lived device secret to an RC5 client. Both peers derive it from the one-time enrollment secret, request nonce and server-issued device ID, and the phone verifies the server's HMAC-signed enrollment response before persisting identity.
+
+
+## RC6 rebind safety
+
+A phone with an existing permanent Rental identity will not accept a new Standard Enrollment QR directly. The administrator must use the explicit Transfer action first. This prevents a scan or transient enrollment failure from destroying a working device binding.

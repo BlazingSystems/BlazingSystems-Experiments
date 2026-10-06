@@ -163,6 +163,9 @@ public class QrEnrollmentScannerActivity extends Activity
             if (server.startsWith("https://") && normalizedPin.length() != 64) {
                 throw new IllegalArgumentException("HTTPS enrollment requires certificate pin");
             }
+            if (RentalLeaseStore.isEnrolled(this)) {
+                throw new IllegalStateException("ALREADY_ENROLLED");
+            }
             if (!RentalLeaseStore.saveManualEnrollment(this, server, token, name, normalizedPin)) {
                 throw new IllegalStateException("ENROLLMENT_STORAGE");
             }
@@ -189,9 +192,20 @@ public class QrEnrollmentScannerActivity extends Activity
             }).start();
         } catch (IllegalStateException e) {
             decoded = false;
-            Toast.makeText(this,
-                    "This is a Device Provisioning QR. Factory reset the phone and scan it from Android Setup Wizard.",
-                    Toast.LENGTH_LONG).show();
+            String reason = e.getMessage();
+            if ("PROVISIONING_QR".equals(reason)) {
+                Toast.makeText(this,
+                        "This is a Device Provisioning QR. Factory reset the phone and scan it from Android Setup Wizard.",
+                        Toast.LENGTH_LONG).show();
+            } else if ("ALREADY_ENROLLED".equals(reason)) {
+                Toast.makeText(this,
+                        "This phone is already bound. Open BlazeRental Admin and use Transfer before scanning a new Standard Enrollment QR.",
+                        Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this,
+                        "Could not save the Standard Enrollment configuration. The existing binding was not replaced.",
+                        Toast.LENGTH_LONG).show();
+            }
         } catch (Exception e) {
             decoded = false;
             Toast.makeText(this, "Not a valid BlazePwifi Standard Enrollment QR",

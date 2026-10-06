@@ -2,6 +2,17 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.6
+
+RC6 supersedes RC5 for testing without modifying the immutable RC5 tag.
+
+Additional hardening:
+- Android provisioning callbacks are idempotent when Setup Wizard redelivers identical extras;
+- an already-bound phone cannot silently destroy its permanent identity by scanning a new Standard Enrollment QR;
+- administrators must use the explicit Transfer action before rebinding;
+- Standard Enrollment scanner errors distinguish Device Provisioning QR, already-bound state, and local-storage failure;
+- Android package identity is `0.5.2-rental.2-rc.6`, versionCode `50207`.
+
 ### v0.5.2-rental.2-rc.5
 
 RC5 supersedes RC4 for testing. It keeps the separated Standard Enrollment / Device Provisioning architecture and closes the first-enrollment transport exposure:
