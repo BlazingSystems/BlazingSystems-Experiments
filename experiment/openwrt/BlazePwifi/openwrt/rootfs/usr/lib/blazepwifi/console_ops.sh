@@ -381,10 +381,14 @@ bp_remote_status_json() {
   if command -v bp_remote_runtime_status_json >/dev/null 2>&1; then
     runtime="$(bp_remote_runtime_status_json 2>/dev/null || printf '%s' "$runtime")"
   fi
-  printf '{"mode":"%s","ready":%s,"monitoring":%s,"management":%s,"terminal":%s,"node_name":"%s","site_label":"%s","wireguard":"%s","zerotier":"%s","runtime":%s}' \
+  zerotier_runtime='{"activation_state":"staged","apply_supported":false,"network_id":"","node_id":"","device":"","ip4":"","listener":"","prepared_at":0,"active_at":0,"last_error":"","reboot_required":0}'
+  if command -v bp_remote_zt_status_json >/dev/null 2>&1; then
+    zerotier_runtime="$(bp_remote_zt_status_json 2>/dev/null || printf '%s' "$zerotier_runtime")"
+  fi
+  printf '{"mode":"%s","ready":%s,"monitoring":%s,"management":%s,"terminal":%s,"node_name":"%s","site_label":"%s","wireguard":"%s","zerotier":"%s","runtime":%s,"zerotier_runtime":%s}' \
     "$(bp_json_escape "$mode")" "$ready" "$(bp_remote_get monitoring 1)" "$(bp_remote_get management 0)" "$(bp_remote_get terminal 0)" \
     "$(bp_json_escape "$(bp_remote_get node_name BlazePwifi)")" "$(bp_json_escape "$(bp_remote_get site_label)")" \
-    "$(bp_json_escape "$(bp_remote_wireguard_state)")" "$(bp_json_escape "$(bp_remote_zerotier_state)")" "$runtime"
+    "$(bp_json_escape "$(bp_remote_wireguard_state)")" "$(bp_json_escape "$(bp_remote_zerotier_state)")" "$runtime" "$zerotier_runtime"
 }
 
 bp_remote_config_json() {
