@@ -39,6 +39,10 @@ config core 'main'
 	option auth_absolute_seconds '28800'
 	option auth_kdf_rounds '2048'
 	option auth_bind_ip '1'
+	option update_source_url 'https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/'
+	option update_stability_seconds '600'
+	option update_retention '3'
+	option update_max_mb '64'
 	# Secrets are generated during first installation/provisioning.
 	# Optional examples:
 	# list walled_domain 'payments.example.com'

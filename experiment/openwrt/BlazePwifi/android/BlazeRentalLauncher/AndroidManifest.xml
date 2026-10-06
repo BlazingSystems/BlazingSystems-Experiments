@@ -58,6 +58,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:backupAgent="com.android.launcher3.LauncherBackupAgent"
@@ -96,6 +97,10 @@
 
         <receiver
             android:name="com.blazesystems.blazerental.RentalAlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name="com.blazesystems.blazerental.BlazeRentalUpdateReceiver"
             android:exported="false" />
 
         <service
