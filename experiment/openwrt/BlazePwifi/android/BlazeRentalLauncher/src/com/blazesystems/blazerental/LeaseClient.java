@@ -92,9 +92,16 @@ public final class LeaseClient {
             if (enrolling) {
                 clearCoinWindow();
             } else {
-                recordCoinWindow(serverNow,
-                        response.optLong("coin_window_expires_ms", 0L),
-                        response.optString("coin_window_vendo", ""));
+                long coinExpires = response.optLong("coin_window_expires_ms", 0L);
+                String coinVendo = response.optString("coin_window_vendo", "");
+                String coinSignature = response.optString("coin_window_sig", "");
+                String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|"
+                        + coinExpires + "|" + coinVendo;
+                if (coinSignature.length() == 0
+                        || !coinSignature.equals(Hmac.sha256Hex(newSecret, coinCanonical))) {
+                    return false;
+                }
+                recordCoinWindow(serverNow, coinExpires, coinVendo);
             }
 
             if (!enrolling) {
@@ -218,7 +225,11 @@ public final class LeaseClient {
             long serverNow = response.optLong("server_time_ms", 0L);
             long expires = response.optLong("expires_ms", 0L);
             String vendo = response.optString("vendo", "selected controller");
-            if (serverNow <= 0L || expires <= serverNow) {
+            String coinSignature = response.optString("coin_window_sig", "");
+            String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|"
+                    + expires + "|" + vendo;
+            if (serverNow <= 0L || expires <= serverNow || coinSignature.length() == 0
+                    || !coinSignature.equals(Hmac.sha256Hex(secret, coinCanonical))) {
                 clearCoinWindow();
                 return "Invalid coin-window response.";
             }
@@ -247,6 +258,13 @@ public final class LeaseClient {
             if (response == null) return "Server unavailable.";
             if (!response.optBoolean("ok", false)) {
                 return response.optString("error", "Unable to close coin slot.");
+            }
+            long serverNow = response.optLong("server_time_ms", 0L);
+            String coinSignature = response.optString("coin_window_sig", "");
+            String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|0|";
+            if (serverNow <= 0L || coinSignature.length() == 0
+                    || !coinSignature.equals(Hmac.sha256Hex(secret, coinCanonical))) {
+                return "Invalid coin-window response.";
             }
             clearCoinWindow();
             return "Coin window closed.";
