@@ -14,6 +14,7 @@ VIAddVersionKey /LANG=1033 "ProductVersion" "0.2.0"
 VIAddVersionKey /LANG=1033 "CompanyName" "BlazeSystems"
 VIAddVersionKey /LANG=1033 "FileDescription" "BlazePisonet SoftTimer Setup"
 VIAddVersionKey /LANG=1033 "FileVersion" "0.2.0.0"
+VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright © 2026 BlazeSystems"
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
@@ -38,39 +39,6 @@ VIAddVersionKey /LANG=1033 "FileVersion" "0.2.0.0"
 Var TaskResult
 Var TaskOutput
 
-Function CreateStartupTasks
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Delete /TN $\"BlazePisonet SoftTimer$\" /F'
-  Pop $TaskResult
-  Pop $TaskOutput
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Delete /TN $\"BlazePisonet SoftTimer Watchdog$\" /F'
-  Pop $TaskResult
-  Pop $TaskOutput
-
-  DetailPrint "Creating interactive SoftTimer logon task..."
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Create /TN $\"BlazePisonet SoftTimer$\" /TR $\"$INSTDIR\BlazePisonet.SoftTimer.exe$\" /SC ONLOGON /RL HIGHEST /IT /F'
-  Pop $TaskResult
-  Pop $TaskOutput
-  DetailPrint "$TaskOutput"
-  ${If} $TaskResult != "0"
-    DetailPrint "SoftTimer startup task creation failed with exit code $TaskResult"
-    SetErrorLevel 1603
-    Abort "Windows could not create the BlazePisonet SoftTimer startup task."
-  ${EndIf}
-
-  DetailPrint "Creating interactive SoftTimer watchdog logon task..."
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Create /TN $\"BlazePisonet SoftTimer Watchdog$\" /TR $\"$INSTDIR\BlazePisonet.SoftTimer.Watchdog.exe$\" /SC ONLOGON /RL HIGHEST /IT /F'
-  Pop $TaskResult
-  Pop $TaskOutput
-  DetailPrint "$TaskOutput"
-  ${If} $TaskResult != "0"
-    DetailPrint "Watchdog startup task creation failed with exit code $TaskResult"
-    nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Delete /TN $\"BlazePisonet SoftTimer$\" /F'
-    Pop $TaskResult
-    Pop $TaskOutput
-    SetErrorLevel 1603
-    Abort "Windows could not create the BlazePisonet SoftTimer watchdog startup task."
-  ${EndIf}
-FunctionEnd
 
 Function ConfigureFirewall
   nsExec::ExecToStack '$\"$SYSDIR\netsh.exe$\" advfirewall firewall delete rule name=$\"BlazePisonet SoftTimer Centralized$\"'
@@ -90,13 +58,13 @@ Section "BlazePisonet SoftTimer" SEC_MAIN
   File "..\..\..\..\out\bundle\BlazePisonet.SoftTimer.exe"
   File "..\..\..\..\out\bundle\BlazePisonet.SoftTimer.Watchdog.exe"
 
-  CreateDirectory "$COMMONAPPDATA\BlazeSystems\BlazePisonetSoftTimer"
-  nsExec::ExecToStack '$\"$SYSDIR\icacls.exe$\" $\"$COMMONAPPDATA\BlazeSystems\BlazePisonetSoftTimer$\" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C'
+  CreateDirectory "$APPDATA\BlazeSystems\BlazePisonetSoftTimer"
+  nsExec::ExecToStack '$\"$SYSDIR\icacls.exe$\" $\"$APPDATA\BlazeSystems\BlazePisonetSoftTimer$\" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C'
   Pop $TaskResult
   Pop $TaskOutput
   DetailPrint "$TaskOutput"
 
-  Delete "$COMMONAPPDATA\BlazeSystems\BlazePisonetSoftTimer\maintenance.until"
+  Delete "$APPDATA\BlazeSystems\BlazePisonetSoftTimer\maintenance.until"
 
   CreateDirectory "$SMPROGRAMS\BlazePisonet SoftTimer"
   CreateShortcut "$SMPROGRAMS\BlazePisonet SoftTimer\BlazePisonet SoftTimer.lnk" "$INSTDIR\BlazePisonet.SoftTimer.exe"
@@ -113,7 +81,13 @@ Section "BlazePisonet SoftTimer" SEC_MAIN
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\BlazePisonetSoftTimer" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\BlazePisonetSoftTimer" "NoRepair" 1
 
-  Call CreateStartupTasks
+  DetailPrint "Registering SoftTimer Windows startup integration..."
+  ExecWait '"$INSTDIR\BlazePisonet.SoftTimer.exe" --install-system-integration' $TaskResult
+  ${If} $TaskResult != 0
+    SetErrorLevel 1603
+    Abort "BlazePisonet SoftTimer could not register Windows startup integration."
+  ${EndIf}
+
   Call ConfigureFirewall
 SectionEnd
 
@@ -125,17 +99,13 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext all
 
-  CreateDirectory "$COMMONAPPDATA\BlazeSystems\BlazePisonetSoftTimer"
-  FileOpen $0 "$COMMONAPPDATA\BlazeSystems\BlazePisonetSoftTimer\maintenance.until" w
+  CreateDirectory "$APPDATA\BlazeSystems\BlazePisonetSoftTimer"
+  FileOpen $0 "$APPDATA\BlazeSystems\BlazePisonetSoftTimer\maintenance.until" w
   FileWrite $0 "4102444800"
   FileClose $0
 
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Delete /TN $\"BlazePisonet SoftTimer$\" /F'
-  Pop $TaskResult
-  Pop $TaskOutput
-  nsExec::ExecToStack '$\"$SYSDIR\schtasks.exe$\" /Delete /TN $\"BlazePisonet SoftTimer Watchdog$\" /F'
-  Pop $TaskResult
-  Pop $TaskOutput
+  ExecWait '"$INSTDIR\BlazePisonet.SoftTimer.exe" --uninstall-system-integration' $TaskResult
+  DetailPrint "SoftTimer system-integration removal exit code: $TaskResult"
 
   nsExec::ExecToStack '$\"$SYSDIR\taskkill.exe$\" /IM BlazePisonet.SoftTimer.exe /F'
   Pop $TaskResult
