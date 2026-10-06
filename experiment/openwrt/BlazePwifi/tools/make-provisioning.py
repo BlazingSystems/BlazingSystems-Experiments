@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse, base64, hashlib, json, pathlib, re
+from urllib.parse import urlsplit
 
 p=argparse.ArgumentParser()
 p.add_argument("--apk",required=True)
@@ -14,8 +15,24 @@ a=p.parse_args()
 
 if not a.apk_url.startswith("https://") or re.search(r"\s", a.apk_url):
     raise SystemExit("--apk-url must be a whitespace-free HTTPS URL")
-if not a.server_url.startswith("https://") or re.search(r"\s", a.server_url):
-    raise SystemExit("--server-url must be a whitespace-free HTTPS URL")
+def valid_server_origin(value):
+    if re.search(r"\s", value) or "\\" in value:
+        return False
+    try:
+        parsed=urlsplit(value)
+        port=parsed.port
+    except ValueError:
+        return False
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        return False
+    return port is None or 1 <= port <= 65535
+
+if not valid_server_origin(a.server_url):
+    raise SystemExit("--server-url must be an HTTPS origin with no userinfo, path, query, or fragment")
 server_pin=a.server_cert_sha256.replace(":","").strip().lower()
 if not re.fullmatch(r"[a-f0-9]{64}", server_pin):
     raise SystemExit("--server-cert-sha256 must be exactly 64 hex characters")

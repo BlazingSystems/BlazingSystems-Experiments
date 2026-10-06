@@ -47,7 +47,9 @@ grep -q 'blazerental.provisioning.v2' "$SRC/BlazeProvisioningContract.java"
 grep -q 'device_owner_provisioning' "$SRC/RentalLeaseStore.java"
 grep -q 'serverCertSha256' "$SRC/RentalLeaseStore.java"
 grep -q 'server_cert_sha256' "$SRC/BlazeProvisioningContract.java"
-grep -q '!server.startsWith("https://")' "$SRC/BlazeProvisioningContract.java"
+grep -q 'isValidServerOrigin(server, true)' "$SRC/BlazeProvisioningContract.java"
+grep -q 'isValidServerOrigin(server, false)' "$SRC/QrEnrollmentScannerActivity.java"
+grep -q 'static boolean isValidServerOrigin' "$SRC/RentalLeaseStore.java"
 grep -q 'BlazePwifi TLS certificate pin mismatch' "$SRC/LeaseClient.java"
 grep -q 'HttpsURLConnection' "$SRC/LeaseClient.java"
 grep -q 'standard_manual' "$SRC/RentalLeaseStore.java"
@@ -94,6 +96,29 @@ assert x["server_url"]=="https://192.168.1.1"
 assert x["server_cert_sha256"]=="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 assert x["enrollment_token"].startswith("0123456789ab.")
 PY
+
+# Server URL is an origin, not an arbitrary base URL. Paths/userinfo/query
+# must fail before a provisioning payload can be written.
+for bad_server in \
+  'https://192.168.1.1/path' \
+  'https://user@192.168.1.1' \
+  'https://192.168.1.1?x=1' \
+  'https://192.168.1.1#fragment'
+do
+  if python3 "$ROOT/tools/make-provisioning.py" \
+      --apk "$TMP/app.apk" \
+      --apk-url 'https://example.invalid/BlazeRental.apk' \
+      --server-url "$bad_server" \
+      --server-cert-sha256 '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+      --enrollment-token '0123456789ab.0123456789abcdef0123456789abcdef' \
+      --device-name 'Audit phone' \
+      --version-code 50207 \
+      --out "$TMP/should-not-exist.json" >/dev/null 2>&1
+  then
+    echo "invalid server origin accepted: $bad_server" >&2
+    exit 1
+  fi
+done
 
 # Release metadata generator must produce the same canonical checksum and GMS flag.
 APK_SHA="$(sha256sum "$TMP/app.apk" | awk '{print $1}')"
