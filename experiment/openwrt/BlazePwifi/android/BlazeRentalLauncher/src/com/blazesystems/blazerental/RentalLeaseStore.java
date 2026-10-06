@@ -52,7 +52,8 @@ public final class RentalLeaseStore {
     public static void recordLease(Context context, long serverNowMs, long leaseUntilMs) {
         long previousLeaseUntil = prefs(context).getLong("lease_until_ms", 0L);
         long duration = Math.max(0L, leaseUntilMs - serverNowMs);
-        if (previousLeaseUntil > 0L && leaseUntilMs > previousLeaseUntil + 1000L) {
+        if (duration <= 0L || (previousLeaseUntil > 0L
+                && leaseUntilMs > previousLeaseUntil + 1000L)) {
             BlazeAlarmPlayer.stop(context);
         }
         prefs(context).edit()
@@ -147,6 +148,7 @@ public final class RentalLeaseStore {
     }
 
     public static void prepareTransfer(Context context) {
+        BlazeAlarmPlayer.stop(context);
         prefs(context).edit()
                 .putBoolean("setup_complete", false)
                 .remove("server")
