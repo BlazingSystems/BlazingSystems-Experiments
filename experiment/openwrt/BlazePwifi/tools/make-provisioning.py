@@ -22,7 +22,7 @@ if not re.fullmatch(r"[0-9a-f]{64}", pin):
     raise SystemExit("--server-cert-sha256 must be a 64-hex SHA-256 fingerprint")
 if a.version_code < 1:
     raise SystemExit("--version-code must be positive")
-if not re.fullmatch(r"[A-Fa-f0-9]+\.[A-Fa-f0-9]+", a.enrollment_token):
+if not re.fullmatch(r"[A-Fa-f0-9]{12}\.[A-Fa-f0-9]{36}", a.enrollment_token):
     raise SystemExit("--enrollment-token has an invalid BlazeRental format")
 
 apk=pathlib.Path(a.apk)

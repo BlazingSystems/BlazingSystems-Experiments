@@ -130,6 +130,7 @@ public class QrEnrollmentScannerActivity extends Activity
             String server;
             String token;
             String certPin = "";
+            boolean secureSchema = false;
             String name = "Rental phone";
             if (raw.trim().startsWith("{")) {
                 JSONObject json = new JSONObject(raw);
@@ -141,6 +142,7 @@ public class QrEnrollmentScannerActivity extends Activity
                 if (schema.length() > 0 && !"blazerental.enrollment.v1".equals(schema)) {
                     throw new IllegalArgumentException();
                 }
+                secureSchema = "blazerental.enrollment.v1".equals(schema);
                 server = json.optString("server_url", "");
                 token = json.optString("enrollment_token", "");
                 certPin = json.optString("server_cert_sha256", "");
@@ -156,7 +158,13 @@ public class QrEnrollmentScannerActivity extends Activity
                 if (supplied != null && supplied.length() > 0) name = supplied;
             }
             if (server == null || !(server.startsWith("http://") || server.startsWith("https://"))
-                    || token == null || token.indexOf('.') <= 0) {
+                    || token == null
+                    || !token.matches("^[A-Fa-f0-9]{12}\\.[A-Fa-f0-9]{36}$")) {
+                throw new IllegalArgumentException();
+            }
+            String normalizedPin = certPin == null ? "" : certPin.replace(":", "").trim().toLowerCase();
+            if (secureSchema && (!server.startsWith("https://")
+                    || !normalizedPin.matches("^[0-9a-f]{64}$"))) {
                 throw new IllegalArgumentException();
             }
             RentalLeaseStore.saveManualEnrollment(this, server, token, name, certPin);
