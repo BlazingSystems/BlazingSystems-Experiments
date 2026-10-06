@@ -45,7 +45,7 @@ public final class RentalPolicyClient {
                     + "&admin_gesture_value=" + LeaseClient.enc(gesture)
                     + "&admin_password=" + LeaseClient.enc(adminPassword)
                     + "&sig=" + LeaseClient.enc(Hmac.sha256Hex(secret, canonical));
-            return LeaseClient.post(base, body);
+            return LeaseClient.post(context, base, body);
         } catch (Exception ignored) {
             return null;
         }

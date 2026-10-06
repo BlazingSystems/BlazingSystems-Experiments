@@ -19,6 +19,9 @@ grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$ADMIN"
 grep -q 'PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE' "$ADMIN"
 grep -q 'GMS_DPC_APPROVED' "$ADMIN"
 grep -q 'ack_custom_dpc' "$ADMIN"
+grep -q 'bp_admin_cert_sha256' "$ADMIN"
+grep -q 'server_cert_sha256' "$ADMIN"
+grep -q 'Device Provisioning Rental Server URL must use HTTPS' "$ADMIN"
 
 STANDARD="$(sed -n '/bp_admin_standard_qr_payload()/,/^}/p' "$ADMIN")"
 ! printf '%s' "$STANDARD" | grep -q 'PROVISIONING_DEVICE_ADMIN'
@@ -42,6 +45,11 @@ test -s "$SRC/BlazeProvisioningComplianceActivity.java"
 grep -q 'MODE_FULLY_MANAGED_DEVICE = 1' "$SRC/BlazeProvisioningContract.java"
 grep -q 'blazerental.provisioning.v2' "$SRC/BlazeProvisioningContract.java"
 grep -q 'device_owner_provisioning' "$SRC/RentalLeaseStore.java"
+grep -q 'serverCertSha256' "$SRC/RentalLeaseStore.java"
+grep -q 'server_cert_sha256' "$SRC/BlazeProvisioningContract.java"
+grep -q '!server.startsWith("https://")' "$SRC/BlazeProvisioningContract.java"
+grep -q 'BlazePwifi TLS certificate pin mismatch' "$SRC/LeaseClient.java"
+grep -q 'HttpsURLConnection' "$SRC/LeaseClient.java"
 grep -q 'standard_manual' "$SRC/RentalLeaseStore.java"
 grep -q 'This is a Device Provisioning QR' "$SRC/QrEnrollmentScannerActivity.java"
 grep -q 'Manual first-run administrator setup is disabled' "$SRC/BlazeAdminActivity.java"
@@ -66,7 +74,8 @@ printf 'dummy-apk-bytes-for-provisioning-contract' > "$TMP/app.apk"
 python3 "$ROOT/tools/make-provisioning.py" \
   --apk "$TMP/app.apk" \
   --apk-url 'https://example.invalid/BlazeRental.apk' \
-  --server-url 'http://192.168.1.1' \
+  --server-url 'https://192.168.1.1' \
+  --server-cert-sha256 '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
   --enrollment-token '0123456789ab.0123456789abcdef0123456789abcdef' \
   --device-name 'Audit phone' \
   --version-code 50206 \
@@ -81,7 +90,8 @@ assert len(checksum)==44 and checksum.endswith("=")
 assert base64.urlsafe_b64decode(checksum)==hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).digest()
 x=p["android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE"]
 assert x["blaze_schema"]=="blazerental.provisioning.v2"
-assert x["server_url"]=="http://192.168.1.1"
+assert x["server_url"]=="https://192.168.1.1"
+assert x["server_cert_sha256"]=="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 assert x["enrollment_token"].startswith("0123456789ab.")
 PY
 

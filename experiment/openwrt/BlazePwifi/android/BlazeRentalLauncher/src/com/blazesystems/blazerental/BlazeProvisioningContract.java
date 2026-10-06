@@ -39,8 +39,11 @@ public final class BlazeProvisioningContract {
         String schema = clean(extras.getString("blaze_schema"));
         String server = clean(extras.getString("server_url"));
         String token = clean(extras.getString("enrollment_token"));
+        String certPin = RentalLeaseStore.normalizePin(
+                clean(extras.getString("server_cert_sha256")));
         if (!SCHEMA.equals(schema)) return false;
-        if (!(server.startsWith("http://") || server.startsWith("https://"))) return false;
+        if (!server.startsWith("https://")) return false;
+        if (certPin.length() != 64) return false;
         int dot = token.indexOf('.');
         if (dot < 8 || dot >= token.length() - 16) return false;
         return token.matches("[A-Fa-f0-9]+\\.[A-Fa-f0-9]+");

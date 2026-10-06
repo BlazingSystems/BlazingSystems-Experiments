@@ -6,8 +6,9 @@ body{font:15px system-ui;margin:0;background:#07111f;color:#eef6ff}.wrap{max-wid
 </style></head><body><div class="wrap">
 <h1>BlazeRental Device Provisioning QR</h1><p class="muted">Android Setup Wizard / Device Owner provisioning only. This is not a Standard Enrollment QR and must not be scanned inside BlazeRental.</p>
 <div class="card"><div class="grid">
-<label>BlazePwifi server URL<input id="server" value="http://192.168.1.1:8080"></label>
+<label>BlazePwifi server URL<input id="server" value="https://192.168.1.1"></label>
 <label>Enrollment token<input id="token" placeholder="paste the one-time token"></label>
+<label>Server certificate SHA-256<input id="certPin" placeholder="64 hex characters"></label>
 <label>Device label<input id="name" value="Rental phone"></label>
 <label>Wi-Fi security<select id="security"><option value="">Do not include Wi-Fi</option><option value="WPA">WPA/WPA2/WPA3 Personal</option><option value="NONE">Open network</option></select></label>
 <label>Wi-Fi SSID<input id="ssid" placeholder="optional"></label>
@@ -23,14 +24,16 @@ body{font:15px system-ui;margin:0;background:#07111f;color:#eef6ff}.wrap{max-wid
 const APK_URL="__APK_URL__", APK_CHECKSUM="__APK_CHECKSUM__", APK_VERSION_CODE=Number("__APK_VERSION_CODE__");
 function v(id){return document.getElementById(id).value.trim()}
 function generateQr(){
-  const token=v('token'),server=v('server'),name=v('name')||'Rental phone';
+  const token=v('token'),server=v('server'),name=v('name')||'Rental phone',certPin=v('certPin').replace(/:/g,'').toLowerCase();
   if(!token||!server){document.getElementById('state').textContent='Server URL and enrollment token are required.';return}
+  if(!server.startsWith('https://')){document.getElementById('state').textContent='Device Provisioning requires an HTTPS Rental Server URL.';return}
+  if(!/^[0-9a-f]{64}$/.test(certPin)){document.getElementById('state').textContent='Server certificate SHA-256 must be exactly 64 hex characters.';return}
   const d={
     "android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver",
     "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":APK_URL,
     "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":APK_CHECKSUM,
     "android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":APK_VERSION_CODE,
-    "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v2","server_url":server,"enrollment_token":token,"device_name":name}
+    "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v2","server_url":server,"enrollment_token":token,"device_name":name,"server_cert_sha256":certPin}
   };
   const security=v('security'),ssid=v('ssid'),wifiPass=v('wifiPass');
   if(security&&ssid){
@@ -41,6 +44,6 @@ function generateQr(){
   const s=JSON.stringify(d),qr=qrcode(0,'L');qr.addData(s);qr.make();
   document.getElementById('qr').innerHTML=qr.createSvgTag({cellSize:5,margin:20,scalable:true});
   document.getElementById('json').textContent=JSON.stringify(d,null,2);
-  document.getElementById('state').innerHTML='<span class="ok">QR ready. The APK checksum is embedded and verified by Android.</span>';
+  document.getElementById('state').innerHTML='<span class="ok">QR ready. Android verifies the APK checksum; BlazeRental pins the Rental Server certificate after provisioning.</span>';
 }
 </script></body></html>
