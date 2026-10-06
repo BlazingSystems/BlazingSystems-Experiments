@@ -262,7 +262,7 @@ EOF
     bp_member_unlock
     case "$rc" in
       0) ;;
-      2) bp_fail "invalid member username or password; username must be 2-32 safe characters and password at least 4 characters" ;;
+      2) bp_fail "invalid member username or password; username must be 2-32 safe characters and password at least 8 characters" ;;
       3) bp_fail "member already exists" ;;
       *) bp_fail "member creation failed" ;;
     esac
@@ -338,7 +338,7 @@ EOF
     bp_member_unlock
     case "$rc" in
       0) ;;
-      2) bp_fail "member password must be at least 4 characters" ;;
+      2) bp_fail "member password must be at least 8 characters" ;;
       3) bp_fail "unknown member" ;;
       *) bp_fail "member password reset failed" ;;
     esac
