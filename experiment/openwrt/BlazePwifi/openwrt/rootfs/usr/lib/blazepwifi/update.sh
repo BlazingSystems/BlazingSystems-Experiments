@@ -189,6 +189,11 @@ bp_update_restore_snapshot() {
 bp_update_apply() {
     bundle="$1"; expected="${2:-}"
     bp_update_lock || { echo "another update is running" >&2; return 1; }
+    if [ -r "$BP_UPDATE_PENDING" ]; then
+        echo "an update candidate is still pending health promotion; promote or roll it back first" >&2
+        bp_update_unlock
+        return 1
+    fi
     extracted="$BP_UPDATE_RUN/extracted.$$"
     if ! bp_update_extract_verify "$bundle" "$extracted" "$expected"; then bp_update_unlock; return 1; fi
     release="$extracted/release.env"
@@ -219,6 +224,13 @@ bp_update_apply() {
     bp_update_write_env "$BP_UPDATE_PENDING"         "VERSION=$version" "PREVIOUS_VERSION=$previous" "SNAPSHOT_ID=$id"         "APPLIED_AT=$now" "PROMOTE_AFTER=$((now+grace))" "FAILURES=0"
     bp_update_write_env "$BP_UPDATE_LAST_ROLLBACK" "SNAPSHOT_ID=$id" "VERSION=$previous"
     bp_update_history candidate "$version" "from:$previous snapshot:$id"
+    # Promote after real service time even when the device is not rebooted.
+    # All descriptors are redirected so the detached guard cannot hold a CGI
+    # connection open.
+    (
+        sleep "$grace"
+        /usr/sbin/blazepwifi-update guard
+    ) >"$BP_UPDATE_RUN/promote-$id.log" 2>&1 </dev/null &
     rm -rf "$extracted"
     bp_update_unlock
     return 0
@@ -242,6 +254,8 @@ bp_update_prune_snapshots() {
 bp_update_guard() {
     bp_update_init
     [ -r "$BP_UPDATE_PENDING" ] || return 0
+    bp_update_lock || return 1
+    [ -r "$BP_UPDATE_PENDING" ] || { bp_update_unlock; return 0; }
     version="$(bp_update_env_get "$BP_UPDATE_PENDING" VERSION)"
     id="$(bp_update_env_get "$BP_UPDATE_PENDING" SNAPSHOT_ID)"
     promote="$(bp_update_env_get "$BP_UPDATE_PENDING" PROMOTE_AFTER)"
@@ -251,9 +265,12 @@ bp_update_guard() {
         failures=$((failures+1))
         if [ "$failures" -ge 2 ]; then
             bp_update_restore_snapshot "$id" boot-health-failed
-            return $?
+            rc=$?
+            bp_update_unlock
+            return "$rc"
         fi
         sed -i "s/^FAILURES=.*/FAILURES=$failures/" "$BP_UPDATE_PENDING"
+        bp_update_unlock
         return 1
     fi
     if [ -n "$promote" ] && [ "$now" -ge "$promote" ] 2>/dev/null; then
@@ -262,6 +279,7 @@ bp_update_guard() {
         bp_update_history stable "$version" "health-grace-passed"
         bp_update_prune_snapshots
     fi
+    bp_update_unlock
     return 0
 }
 
