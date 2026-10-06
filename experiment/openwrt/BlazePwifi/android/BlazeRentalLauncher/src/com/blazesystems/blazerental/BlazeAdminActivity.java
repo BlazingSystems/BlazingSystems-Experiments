@@ -3,6 +3,7 @@ package com.blazesystems.blazerental;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
+import android.app.NotificationManager;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -11,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.media.RingtoneManager;
 import android.os.Bundle;
 import android.os.Build;
 import android.provider.Settings;
@@ -35,6 +37,8 @@ import java.util.List;
 public class BlazeAdminActivity extends Activity {
     private static final int REQUEST_QR = 441;
     private static final int REQUEST_DEVICE_ADMIN = 442;
+    private static final int REQUEST_ALARM_DEVICE_BASE = 460;
+    private static final int REQUEST_ALARM_FILE_BASE = 470;
 
     private LinearLayout content;
     private final List<CheckBox> appChecks = new ArrayList<CheckBox>();
@@ -206,7 +210,7 @@ public class BlazeAdminActivity extends Activity {
     private void showDashboard() {
         content = page();
         content.addView(title("BlazeRental Control Center"));
-        content.addView(label("Native BlazeRental administration · v0.5 Launcher Edition"));
+        content.addView(label("Native BlazeRental administration · v0.5.2 Launcher Edition"));
 
         section("Dashboard");
         addStatus("Security", ManagedPolicyController.isDeviceOwner(this)
@@ -278,6 +282,35 @@ public class BlazeAdminActivity extends Activity {
             }
         });
 
+        section("Rental time alarms");
+        content.addView(label("Audible warnings use the Android ALARM stream and temporarily raise it "
+                + "to the configured minimum even when the phone is muted. Grant DND override for "
+                + "the strongest Total Silence protection."));
+        addAlarmControls(RentalAlarmConfig.KIND_NEAR_END);
+        addAlarmControls(RentalAlarmConfig.KIND_URGENT);
+        addAlarmControls(RentalAlarmConfig.KIND_TIME_UP);
+        addStatus("Silent / DND protection", hasDndOverride()
+                ? "FULL · alarm can temporarily override Total Silence"
+                : "ALARM STREAM FORCED · grant DND override for Total Silence");
+        if (Build.VERSION.SDK_INT >= 23 && !hasDndOverride()) {
+            Button dnd = secondary("GRANT DND ALARM OVERRIDE");
+            content.addView(dnd, full());
+            dnd.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+        Button stopAlarm = secondary("STOP CURRENT ALARM TEST");
+        content.addView(stopAlarm, full());
+        stopAlarm.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                BlazeAlarmPlayer.stop(BlazeAdminActivity.this);
+            }
+        });
+
         section("Security");
         Button password = secondary("CHANGE ADMIN PASSWORD");
         content.addView(password, full());
@@ -339,6 +372,163 @@ public class BlazeAdminActivity extends Activity {
             }
         });
         setContentView(wrap(content));
+    }
+
+    private void addAlarmControls(final int kind) {
+        addStatus(RentalAlarmConfig.title(kind), RentalAlarmConfig.summary(this, kind));
+
+        Button timing = secondary(RentalAlarmConfig.title(kind).toUpperCase()
+                + " · TIMING / VOLUME");
+        content.addView(timing, full());
+        timing.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { configureAlarmTiming(kind); }
+        });
+
+        Button sound = secondary(RentalAlarmConfig.title(kind).toUpperCase()
+                + " · SOUND / TEST");
+        content.addView(sound, full());
+        sound.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { chooseAlarmSound(kind); }
+        });
+    }
+
+    private void configureAlarmTiming(final int kind) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), dp(4));
+
+        final CheckBox enabled = new CheckBox(this);
+        enabled.setText("Alarm enabled");
+        enabled.setChecked(RentalAlarmConfig.enabled(this, kind));
+        box.addView(enabled, full());
+
+        final EditText threshold = field(
+                kind == RentalAlarmConfig.KIND_TIME_UP
+                        ? "Fixed at 00:00"
+                        : "Trigger seconds remaining", false);
+        threshold.setInputType(InputType.TYPE_CLASS_NUMBER);
+        threshold.setEnabled(kind != RentalAlarmConfig.KIND_TIME_UP);
+        threshold.setText(kind == RentalAlarmConfig.KIND_TIME_UP
+                ? "0" : String.valueOf(RentalAlarmConfig.thresholdSeconds(this, kind)));
+        box.addView(threshold, full());
+
+        final EditText duration = field("Ring duration (1–60 seconds)", false);
+        duration.setInputType(InputType.TYPE_CLASS_NUMBER);
+        duration.setText(String.valueOf(RentalAlarmConfig.durationSeconds(this, kind)));
+        box.addView(duration, full());
+
+        final EditText volume = field("Forced alarm volume (25–100%)", false);
+        volume.setInputType(InputType.TYPE_CLASS_NUMBER);
+        volume.setText(String.valueOf(RentalAlarmConfig.volumePercent(this, kind)));
+        box.addView(volume, full());
+
+        new AlertDialog.Builder(this)
+                .setTitle(RentalAlarmConfig.title(kind))
+                .setView(box)
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        try {
+                            long sec = kind == RentalAlarmConfig.KIND_TIME_UP
+                                    ? 0L : Long.parseLong(threshold.getText().toString());
+                            long durationSec = Long.parseLong(duration.getText().toString());
+                            int volumePct = Integer.parseInt(volume.getText().toString());
+
+                            if (kind == RentalAlarmConfig.KIND_NEAR_END
+                                    && sec <= RentalAlarmConfig.thresholdSeconds(
+                                            BlazeAdminActivity.this,
+                                            RentalAlarmConfig.KIND_URGENT)) {
+                                Toast.makeText(BlazeAdminActivity.this,
+                                        "Near End must trigger before the Urgent alarm",
+                                        Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            if (kind == RentalAlarmConfig.KIND_URGENT
+                                    && sec >= RentalAlarmConfig.thresholdSeconds(
+                                            BlazeAdminActivity.this,
+                                            RentalAlarmConfig.KIND_NEAR_END)) {
+                                Toast.makeText(BlazeAdminActivity.this,
+                                        "Urgent alarm must be closer to 00:00 than Near End",
+                                        Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            RentalAlarmConfig.setEnabled(BlazeAdminActivity.this,
+                                    kind, enabled.isChecked());
+                            if (kind != RentalAlarmConfig.KIND_TIME_UP) {
+                                RentalAlarmConfig.setThresholdSeconds(
+                                        BlazeAdminActivity.this, kind, sec);
+                            }
+                            RentalAlarmConfig.setDurationSeconds(
+                                    BlazeAdminActivity.this, kind, durationSec);
+                            RentalAlarmConfig.setVolumePercent(
+                                    BlazeAdminActivity.this, kind, volumePct);
+                            RentalAlarmReceiver.schedule(BlazeAdminActivity.this,
+                                    RentalLeaseStore.remainingMs(BlazeAdminActivity.this));
+                            showDashboard();
+                        } catch (Exception ignored) {
+                            Toast.makeText(BlazeAdminActivity.this,
+                                    "Check the alarm values", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void chooseAlarmSound(final int kind) {
+        final String[] options = {
+                "Use built-in Blaze alarm",
+                "Choose device alarm sound",
+                "Choose custom audio file",
+                "Test current alarm"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle(RentalAlarmConfig.title(kind) + " sound")
+                .setItems(options, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        if (which == 0) {
+                            RentalAlarmConfig.setSound(BlazeAdminActivity.this,
+                                    kind, RentalAlarmConfig.MODE_BUILTIN, "");
+                            showDashboard();
+                        } else if (which == 1) {
+                            Intent picker = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+                            picker.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE,
+                                    RingtoneManager.TYPE_ALARM);
+                            picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+                            picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+                            String current = RentalAlarmConfig.soundUri(
+                                    BlazeAdminActivity.this, kind);
+                            if (current.length() > 0) {
+                                picker.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                        Uri.parse(current));
+                            }
+                            startActivityForResult(picker,
+                                    REQUEST_ALARM_DEVICE_BASE + kind);
+                        } else if (which == 2) {
+                            Intent file = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                            file.addCategory(Intent.CATEGORY_OPENABLE);
+                            file.setType("audio/*");
+                            file.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                            startActivityForResult(file, REQUEST_ALARM_FILE_BASE + kind);
+                        } else {
+                            Toast.makeText(BlazeAdminActivity.this,
+                                    "Testing " + RentalAlarmConfig.title(kind),
+                                    Toast.LENGTH_SHORT).show();
+                            BlazeAlarmPlayer.play(BlazeAdminActivity.this, kind);
+                        }
+                    }
+                }).show();
+    }
+
+    private boolean hasDndOverride() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        try {
+            NotificationManager nm = (NotificationManager)
+                    getSystemService(NOTIFICATION_SERVICE);
+            return nm != null && nm.isNotificationPolicyAccessGranted();
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private void specialAccessButtons() {
@@ -568,6 +758,37 @@ public class BlazeAdminActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+
+        if (request > REQUEST_ALARM_DEVICE_BASE
+                && request <= REQUEST_ALARM_DEVICE_BASE + RentalAlarmConfig.KIND_TIME_UP) {
+            int kind = request - REQUEST_ALARM_DEVICE_BASE;
+            if (result == RESULT_OK && data != null) {
+                Uri uri = (Uri) data.getParcelableExtra(
+                        RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                if (uri != null) {
+                    RentalAlarmConfig.setSound(this, kind,
+                            RentalAlarmConfig.MODE_DEVICE, uri.toString());
+                }
+            }
+            showDashboard();
+            return;
+        }
+
+        if (request > REQUEST_ALARM_FILE_BASE
+                && request <= REQUEST_ALARM_FILE_BASE + RentalAlarmConfig.KIND_TIME_UP) {
+            int kind = request - REQUEST_ALARM_FILE_BASE;
+            if (result == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {}
+                RentalAlarmConfig.setSound(this, kind,
+                        RentalAlarmConfig.MODE_CUSTOM, uri.toString());
+            }
+            showDashboard();
+            return;
+        }
         if (request == REQUEST_QR && result == RESULT_OK) {
             if (!RentalLeaseStore.isInitialSetupComplete(this)) showInitialSetup();
             else showDashboard();
