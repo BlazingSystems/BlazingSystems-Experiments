@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-START=75
+START=95
 STOP=10
 USE_PROCD=1
 
