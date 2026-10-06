@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.2** on `blazepwifi-v0.5.3-dev2-console-ops`. Exact green branch head `e917171d2a3875fd54183d552c02f8afcdb7862f`, branch workflow `37500821733` — PASS. Reconciled PR #18 merge tree `dee385974b7142afa4e8a56fc47d611f62a10ccf`, PR workflow `37500829258` — PASS.  
+**Active development:** **v0.5.3-dev.3** on `blazepwifi-v0.5.3-dev3-softtimer-members`, based on merged Full BlazePwifi v0.5.3-dev.2 main baseline `c7ae651c940ddbd1bb48684b77845e5d7c2988a1`. dev.3 adds centralized BlazePisonet SoftTimer member management; it is development work, not a production v0.5.3 release.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
@@ -56,6 +56,92 @@ The post-v0.5.2 hardening work is implemented and artifact-validated. This is a 
 - No v0.5.3 production tag/release has been created.
 - No production signing key was rotated or exposed.
 - Frozen v0.5.2 release/tag and dedicated signing/recovery workflows remain unchanged.
+
+## v0.5.3-dev.3 — BlazePisonet SoftTimer member authority
+
+This is a **required architecture rule** for all future BlazePwifi + BlazePisonet SoftTimer work.
+
+### Ownership rule
+
+- **BlazePwifi Management Console is the central authority for SoftTimer member accounts whenever BlazePwifi integration is enabled.**
+- Member creation, editing, enable/disable, password reset, banked-time adjustment, deletion/revocation and audit belong in **BlazePwifi Admin → Pisonet Members**.
+- BlazePisonet SoftTimer must not maintain an independent authoritative member balance database while connected to BlazePwifi.
+- SoftTimer may keep a signed/revisioned last-known-good member cache for local authentication and resilience, but the central BlazePwifi member revision and banked-time ledger win during reconciliation.
+- Standalone SoftTimer deployments with no BlazePwifi server may continue using local-only member storage.
+
+### Member data model
+
+Central member records must at minimum carry:
+
+- normalized member username / stable member ID;
+- display name or optional label;
+- enabled/revoked state;
+- password verifier material only (never plaintext);
+- banked seconds;
+- monotonically increasing record revision;
+- updated timestamp;
+- last modifying actor/source;
+- bounded idempotent member-event history for bank/restore/transfer operations.
+
+Passwords must never be returned to the browser, SoftTimer, logs, exports or audit records. The console can reset a password, but cannot reveal the old one.
+
+### SoftTimer synchronization contract
+
+The BlazePwifi ↔ SoftTimer member integration must use the existing trusted controller relationship rather than anonymous captive-portal APIs.
+
+Required behavior:
+
+1. SoftTimer identifies itself with its configured BlazePwifi controller ID and signed controller request.
+2. SoftTimer periodically requests a member snapshot/revision from BlazePwifi.
+3. BlazePwifi returns only cache-safe member verifier/state fields; plaintext credentials never leave the client/operator input path.
+4. SoftTimer atomically replaces/updates its local member cache only after validating the signed response/revision.
+5. When online/integrated, banked-time mutations are sent to BlazePwifi as idempotent events and BlazePwifi is the authority for the resulting balance.
+6. Lost/retried requests must not duplicate banked time, restored time or transfers.
+7. If BlazePwifi is unreachable, cached login may remain available according to policy, but **central member balance mutation must fail closed by default** to prevent the same cached balance being spent on two PCs. A future explicit offline-spend lease design may relax this only with collision-safe reservations.
+8. When connectivity returns, the newest authoritative BlazePwifi revision replaces stale cached balance state.
+
+### Management Console requirements
+
+Add a dedicated **Pisonet Members** page, separate from administrator accounts and hotspot device accounts.
+
+Minimum console actions:
+
+- list/search members;
+- add member;
+- edit label/name;
+- enable/disable/revoke;
+- reset password;
+- view/set/add/subtract banked time;
+- inspect revision / last update / source;
+- view recent member events;
+- transfer banked time between members;
+- export/import member metadata without plaintext passwords.
+
+Viewer role may read non-secret member status. Operator may create/edit ordinary member state and banked time within policy. Password reset, destructive delete/revoke and bulk import require Admin plus CSRF; high-risk bulk operations should require fresh re-authentication.
+
+### Compatibility / migration
+
+- Existing v0.3.0 SoftTimer local members must not be silently destroyed.
+- When central member management is first enabled, the operator must be offered an explicit migration/import path.
+- Username collisions must be shown for operator resolution; do not silently overwrite a BlazePwifi member.
+- Local hashes that cannot be verified by BlazePwifi should require a password reset rather than attempting reversible conversion.
+- SoftTimer remains able to operate in **Local Members** mode when BlazePwifi member authority is disabled.
+
+### Scope guard
+
+- Do **not** implement this by modifying `profiles/standalone-rental`. This belongs to Full BlazePwifi Management Console + BlazePisonet SoftTimer integration. Existing BlazeRental phone enrollment/member-independent rental accounting must continue to work unchanged.
+
+### Validation gates for dev.3
+
+- static shell validation for the member library/API;
+- member CRUD/revision/idempotency tests;
+- password-verifier non-disclosure test;
+- browser Management Console member-flow test;
+- SoftTimer build with warnings-as-errors;
+- SoftTimer online sync / offline fail-closed balance test;
+- duplicate bank/restore/transfer event test;
+- full existing BlazePwifi regression matrix, including Android, ESP, Ruijie, Orange Pi and x86/QEMU gates;
+- no production v0.5.3 tag/signing action from this development branch.
 
 ## Historical v0.5.1 maintenance target
 
