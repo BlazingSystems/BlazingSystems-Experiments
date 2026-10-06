@@ -78,7 +78,7 @@ bp_terminal_unlock() {
 bp_terminal_exec_lock() {
   mkdir -p "$BP_RUN"
   exec 5>"$BP_RUN/terminal-exec.lock"
-  flock -n 5 5 || { exec 5>&-; return 1; }
+  flock -n 5 || { exec 5>&-; return 1; }
 }
 
 bp_terminal_exec_unlock() {
@@ -197,9 +197,12 @@ bp_terminal_exec() {
   max_bytes="$(bp_terminal_cfg_uint terminal_output_max_bytes 16000 1024 65536)"
   outfile="$BP_RUN/.terminal-output.$(bp_tmp_suffix)"
   : > "$outfile"; chmod 600 "$outfile"
-  PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root TERM=dumb \
-    timeout "$limit" sh -c "$cmd" >"$outfile" 2>&1
-  BP_TERMINAL_RC=$?
+  if PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root TERM=dumb \
+    timeout "$limit" sh -c "$cmd" >"$outfile" 2>&1; then
+    BP_TERMINAL_RC=0
+  else
+    BP_TERMINAL_RC=$?
+  fi
   BP_TERMINAL_OUTPUT="$(head -c "$max_bytes" "$outfile" 2>/dev/null || true)"
   rm -f "$outfile"
   bp_terminal_exec_unlock
