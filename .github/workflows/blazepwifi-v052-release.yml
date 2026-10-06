@@ -69,6 +69,9 @@ jobs:
           echo "sign=$SIGN_RUN" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Preserve v0.5.2 release notes
+        run: cp experiment/openwrt/BlazePwifi/releases/0.5.2/README.md "$RUNNER_TEMP/v052-README.md"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.req.outputs.sha }}
@@ -143,7 +146,7 @@ jobs:
           test -n "$BOOTSTRAP" -a -s "$BOOTSTRAP" -a -n "$BOOTSTRAP_SHA" -a -s "$BOOTSTRAP_SHA"
           cp "$BOOTSTRAP" release-out/BlazePwifi-v0.5.2-update-bootstrap.sh
           cp "$BOOTSTRAP_SHA" release-out/BlazePwifi-v0.5.2-update-bootstrap.sh.sha256
-          cp experiment/openwrt/BlazePwifi/releases/0.5.2/README.md release-out/README.md
+          cp "$RUNNER_TEMP/v052-README.md" release-out/README.md
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           cp "$GATE" release-out/CANDIDATE-GATE.json
           jq -n --arg release "0.5.2" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" \
@@ -166,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG=v0.5.2
-          NOTES=experiment/openwrt/BlazePwifi/releases/0.5.2/README.md
+          NOTES="$RUNNER_TEMP/v052-README.md"
           EXTRA=()
           if [ "$SIGN_RUN" = 0 ]; then EXTRA+=(--prerelease); fi
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
