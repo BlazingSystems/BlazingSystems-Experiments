@@ -9,7 +9,7 @@ done
 ! grep -Eq 'uci (set|add_list|delete) (network|wireless|firewall)\.' "$ROOT/openwrt/install.sh"
 ! grep -Eq 'uci commit (network|wireless|firewall)' "$ROOT/openwrt/install.sh"
 
-grep -q "PROFILE_VERSION=\"0.5.2-rental\"" "$ROOT/openwrt/install.sh"
+grep -q "PROFILE_VERSION=\"0.5.2-rental.1\"" "$ROOT/openwrt/install.sh"
 grep -q "edition='rental-standalone'" "$ROOT/openwrt/install.sh"
 grep -q "enabled='0'" "$ROOT/openwrt/install.sh"
 grep -q "admin_port='443'" "$ROOT/openwrt/install.sh"
