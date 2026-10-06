@@ -9,6 +9,7 @@ ADMIN="$SRC/BlazeAdminActivity.java"
 ALARM="$SRC/RentalAlarmConfig.java"
 PLAYER="$SRC/BlazeAlarmPlayer.java"
 RECEIVER="$SRC/RentalAlarmReceiver.java"
+LCM_PNG="$L/res/drawable-nodpi/blaze_lcm_brand.png"
 
 [ "$(cat "$ROOT/VERSION")" = "0.5.2" ]
 grep -Fq 'versionCode 50200' "$GRADLE"
@@ -17,7 +18,29 @@ grep -Fq 'android:icon="@drawable/blaze_lcm_brand"' "$MANIFEST"
 grep -Fq 'android.permission.MODIFY_AUDIO_SETTINGS' "$MANIFEST"
 grep -Fq 'android.permission.ACCESS_NOTIFICATION_POLICY' "$MANIFEST"
 grep -Fq 'android.permission.WAKE_LOCK' "$MANIFEST"
-test -s "$L/res/drawable-nodpi/blaze_lcm_brand.png"
+test -s "$LCM_PNG"
+python3 - "$LCM_PNG" <<'PY'
+import struct, sys, zlib
+p=sys.argv[1]
+data=open(p,'rb').read()
+assert data[:8] == b'\x89PNG\r\n\x1a\n'
+off=8
+seen_iend=False
+while off < len(data):
+    assert off + 12 <= len(data)
+    n=struct.unpack('>I', data[off:off+4])[0]
+    typ=data[off+4:off+8]
+    end=off+12+n
+    assert end <= len(data)
+    body=data[off+4:off+8+n]
+    crc=struct.unpack('>I', data[off+8+n:end])[0]
+    assert (zlib.crc32(body) & 0xffffffff) == crc
+    off=end
+    if typ == b'IEND':
+        seen_iend=True
+        break
+assert seen_iend and off == len(data)
+PY
 test -s "$ALARM"
 test -s "$PLAYER"
 grep -Fq 'def = kind == KIND_URGENT ? 180L : 600L' "$ALARM"
