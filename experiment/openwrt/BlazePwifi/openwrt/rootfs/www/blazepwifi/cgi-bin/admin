@@ -501,6 +501,7 @@ EOF
       0) ;;
       2) bp_fail "command blocked; use a dedicated guarded control for this operation" ;;
       4) bp_fail "terminal session expired or invalid" ;;
+      5) bp_fail "another terminal command is already running" ;;
       127) bp_fail "bounded timeout utility unavailable on this target" ;;
       *) bp_fail "invalid terminal command" ;;
     esac
