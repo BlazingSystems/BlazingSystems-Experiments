@@ -75,6 +75,17 @@ bp_terminal_unlock() {
   exec 7>&-
 }
 
+bp_terminal_exec_lock() {
+  mkdir -p "$BP_RUN"
+  exec 5>"$BP_RUN/terminal-exec.lock"
+  flock -n 5 5 || { exec 5>&-; return 1; }
+}
+
+bp_terminal_exec_unlock() {
+  flock -u 5 2>/dev/null || true
+  exec 5>&-
+}
+
 bp_terminal_cleanup_unlocked() {
   now="$(bp_now)"
   idle="$(bp_terminal_cfg_uint terminal_idle_seconds 60 15 900)"
@@ -180,6 +191,7 @@ bp_terminal_exec() {
   bp_terminal_validate "$token" || return 4
   bp_terminal_command_safe_wrapper "$cmd" || return $?
   command -v timeout >/dev/null 2>&1 || return 127
+  bp_terminal_exec_lock || return 5
 
   limit="$(bp_terminal_cfg_uint terminal_command_timeout_seconds 12 2 60)"
   max_bytes="$(bp_terminal_cfg_uint terminal_output_max_bytes 16000 1024 65536)"
@@ -190,6 +202,7 @@ bp_terminal_exec() {
   BP_TERMINAL_RC=$?
   BP_TERMINAL_OUTPUT="$(head -c "$max_bytes" "$outfile" 2>/dev/null || true)"
   rm -f "$outfile"
+  bp_terminal_exec_unlock
   audit_verb="$(printf '%s' "$cmd" | awk '{print $1}' | cut -c1-48)"
   audit_hash="$(printf '%s' "$cmd" | bp_sha256)"
   bp_auth_audit terminal_exec "${BP_AUTH_USER:-unknown}" "${REMOTE_ADDR:-unknown}" "verb=$audit_verb sha256=$audit_hash"
