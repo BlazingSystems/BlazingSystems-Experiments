@@ -160,7 +160,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.expand.outputs.had_archive == 'false'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (steps.expand.outputs.had_archive == 'false' || steps.materialize.outputs.did == 'true')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,6 +170,6 @@ jobs:
             gh release upload $env:TAG $zip SHA256SUMS --clobber
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
-            gh release create $env:TAG $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.1.0.md" --target $env:GITHUB_SHA
+            gh release create $env:TAG $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.1.0.md" --target $releaseTarget
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
