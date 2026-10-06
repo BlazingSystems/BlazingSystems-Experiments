@@ -13,6 +13,17 @@ bp_member_init() {
   chmod 600 "$BP_MEMBERS" "$BP_MEMBER_EVENTS" "$BP_MEMBER_REVISION"
 }
 
+bp_member_lock() {
+  mkdir -p "$BP_RUN"
+  exec 7>"$BP_RUN/member.lock"
+  flock -w 10 7 || { exec 7>&-; return 1; }
+}
+
+bp_member_unlock() {
+  flock -u 7 2>/dev/null || true
+  exec 7>&-
+}
+
 bp_member_norm() {
   printf '%s' "$1" | grep -Eq '^[A-Za-z0-9_.-]{2,32}$' || return 1
   printf '%s' "$1"
