@@ -4,6 +4,7 @@
 . "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 . "${BP_RENTAL_POLICY_LIB:-/usr/lib/blazepwifi/rental_policy.sh}"
+. "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 bp_init_dirs
@@ -127,6 +128,25 @@ case "$action" in
     newrev="$(bp_rental_policy_v2_patch "$did" "$rev" "admin:$BP_AUTH_USER" @keep @keep @keep @keep @keep @keep @keep @keep "$admin_password")" || bp_fail "admin password must be at least 8 characters"
     bp_auth_audit rental_admin_password_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$newrev"
     bp_json "$(printf '{"ok":true,"policy_revision":%s}' "$newrev")"
+    ;;
+  rental_update_get)
+    require_role viewer
+    bp_rental_update_init
+    body="$(bp_rental_update_json)"
+    bp_json "$(printf '{"ok":true,"update":%s}' "$body")"
+    ;;
+  rental_update_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    version="$(bp_param version)"; code="$(bp_param version_code)"
+    url="$(bp_param apk_url)"; sha="$(bp_param apk_sha256)"
+    rollback_version="$(bp_param rollback_version)"; rollback_code="$(bp_param rollback_version_code)"
+    rollback_url="$(bp_param rollback_url)"; rollback_sha="$(bp_param rollback_sha256)"
+    bp_rental_update_set "$version" "$code" "$url" "$sha" "$rollback_version" "$rollback_code" "$rollback_url" "$rollback_sha" || bp_fail "invalid rental update metadata"
+    bp_auth_audit rental_update_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$version:$code"
+    body="$(bp_rental_update_json)"
+    bp_json "$(printf '{"ok":true,"update":%s}' "$body")"
     ;;
   controller_list)
     require_role viewer
