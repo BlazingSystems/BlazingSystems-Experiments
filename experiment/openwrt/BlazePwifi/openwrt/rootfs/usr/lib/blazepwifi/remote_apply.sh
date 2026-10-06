@@ -81,6 +81,7 @@ bp_remote_live_supported() {
   command -v wg >/dev/null 2>&1 || return 1
   command -v ifup >/dev/null 2>&1 || return 1
   command -v ifdown >/dev/null 2>&1 || return 1
+  command -v ip >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -293,6 +294,17 @@ bp_remote_ifup() {
   ifup "$BP_REMOTE_WG_IF" >/dev/null 2>&1
 }
 
+bp_remote_wg_link_delete() {
+  if [ -n "${BP_REMOTE_LINK_DELETE_HOOK:-}" ]; then sh -c "$BP_REMOTE_LINK_DELETE_HOOK"; return; fi
+  ip link delete dev "$BP_REMOTE_WG_IF" >/dev/null 2>&1 || true
+}
+
+bp_remote_wg_link_precreate() {
+  if [ -n "${BP_REMOTE_LINK_PRECREATE_HOOK:-}" ]; then sh -c "$BP_REMOTE_LINK_PRECREATE_HOOK"; return; fi
+  ip link show dev "$BP_REMOTE_WG_IF" >/dev/null 2>&1 && return 0
+  ip link add dev "$BP_REMOTE_WG_IF" type wireguard >/dev/null 2>&1
+}
+
 bp_remote_firewall_reload() {
   if [ -n "${BP_REMOTE_FIREWALL_RELOAD_HOOK:-}" ]; then sh -c "$BP_REMOTE_FIREWALL_RELOAD_HOOK"; return; fi
   /etc/init.d/firewall reload >/dev/null 2>&1
@@ -340,7 +352,17 @@ bp_remote_restore_snapshot() {
   bp_remote_config_restore_file "$snap" firewall "$BP_REMOTE_FIREWALL_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" runtime "$BP_REMOTE_RUNTIME" || return 1
   bp_remote_ifdown || true
+  bp_remote_wg_link_delete || true
+  restored_state="$(bp_remote_runtime_get state staged)"
+  case "$restored_state" in
+    active|active_staged_changes)
+      bp_remote_wg_link_precreate || return 1
+      ;;
+  esac
   bp_remote_network_reload || return 1
+  case "$restored_state" in
+    active|active_staged_changes) bp_remote_ifup || return 1 ;;
+  esac
   bp_remote_firewall_reload || return 1
   bp_remote_admin_sync || return 1
 }
@@ -548,6 +570,8 @@ bp_remote_wireguard_apply() {
 
   if ! bp_remote_wg_write_uci; then bp_remote_rollback_pending "$id" uci-write-failed; return 24; fi
   bp_remote_ifdown || true
+  bp_remote_wg_link_delete || true
+  if ! bp_remote_wg_link_precreate; then bp_remote_rollback_pending "$id" interface-create-failed; return 25; fi
   if ! bp_remote_ifup; then bp_remote_rollback_pending "$id" interface-up-failed; return 25; fi
   if ! bp_remote_firewall_reload; then bp_remote_rollback_pending "$id" firewall-reload-failed; return 26; fi
   if ! bp_remote_wg_wait_health; then bp_remote_rollback_pending "$id" handshake-timeout; return 27; fi
@@ -596,6 +620,7 @@ bp_remote_wireguard_disable() {
   if ! bp_remote_admin_stop; then bp_remote_rollback_pending "$id" disable-admin-stop-failed; return 28; fi
   if ! bp_remote_wireguard_remove_uci; then bp_remote_rollback_pending "$id" disable-uci-failed; return 24; fi
   bp_remote_ifdown || true
+  bp_remote_wg_link_delete || true
   if ! bp_remote_network_reload; then bp_remote_rollback_pending "$id" disable-network-reload-failed; return 25; fi
   if ! bp_remote_firewall_reload; then bp_remote_rollback_pending "$id" disable-firewall-failed; return 26; fi
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" disable-route-survival-failed; return 29; fi
