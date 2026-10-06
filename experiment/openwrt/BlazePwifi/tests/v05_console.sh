@@ -80,6 +80,11 @@ grep -Fq 'watchdog-timeout' "$REMOTE_APPLY"
 grep -Fq 'reboot-during-apply' "$REMOTE_APPLY"
 grep -Fq 'bp_remote_admin_sync' "$REMOTE_APPLY"
 grep -Fq 'bp_remote_wg_link_precreate' "$REMOTE_APPLY"
+[ "$(grep -Fc 'bp_remote_runtime_status_json()' "$REMOTE_APPLY")" -eq 1 ]
+[ "$(grep -Fc 'bp_remote_wg_live_validate()' "$REMOTE_APPLY")" -eq 1 ]
+[ "$(grep -Fc 'bp_remote_snapshot_create()' "$REMOTE_APPLY")" -eq 1 ]
+[ "$(grep -Fc 'bp_remote_wireguard_apply()' "$REMOTE_APPLY")" -eq 1 ]
+[ "$(grep -Fc 'bp_remote_wireguard_disable()' "$REMOTE_APPLY")" -eq 1 ]
 ! grep -Fq 'BP_REMOTE_UHTTPD_CONFIG' "$REMOTE_APPLY"
 ! grep -Fq 'uhttpd.blazepwifi_admin' "$REMOTE_APPLY"
 grep -Fq '/www/blazepwifi/cgi-bin/admin-session' "$REMOTE_ADMIN"
