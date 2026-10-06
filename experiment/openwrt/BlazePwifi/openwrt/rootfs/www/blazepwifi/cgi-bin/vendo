@@ -2,9 +2,11 @@
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
+. "${BP_MEMBER_LIB:-/usr/lib/blazepwifi/member.sh}"
 bp_init_dirs
 bp_rental_init
 bp_controller_init
+bp_member_init
 
 vendo_port="$(bp_cfg vendo_port)"
 [ -n "$vendo_port" ] || vendo_port=4455
@@ -41,6 +43,22 @@ bp_lock || bp_fail "vendo state busy"
 heartbeat
 bp_unlock
 
+
+member_snapshot_sig() {
+  revision="$1"; payload_hash="$2"; secret="$(bp_cfg vendo_key)"
+  printf '%s|member_snapshot|%s|%s|%s|%s|%s' "$secret" "$id" "$nonce" "$revision" "$payload_hash" "$secret" | bp_sha256
+}
+
+member_auth_sig() {
+  user="$1"; revision="$2"; banked="$3"; secret="$(bp_cfg vendo_key)"
+  printf '%s|member_auth|%s|%s|%s|%s|%s|%s' "$secret" "$id" "$nonce" "$user" "$revision" "$banked" "$secret" | bp_sha256
+}
+
+member_mutation_sig() {
+  action_name="$1"; event_id="$2"; member_token="$3"; result_seconds="$4"; balance_seconds="$5"; revision="$6"; secret="$(bp_cfg vendo_key)"
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' "$secret" "$action_name" "$id" "$nonce" "$event_id" "$member_token" "$result_seconds" "$balance_seconds" "$revision" "$secret" | bp_sha256
+}
+
 case "$action" in
   register|ping)
     controller="$(bp_controller_json "$id")"
@@ -67,6 +85,153 @@ case "$action" in
     [ "$enabled" = 1 ] && [ "$coin_enabled" = 1 ] || insert=0
     body="$(printf '{"ok":true,"insert":%s,"target_nonce":"%s","expires":%s,"controller":%s}' "$insert" "$(bp_json_escape "$target_nonce")" "${expires:-0}" "$controller")"
     bp_json "$body"
+    ;;
+  member_snapshot)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
+    revision="$(bp_member_global_revision)"
+    members="$(bp_member_snapshot_json)"
+    payload_hash="$(printf '%s' "$members" | bp_sha256)"
+    response_sig="$(member_snapshot_sig "$revision" "$payload_hash")"
+    body="$(printf '{"ok":true,"member_revision":%s,"payload_sha256":"%s","members":%s,"response_sig":"%s"}' "$revision" "$payload_hash" "$members" "$response_sig")"
+    bp_json "$body"
+    ;;
+  member_auth)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
+    user="$(printf '%s' "$target" | cut -d: -f1)"
+    proof="$(printf '%s' "$target" | cut -d: -f2)"
+    user="$(bp_member_norm "$user")" || bp_fail "invalid member"
+    printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
+    bp_member_auth_proof_ok "$user" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
+    line="$(bp_member_line "$user")"
+    banked="$(printf '%s' "$line" | cut -f8)"
+    revision="$(printf '%s' "$line" | cut -f9)"
+    [ -n "$banked" ] || banked=0
+    [ -n "$revision" ] || revision=0
+    response_sig="$(member_auth_sig "$user" "$revision" "$banked")"
+    bp_json "$(printf '{"ok":true,"username":"%s","banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$(bp_json_escape "$user")" "$banked" "$revision" "$response_sig")"
+    ;;
+  member_bank)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
+    case "$pulses" in ''|*[!0-9]*) bp_fail "invalid bank seconds";; esac
+    [ "$pulses" -gt 0 ] 2>/dev/null && [ "$pulses" -le 31536000 ] 2>/dev/null || bp_fail "bank seconds out of range"
+    user="$(printf '%s' "$target" | cut -d: -f1)"
+    event_id="$(printf '%s' "$target" | cut -d: -f2)"
+    proof="$(printf '%s' "$target" | cut -d: -f3)"
+    user="$(bp_member_norm "$user")" || bp_fail "invalid member"
+    printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
+
+    prior="$(bp_member_replay_line "$event_id" "$id" "$user" add)"
+    if [ -n "$prior" ]; then
+      result_seconds="$(printf '%s' "$prior" | cut -f6)"
+      revision="$(bp_member_global_revision)"
+      balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
+      [ -n "$result_seconds" ] || result_seconds=0
+      [ -n "$balance" ] || balance=0
+      response_sig="$(member_mutation_sig member_bank "$event_id" "$user" "$result_seconds" "$balance" "$revision")"
+      bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
+      exit 0
+    fi
+
+    printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
+    bp_member_auth_proof_ok "$user" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
+    bp_member_lock || bp_fail "member state busy"
+    result="$(bp_member_balance_change "$user" add "$pulses" "softtimer:$id" "$event_id")"
+    rc=$?
+    bp_member_unlock
+    [ "$rc" -eq 0 ] || bp_fail "member bank failed"
+    result_seconds="$(printf '%s' "$result" | cut -f1)"
+    revision="$(printf '%s' "$result" | cut -f2)"
+    balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
+    [ -n "$result_seconds" ] || result_seconds=0
+    [ -n "$revision" ] || revision=0
+    [ -n "$balance" ] || balance=0
+    response_sig="$(member_mutation_sig member_bank "$event_id" "$user" "$result_seconds" "$balance" "$revision")"
+    bp_json "$(printf '{"ok":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
+    ;;
+  member_restore)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
+    user="$(printf '%s' "$target" | cut -d: -f1)"
+    event_id="$(printf '%s' "$target" | cut -d: -f2)"
+    proof="$(printf '%s' "$target" | cut -d: -f3)"
+    user="$(bp_member_norm "$user")" || bp_fail "invalid member"
+    printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
+
+    prior="$(bp_member_replay_line "$event_id" "$id" "$user" restore_all)"
+    if [ -n "$prior" ]; then
+      result_seconds="$(printf '%s' "$prior" | cut -f6)"
+      revision="$(bp_member_global_revision)"
+      balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
+      [ -n "$result_seconds" ] || result_seconds=0
+      [ -n "$balance" ] || balance=0
+      response_sig="$(member_mutation_sig member_restore "$event_id" "$user" "$result_seconds" "$balance" "$revision")"
+      bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
+      exit 0
+    fi
+
+    printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
+    bp_member_auth_proof_ok "$user" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
+    bp_member_lock || bp_fail "member state busy"
+    result="$(bp_member_balance_change "$user" restore_all 0 "softtimer:$id" "$event_id")"
+    rc=$?
+    bp_member_unlock
+    [ "$rc" -eq 0 ] || bp_fail "member restore failed"
+    result_seconds="$(printf '%s' "$result" | cut -f1)"
+    revision="$(printf '%s' "$result" | cut -f2)"
+    balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
+    [ -n "$result_seconds" ] || result_seconds=0
+    [ -n "$revision" ] || revision=0
+    [ -n "$balance" ] || balance=0
+    response_sig="$(member_mutation_sig member_restore "$event_id" "$user" "$result_seconds" "$balance" "$revision")"
+    bp_json "$(printf '{"ok":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
+    ;;
+  member_transfer)
+    bp_time_sane "$now" || bp_fail "router clock not synchronized"
+    case "$pulses" in ''|*[!0-9]*) bp_fail "invalid transfer seconds";; esac
+    [ "$pulses" -gt 0 ] 2>/dev/null && [ "$pulses" -le 31536000 ] 2>/dev/null || bp_fail "transfer seconds out of range"
+    pair="$(printf '%s' "$target" | cut -d: -f1)"
+    event_id="$(printf '%s' "$target" | cut -d: -f2)"
+    proof="$(printf '%s' "$target" | cut -d: -f3)"
+    printf '%s' "$pair" | grep -q '>' || bp_fail "invalid transfer members"
+    from="$(printf '%s' "$pair" | cut -d'>' -f1)"
+    to="$(printf '%s' "$pair" | cut -d'>' -f2)"
+    from="$(bp_member_norm "$from")" || bp_fail "invalid source member"
+    to="$(bp_member_norm "$to")" || bp_fail "invalid destination member"
+    printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
+
+    prior="$(bp_member_replay_line "$event_id" "$id" "$from" transfer)"
+    if [ -n "$prior" ]; then
+      result_seconds="$(printf '%s' "$prior" | cut -f6)"
+      revision="$(bp_member_global_revision)"
+      from_balance="$(printf '%s' "$(bp_member_line "$from")" | cut -f8)"
+      [ -n "$result_seconds" ] || result_seconds=0
+      [ -n "$from_balance" ] || from_balance=0
+      token="$from>$to"
+      response_sig="$(member_mutation_sig member_transfer "$event_id" "$token" "$result_seconds" "$from_balance" "$revision")"
+      bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","from_username":"%s","to_username":"%s","result_seconds":%s,"source_banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$from")" "$(bp_json_escape "$to")" "$result_seconds" "$from_balance" "$revision" "$response_sig")"
+      exit 0
+    fi
+
+    printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
+    bp_member_auth_proof_ok "$from" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
+    [ "$(printf '%s' "$(bp_member_line "$to")" | cut -f3)" = 1 ] || bp_fail "destination member disabled or missing"
+    bp_member_lock || bp_fail "member state busy"
+    result="$(bp_member_transfer "$from" "$to" "$pulses" "softtimer:$id" "$event_id")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      4) bp_fail "insufficient banked time" ;;
+      *) bp_fail "member transfer failed" ;;
+    esac
+    result_seconds="$(printf '%s' "$result" | cut -f1)"
+    revision="$(printf '%s' "$result" | cut -f2)"
+    from_balance="$(printf '%s' "$(bp_member_line "$from")" | cut -f8)"
+    [ -n "$result_seconds" ] || result_seconds=0
+    [ -n "$revision" ] || revision=0
+    [ -n "$from_balance" ] || from_balance=0
+    token="$from>$to"
+    response_sig="$(member_mutation_sig member_transfer "$event_id" "$token" "$result_seconds" "$from_balance" "$revision")"
+    bp_json "$(printf '{"ok":true,"event_id":"%s","from_username":"%s","to_username":"%s","result_seconds":%s,"source_banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$from")" "$(bp_json_escape "$to")" "$result_seconds" "$from_balance" "$revision" "$response_sig")"
     ;;
   coin)
     bp_time_sane "$now" || bp_fail "router clock not synchronized"

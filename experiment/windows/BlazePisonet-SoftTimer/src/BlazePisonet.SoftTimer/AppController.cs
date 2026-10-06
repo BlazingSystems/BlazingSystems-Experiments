@@ -11,6 +11,7 @@ public sealed class AppController : IDisposable
     private readonly BlazePwifiClient _blazePwifi;
     private CentralizedServer? _centralServer;
     private readonly System.Windows.Forms.Timer _maintenanceTimer;
+    private readonly SemaphoreSlim _memberOperationGate = new(1, 1);
     private readonly List<LockForm> _locks = new();
     private readonly HashSet<string> _activeScheduleShutdownWindows = new(StringComparer.OrdinalIgnoreCase);
     private MainForm? _mainForm;
@@ -20,6 +21,7 @@ public sealed class AppController : IDisposable
     private bool _shutdownPrompted;
     private bool _warningPlayed;
     private DateTimeOffset _lastQueuePoll = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastMemberRecovery = DateTimeOffset.MinValue;
 
     public AppConfig Config { get; private set; }
     public TimerEngine Timer => _timer;
@@ -54,6 +56,11 @@ public sealed class AppController : IDisposable
         _blazeTimer.RemainingReceived += s => _timer.SetAuthoritativeSeconds(s, "Blaze Pisonet Timer");
         _blazeTimer.StatusChanged += s => { HardwareStatus = s; StatusChanged?.Invoke(); };
         _blazePwifi.StatusChanged += s => { IntegrationStatus = s; StatusChanged?.Invoke(); };
+        _blazePwifi.MembersReceived += snapshot =>
+        {
+            _timer.ApplyRemoteMembers(snapshot.Members, snapshot.Revision);
+            StatusChanged?.Invoke();
+        };
     }
 
     public void AttachMainForm(MainForm form) => _mainForm = form;
@@ -61,13 +68,39 @@ public sealed class AppController : IDisposable
     public void Start()
     {
         _security.StartKeyboardHook();
+
+        if (MemberReconciliationPending)
+            _timer.Pause(true);
+
         ConfigureRuntime();
         _maintenanceTimer.Start();
         EvaluateLockState();
+
+        if (MemberReconciliationPending)
+        {
+            SetLockStatus("MEMBER TRANSACTION PENDING · waiting for BlazePwifi reconciliation", false, true);
+            _ = RecoverPendingMemberOperationAsync();
+        }
     }
 
     public void ApplyConfig(AppConfig updated)
     {
+        var pending = _timer.PendingMemberOperation;
+        if (pending is not null)
+        {
+            var integrationChanged =
+                !updated.BlazePwifiEnabled
+                || !updated.BlazePwifiMemberAuthorityEnabled
+                || !string.Equals(updated.BlazePwifiVendoUrl, Config.BlazePwifiVendoUrl, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(updated.BlazePwifiVendoKey, Config.BlazePwifiVendoKey, StringComparison.Ordinal)
+                || !Storage.NormalizeId(updated.BlazePwifiControllerId)
+                    .Equals(Storage.NormalizeId(Config.BlazePwifiControllerId), StringComparison.OrdinalIgnoreCase);
+
+            if (integrationChanged)
+                throw new InvalidOperationException(
+                    $"Resolve the pending BlazePwifi member transaction ({pending.Action} · {pending.Username}) before disabling or changing central member integration.");
+        }
+
         Config = updated;
         Storage.SaveConfig(Config);
         _security.UpdateConfig(Config);
@@ -133,6 +166,12 @@ public sealed class AppController : IDisposable
     private async Task HandleCoinPulse()
     {
         if (!Config.Enabled) return;
+        if (MemberReconciliationPending)
+        {
+            HardwareStatus = "Coin ignored · member transaction reconciliation pending";
+            StatusChanged?.Invoke();
+            return;
+        }
         if (Config.CoinTopology == CoinTopologyMode.CentralizedCoordinator)
         {
             if (_centralServer is not null)
@@ -219,7 +258,7 @@ public sealed class AppController : IDisposable
             _security.SetLocked(false);
             return;
         }
-        var shouldLock = !_timer.IsActive || _forcedScheduleLock;
+        var shouldLock = !_timer.IsActive || _forcedScheduleLock || MemberReconciliationPending;
         if (shouldLock)
         {
             HideActiveTimer();
@@ -246,7 +285,7 @@ public sealed class AppController : IDisposable
         {
             var form = new LockForm(Config, screens[i], i == 0);
             form.RequestCoin += async () => await RequestCentralCoinAsync();
-            form.MemberLogin += () => OpenMemberLogin();
+            form.MemberLogin += () => _ = OpenMemberLoginAsync();
             form.AdminSequenceArmRequested += () => _security.ArmAdminSecret(TimeSpan.FromSeconds(Math.Max(5, Config.AdminSecretWindowSeconds)));
             form.UpdateRemaining(_timer.RemainingSeconds);
             _locks.Add(form);
@@ -274,7 +313,7 @@ public sealed class AppController : IDisposable
         if (_activeTimer is null || _activeTimer.IsDisposed)
         {
             _activeTimer = new ActiveTimerForm(Config);
-            _activeTimer.BankRequested += OpenMemberBankFromOverlay;
+            _activeTimer.BankRequested += () => _ = OpenMemberBankFromOverlayAsync();
             _activeTimer.UpdateRemaining(_timer.RemainingSeconds);
             _activeTimer.Show();
         }
@@ -292,21 +331,49 @@ public sealed class AppController : IDisposable
         _activeTimer = null;
     }
 
-    private void OpenMemberBankFromOverlay()
+    private async Task OpenMemberBankFromOverlayAsync()
     {
         if (!Config.AllowMemberBankFromOverlay || !_timer.IsActive) return;
         using var bank = new MemberBankForm();
         if (bank.ShowDialog() != DialogResult.OK) return;
 
-        if (_timer.BankCurrentTime(bank.Username, bank.Password))
+        if (!Config.BlazePwifiMemberAuthorityEnabled)
         {
-            SetLockStatus("Time banked to member account", true);
-            EvaluateLockState();
+            if (_timer.BankCurrentTime(bank.Username, bank.Password))
+            {
+                SetLockStatus("Time banked to member account", true);
+                EvaluateLockState();
+            }
+            else
+            {
+                MessageBox.Show(
+                    "Could not bank the remaining time. Check the member username/password.",
+                    "BlazePisonet SoftTimer",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            return;
         }
-        else
+
+        var member = await GetRemoteMemberAsync(bank.Username);
+        if (member is null)
         {
             MessageBox.Show(
-                "Could not bank the remaining time. Check the member username/password.",
+                "This member is not available in the BlazePwifi member list. Manage members from BlazePwifi Admin.",
+                "BlazePisonet SoftTimer",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        var seconds = _timer.RemainingSeconds;
+        if (seconds <= 0) return;
+
+        var ok = await CommitCentralBankAsync(member, bank.Password, seconds);
+        if (!ok)
+        {
+            MessageBox.Show(
+                "BlazePwifi did not conclusively confirm the member bank operation. Paid time is frozen and protected while the same transaction is reconciled.",
                 "BlazePisonet SoftTimer",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -341,19 +408,190 @@ public sealed class AppController : IDisposable
         });
     }
 
-    private void OpenMemberLogin()
+    private async Task OpenMemberLoginAsync()
     {
         using var login = new MemberLoginForm();
         if (login.ShowDialog() != DialogResult.OK) return;
-        if (!_timer.RestoreMemberTime(login.Username, login.Password))
+
+        if (!Config.BlazePwifiMemberAuthorityEnabled)
         {
-            SetLockStatus("Invalid member account or no banked time", false, true);
+            if (!_timer.RestoreMemberTime(login.Username, login.Password))
+            {
+                SetLockStatus("Invalid member account or no banked time", false, true);
+                return;
+            }
+            SetLockStatus("Member time restored", true);
             return;
         }
-        SetLockStatus("Member time restored", true);
+
+        var pending = _timer.PendingMemberOperation;
+        if (pending is not null && pending.Action == "member_bank")
+        {
+            if (!pending.Username.Equals(login.Username, StringComparison.OrdinalIgnoreCase))
+            {
+                SetLockStatus($"Pending BANK belongs to {pending.Username}", false, true);
+                return;
+            }
+
+            var bankMember = await GetRemoteMemberAsync(pending.Username);
+            if (bankMember is null || !bankMember.Enabled)
+            {
+                SetLockStatus("Pending member is unavailable in BlazePwifi", false, true);
+                return;
+            }
+
+            var bankOk = await CommitCentralBankAsync(bankMember, login.Password, pending.Seconds);
+            SetLockStatus(
+                bankOk ? $"Pending BANK reconciled · {pending.Username}" : "Pending BANK still needs BlazePwifi confirmation",
+                bankOk,
+                !bankOk);
+            return;
+        }
+
+        var member = await GetRemoteMemberAsync(login.Username);
+        if (member is null || !member.Enabled)
+        {
+            SetLockStatus("Member unavailable in BlazePwifi", false, true);
+            return;
+        }
+
+        var restored = await CommitCentralRestoreAsync(member, login.Password);
+        if (restored is null)
+        {
+            SetLockStatus("BlazePwifi member login failed, server is offline, or the transaction remains pending", false, true);
+            return;
+        }
+
+        SetLockStatus(
+            restored.Value > 0
+                ? $"Member time restored · {member.Username}"
+                : "Member authenticated · no banked time",
+            restored.Value > 0,
+            restored.Value <= 0);
     }
 
-    public bool BankTimeToMember(string user, string pass) => _timer.BankCurrentTime(user, pass);
+    private async Task<MemberAccount?> GetRemoteMemberAsync(string username)
+    {
+        var member = _timer.RemoteMember(username);
+        if (member is not null) return member;
+
+        await _blazePwifi.SyncMembersAsync();
+        return _timer.RemoteMember(username);
+    }
+
+    public async Task<bool> BankTimeToMemberAsync(string user, string pass)
+    {
+        if (!Config.BlazePwifiMemberAuthorityEnabled)
+            return _timer.BankCurrentTime(user, pass);
+
+        var member = await GetRemoteMemberAsync(user);
+        if (member is null || !_timer.IsActive) return false;
+
+        var seconds = _timer.RemainingSeconds;
+        return await CommitCentralBankAsync(member, pass, seconds);
+    }
+
+    private PendingMemberOperation? EnsurePendingMemberOperation(
+        string action,
+        MemberAccount member,
+        string memberToken,
+        long seconds)
+    {
+        var existing = _timer.PendingMemberOperation;
+        if (existing is not null)
+        {
+            if (existing.Action.Equals(action, StringComparison.Ordinal)
+                && existing.Username.Equals(member.Username, StringComparison.OrdinalIgnoreCase)
+                && existing.MemberToken.Equals(memberToken, StringComparison.OrdinalIgnoreCase))
+                return existing;
+
+            IntegrationStatus = $"Resolve pending {existing.Action} for {existing.Username} first";
+            StatusChanged?.Invoke();
+            return null;
+        }
+
+        var pending = new PendingMemberOperation
+        {
+            Action = action,
+            Username = member.Username,
+            MemberToken = memberToken,
+            EventId = _blazePwifi.CreateMemberEventId(action, memberToken, member.Revision, seconds),
+            Seconds = seconds,
+            MemberRevision = member.Revision,
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
+        _timer.SetPendingMemberOperation(pending);
+        _timer.Pause(true);
+        EvaluateLockState();
+        SetLockStatus($"VERIFYING MEMBER · {member.Username}", false, true);
+        return pending;
+    }
+
+    private async Task<bool> CommitCentralBankAsync(MemberAccount member, string password, long seconds)
+    {
+        await _memberOperationGate.WaitAsync();
+        try
+        {
+            var pending = EnsurePendingMemberOperation("member_bank", member, member.Username, seconds);
+            if (pending is null) return false;
+
+            var result = await _blazePwifi.BankMemberAsync(member, password, pending.Seconds, pending.EventId);
+            if (result is null)
+            {
+                _timer.Pause(true);
+                EvaluateLockState();
+                return false;
+            }
+
+            _timer.Reset($"banked to BlazePwifi member {member.Username}");
+            _timer.ClearPendingMemberOperation(pending.EventId);
+            _timer.Pause(false);
+            await _blazePwifi.SyncMembersAsync();
+            EvaluateLockState();
+            return true;
+        }
+        finally
+        {
+            _memberOperationGate.Release();
+        }
+    }
+
+    private async Task<long?> CommitCentralRestoreAsync(MemberAccount member, string password)
+    {
+        await _memberOperationGate.WaitAsync();
+        try
+        {
+            var pending = EnsurePendingMemberOperation("member_restore", member, member.Username, 0);
+            if (pending is null) return null;
+
+            var result = await _blazePwifi.RestoreMemberAsync(member, password, pending.EventId);
+            if (result is null)
+            {
+                _timer.Pause(true);
+                EvaluateLockState();
+                return null;
+            }
+
+            if (result.ResultSeconds > 0)
+            {
+                _timer.AddSeconds(
+                    result.ResultSeconds,
+                    $"blazepwifi-member:{pending.EventId}",
+                    false,
+                    $"BlazePwifi member time restored: {member.Username}");
+            }
+
+            _timer.ClearPendingMemberOperation(pending.EventId);
+            _timer.Pause(false);
+            await _blazePwifi.SyncMembersAsync();
+            EvaluateLockState();
+            return result.ResultSeconds;
+        }
+        finally
+        {
+            _memberOperationGate.Release();
+        }
+    }
 
     private async Task MaintenanceTick()
     {
@@ -362,6 +600,13 @@ public sealed class AppController : IDisposable
         {
             if (!_serial.IsConnected) _serial.TryReconnect(Config);
             if (Config.TimerSource == TimerSourceMode.ExternalTimerBoard) UpdateExternalBoard();
+        }
+
+        if (MemberReconciliationPending
+            && DateTimeOffset.UtcNow - _lastMemberRecovery >= TimeSpan.FromSeconds(5))
+        {
+            _lastMemberRecovery = DateTimeOffset.UtcNow;
+            await RecoverPendingMemberOperationAsync();
         }
 
         EvaluateSchedules();
@@ -377,6 +622,56 @@ public sealed class AppController : IDisposable
                 if (state.Position == 0) SetLockStatus("COIN SLOT READY · INSERT COIN", true);
                 else if (state.Position > 0) SetLockStatus($"Waiting for coin slot · queue position {state.Position}", false, true);
             }
+        }
+    }
+
+    private bool MemberReconciliationPending =>
+        Config.BlazePwifiMemberAuthorityEnabled && _timer.PendingMemberOperation is not null;
+
+    private async Task<bool> RecoverPendingMemberOperationAsync()
+    {
+        await _memberOperationGate.WaitAsync();
+        try
+        {
+            var pending = _timer.PendingMemberOperation;
+            if (pending is null || !Config.BlazePwifiMemberAuthorityEnabled)
+                return true;
+
+            _timer.Pause(true);
+            var result = await _blazePwifi.ReplayMemberOperationAsync(pending);
+        if (result is null)
+        {
+            IntegrationStatus = $"Member reconciliation pending · {pending.Action} · {pending.Username}";
+            SetLockStatus("MEMBER TRANSACTION PENDING · reconnect BlazePwifi or retry with member password", false, true);
+            StatusChanged?.Invoke();
+            EvaluateLockState();
+            return false;
+        }
+
+        if (pending.Action == "member_bank")
+        {
+            _timer.Reset($"reconciled bank to BlazePwifi member {pending.Username}");
+        }
+        else if (pending.Action == "member_restore" && result.ResultSeconds > 0)
+        {
+            _timer.AddSeconds(
+                result.ResultSeconds,
+                $"blazepwifi-member:{pending.EventId}",
+                false,
+                $"Recovered BlazePwifi member restore: {pending.Username}");
+        }
+
+        _timer.ClearPendingMemberOperation(pending.EventId);
+        _timer.Pause(false);
+        await _blazePwifi.SyncMembersAsync();
+        IntegrationStatus = "BlazePwifi member transaction reconciled";
+        StatusChanged?.Invoke();
+            EvaluateLockState();
+            return true;
+        }
+        finally
+        {
+            _memberOperationGate.Release();
         }
     }
 
@@ -500,6 +795,7 @@ public sealed class AppController : IDisposable
         HideLocks();
         HideActiveTimer();
         WarningSound.Stop();
+        _memberOperationGate.Dispose();
         _centralServer?.Dispose();
         _blazePwifi.Dispose();
         _blazeTimer.Dispose();
