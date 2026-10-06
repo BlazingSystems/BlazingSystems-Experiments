@@ -47,7 +47,7 @@ Official reference: https://support.google.com/work/android/answer/16694822
 
 ## Checksum canonicalization
 
-Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC3 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
+Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC4 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
 
 ## Release gate
 
@@ -70,13 +70,13 @@ Do not promote Device Owner provisioning to stable production status until:
 The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, or privileged platform exploits.
 
 
-## ESP scope in RC3
+## ESP scope in RC4
 
-ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC3 does not claim Android Device Provisioning QR parity on ESP.
+ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC4 does not claim Android Device Provisioning QR parity on ESP.
 
 Current ESP Rental Server onboarding is a manual one-time server/token enrollment flow. The ESP firmware does not embed the OpenWrt QR renderer or release-bound Android DPC APK/checksum metadata. Adding those features must be evaluated separately against ESP flash/RAM limits and must use the same distinct Standard Enrollment vs Device Provisioning contract if implemented.
 
-Therefore RC3 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.
+Therefore RC4 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.
 
 
 ## TEST signing continuity
