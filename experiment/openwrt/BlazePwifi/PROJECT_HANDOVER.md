@@ -2,7 +2,33 @@
 
 **Last updated:** 2026-10-05  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
-**Development state:** BlazePwifi v0.5.0 prerelease is published, validated, and the full released implementation is now integrated into `main`. Android production signing remains blocked only by unavailable locked v0.4 private signing material.
+**Development state:** BlazePwifi v0.5.1 maintenance release is in active implementation/validation. v0.5.0 remains the current published validated prerelease. Android production signing still requires the exact locked v0.4 signing identity.
+
+## Active v0.5.1 maintenance target
+
+The owner requested a maintenance release that eliminates full-system reflashing for ordinary feature/revision upgrades and adds safe rollback for BlazePwifi and BlazeRental.
+
+Implemented on `blazepwifi-v0.5.1-implementation`:
+
+- Transactional BlazePwifi overlay updater with exact SHA-256 verification.
+- Configurable HTTPS update source, size bound, stability grace and rollback retention.
+- Last-known-good snapshots before file replacement.
+- Immediate health-check rollback and boot-health rollback guard.
+- Manual rollback from Management Console → Updates & Recovery.
+- Idempotent configuration migration; normal feature bundles do not overwrite persistent operator/session state.
+- One-time v0.5.0 → v0.5.1 no-reflash bootstrap updater.
+- Build-time `BlazePwifi-v0.5.1-update.tar.gz` generation.
+- BlazeRental v0.5.1 version code `50100`.
+- BlazeRental managed updater verifies SHA-256, package name and installed signing identity.
+- Previous APK/version metadata retained; new build becomes stable only after a 30-second launcher health window.
+- Known-good v0.5.0 rollback rescue is rebuilt from exact RC9 source `66e159b65b6d8fb5f74dd981dc73d46db7229adc` using recovery-only version code `50101`.
+- Repeated failed boots while a Rental update remains pending can stage the configured rescue APK.
+- Native Rental Admin update/check/rollback controls.
+- Central Rental Update Manager in the BlazePwifi console.
+- Locked v0.5.1 production signer workflow signs both current and rescue APKs with the exact existing certificate and refuses rotation.
+- v0.5.1 release workflow supports validated prerelease publication if the locked signer remains unavailable.
+
+Full firmware/sysupgrade remains reserved for base-system changes such as kernel, bootloader, partition/ABI or filesystem changes that cannot safely be delivered as an overlay.
 
 ## Main branch integration status
 
