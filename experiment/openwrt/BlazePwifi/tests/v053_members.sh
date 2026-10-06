@@ -34,7 +34,23 @@ bp_member_init
 bp_member_lock
 bp_member_create alice "Alice Member" 'alpha123' test >/dev/null
 bp_member_create bob "Bob Member" 'beta1234' test >/dev/null
+bp_member_create nolabel "" 'nolabel99' test >/dev/null
 bp_member_unlock
+
+# Optional empty labels must not shift tab fields or corrupt auth/balance/password operations.
+NO_LABEL_LINE="$(bp_member_line nolabel)"
+[ "$(printf '%s' "$NO_LABEL_LINE" | cut -f2)" = "" ]
+[ "$(printf '%s' "$NO_LABEL_LINE" | cut -f3)" = 1 ]
+[ "$(printf '%s' "$NO_LABEL_LINE" | cut -f4)" = sha256i ]
+bp_member_verify_password nolabel 'nolabel99'
+bp_member_lock
+bp_member_balance_change nolabel add 120 test "" >/dev/null
+bp_member_set_password nolabel 'nolabel-new99' test >/dev/null
+bp_member_patch nolabel "Now Labeled" @keep test >/dev/null
+bp_member_unlock
+bp_member_verify_password nolabel 'nolabel-new99'
+[ "$(printf '%s' "$(bp_member_line nolabel)" | cut -f8)" -eq 120 ]
+[ "$(printf '%s' "$(bp_member_line nolabel)" | cut -f2)" = "Now Labeled" ]
 
 ALICE_LINE="$(bp_member_line alice)"
 ALICE_HASH="$(printf '%s' "$ALICE_LINE" | cut -f6)"
@@ -139,4 +155,4 @@ grep -Fq 'member_snapshot)' "$VENDO"
 ! grep -Fq '\${BP_AUTH_MUST_CHANGE' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
 ! grep -Fq '"hash":"%s"' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/member.sh"
 
-echo 'BlazePwifi v0.5.3-dev.3 centralized SoftTimer member checks passed'
+echo 'BlazePwifi centralized SoftTimer member checks passed'
