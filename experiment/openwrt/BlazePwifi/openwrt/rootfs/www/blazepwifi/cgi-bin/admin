@@ -117,7 +117,7 @@ case "$action" in
     fi
     ;;
   rental_provisioning_qr)
-    require_role operator
+    require_role admin
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_provisioning_validate || bp_fail "device provisioning unavailable: exact APK URL/checksum metadata missing"
     if [ "$gms_dpc_approved" != 1 ]; then
