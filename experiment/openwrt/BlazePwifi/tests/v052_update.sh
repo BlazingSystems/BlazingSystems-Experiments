@@ -5,7 +5,6 @@ LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/update.sh"
 BOOT="$ROOT/tools/BlazePwifi-v0.5.2-update-bootstrap.sh"
 BUILD="$ROOT/tools/build-update-bundle.sh"
 
-[ "$(cat "$ROOT/VERSION")" = "0.5.2" ]
 sh -n "$LIB"
 sh -n "$BOOT"
 sh -n "$BUILD"
@@ -35,4 +34,4 @@ bp_update_apply "$TMP/update.tar.gz" "$BUNDLE_SHA"
 bp_update_manual_rollback
 [ "$(cat "$TARGET")" = stable ]
 [ ! -e "$BP_UPDATE_PENDING" ]
-echo "v0.5.2 transactional update/rollback tests passed"
+echo "v0.5.2 transactional update/rollback compatibility tests passed"
