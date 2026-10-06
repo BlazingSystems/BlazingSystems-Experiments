@@ -54,15 +54,19 @@ bp_provisioning_validate() {
   apk_code="$(bp_provisioning_meta_get APK_VERSION_CODE)"
   apk_channel="$(bp_provisioning_meta_get APK_CHANNEL)"
   production_ready="$(bp_provisioning_meta_get PRODUCTION_READY)"
+  gms_dpc_approved="$(bp_provisioning_meta_get GMS_DPC_APPROVED)"
   [ "$ready" = 1 ] || return 1
   case "$apk_url" in https://*) ;; *) return 1;; esac
   printf '%s' "$apk_url" | grep -q '[[:space:][:cntrl:]]' && return 1
-  printf '%s' "$apk_checksum" | grep -Eq '^[A-Za-z0-9_-]{43}$' || return 1
+  # Android documents this as URL-safe Base64 SHA-256. Use canonical
+  # padded Base64URL (32 bytes => 44 chars ending in '=') for Setup Wizard.
+  printf '%s' "$apk_checksum" | grep -Eq '^[A-Za-z0-9_-]{43}=$' || return 1
   printf '%s' "$apk_sha256" | grep -Eq '^[A-Fa-f0-9]{64}$' || return 1
   printf '%s' "$apk_code" | grep -Eq '^[0-9]+$' || return 1
   [ -n "$apk_version" ] || return 1
   case "$apk_channel" in test|production) ;; *) return 1;; esac
   case "$production_ready" in 0|1) ;; *) return 1;; esac
+  case "$gms_dpc_approved" in 0|1) ;; *) return 1;; esac
   [ "$apk_channel" != production ] || [ "$production_ready" = 1 ] || return 1
   return 0
 }
@@ -104,8 +108,10 @@ case "$action" in
   rental_provisioning_status)
     require_role viewer
     if bp_provisioning_validate; then
-      bp_json "$(printf '{"ok":true,"ready":true,"apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
-        "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready")"
+      gms_warning=false
+      [ "$gms_dpc_approved" = 1 ] || gms_warning=true
+      bp_json "$(printf '{"ok":true,"ready":true,"apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"custom_dpc_gms_warning":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
+        "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$gms_warning")"
     else
       bp_json '{"ok":true,"ready":false,"production_ready":false,"error":"exact provisionable BlazeRental APK metadata unavailable"}'
     fi
@@ -114,6 +120,12 @@ case "$action" in
     require_role operator
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_provisioning_validate || bp_fail "device provisioning unavailable: exact APK URL/checksum metadata missing"
+    if [ "$gms_dpc_approved" != 1 ]; then
+      case "$(bp_param ack_custom_dpc)" in
+        1|true|yes|on) ;;
+        *) bp_fail "custom DPC is not Android Enterprise approved; use only on AOSP/non-GMS or explicitly supported test devices" ;;
+      esac
+    fi
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
     server="$(bp_admin_rental_server_url)" || bp_fail "invalid server url"
     ssid="$(bp_param wifi_ssid)"
@@ -135,8 +147,8 @@ case "$action" in
     token="$(bp_rental_enroll_create "$label" 3600)"
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s:%s:%s' "$apk_channel" "$apk_version" "$label" | cut -c1-120)"
-    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v1","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"qr_payload":"%s"}' \
-      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$(bp_json_escape "$qr_payload")")"
+    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v1","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"qr_payload":"%s"}' \
+      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$qr_payload")")"
     ;;
   rental_list|rental_device_list)
     require_role viewer

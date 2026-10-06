@@ -35,6 +35,12 @@ cp -p "$PROFILE_ROOT/openwrt/install.sh" "$FILES/usr/share/blazepwifi-rental-ins
 cp -p "$PROFILE_ROOT/openwrt/upgrade-to-full.sh" "$FILES/usr/share/blazepwifi-rental-installer/upgrade-to-full.sh"
 cp -p "$PROFILE_ROOT/openwrt/rental-profile" "$FILES/usr/share/blazepwifi-rental-installer/rental-profile"
 cp -p "$PROFILE_ROOT/openwrt/rental-standalone.html" "$FILES/usr/share/blazepwifi-rental-installer/rental-standalone.html"
+
+PROVISIONING_META="${RENTAL_PROVISIONING_META:-$PROFILE_ROOT/openwrt/rental-provisioning.env}"
+[ -f "$PROVISIONING_META" ] || { echo "provisioning metadata missing: $PROVISIONING_META" >&2; exit 1; }
+cp -p "$PROVISIONING_META" "$FILES/usr/share/blazepwifi-rental-installer/rental-provisioning.env"
+cp -p "$PROVISIONING_META" "$FILES/usr/share/blazepwifi/rental-provisioning.env"
+
 chmod 755 "$FILES/usr/share/blazepwifi-rental-installer/"*.sh "$FILES/usr/share/blazepwifi-rental-installer/rental-profile"
 
 cat > "$FILES/etc/uci-defaults/98-blazepwifi-rental-standalone" <<EOF
@@ -99,7 +105,7 @@ esac
 
 cat > "$OUT/BUILD-MANIFEST.txt" <<EOF
 Edition: BlazePwifi Rental Standalone
-Edition version: 0.5.2-rental.2-rc.2
+Edition version: 0.5.2-rental.2-rc.3
 OpenWrt version: $VER
 Target: $TARGET
 OpenWrt target: $SUB
@@ -109,6 +115,11 @@ Hotspot core activated by image first boot: no
 Rental management route: /rental/
 Android server base: http://LocalIP
 Remote coin protocol port: 4455
+Provisioning metadata source: $PROVISIONING_META
+Provisioning ready: $(awk -F= '$1=="READY"{print $2;exit}' "$PROVISIONING_META" 2>/dev/null || true)
+Provisioning APK version: $(awk -F= '$1=="APK_VERSION"{print $2;exit}' "$PROVISIONING_META" 2>/dev/null || true)
+Provisioning APK channel: $(awk -F= '$1=="APK_CHANNEL"{print $2;exit}' "$PROVISIONING_META" 2>/dev/null || true)
+GMS DPC approved flag: $(awk -F= '$1=="GMS_DPC_APPROVED"{print $2;exit}' "$PROVISIONING_META" 2>/dev/null || true)
 Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 (cd "$OUT" && sha256sum * | grep -v ' SHA256SUMS$' > SHA256SUMS)

@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.2
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.3
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -43,7 +43,7 @@ Password: admin
 Existing admin accounts are preserved. The normal password-change action still requires a stronger password.
 
 
-## 0.5.2-rental.2-rc.2 UI hotfix
+## 0.5.2-rental.2-rc.3 UI hotfix
 
 Rental mutations now submit CSRF through both the custom header and form body, with one authenticated token refresh/retry on mismatch. This specifically fixes QR enrollment creation on R281/uHTTPd paths where custom CGI headers may not be reliable.
 
@@ -56,3 +56,12 @@ This release candidate deliberately separates:
 - **Device Provisioning QR** — for Android Setup Wizard on a new/factory-reset phone; exact DPC APK URL/checksum plus one-time server binding extras.
 
 Device Provisioning is fail-closed when exact APK metadata is not installed.
+
+
+## RC3 provisioning boundary
+
+Standard Enrollment and Device Provisioning are independent contracts. Device Provisioning uses an exact release APK/checksum and is still a prerelease path.
+
+The provisioning metadata includes `GMS_DPC_APPROVED`. When it is `0`, the server/API/UI require an explicit acknowledgement and label the custom-DPC QR for AOSP/non-GMS or explicitly supported test devices only. Google-certified devices may block a non-approved custom DPC during Setup Wizard.
+
+The Setup Wizard package checksum is canonical padded Base64URL SHA-256 and is cross-checked against the exact published APK.

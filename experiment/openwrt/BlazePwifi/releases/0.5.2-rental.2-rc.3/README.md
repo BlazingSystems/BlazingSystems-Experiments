@@ -1,0 +1,40 @@
+# BlazePwifi Standalone Rental Server v0.5.2-rental.2-rc.3
+
+RC3 continues the provisioning architecture audit and keeps RC1/RC2 immutable.
+
+## RC3 corrections
+
+- uses canonical padded Base64URL SHA-256 for `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM`;
+- publishes exact APK SHA-256, Setup Wizard checksum, and TEST signer-certificate SHA-256;
+- OpenWrt tar/OneClick and EW1200G/x86 firmware receive provisioning metadata through the same release-metadata builder;
+- adds `GMS_DPC_APPROVED` to the metadata/API contract;
+- requires explicit acknowledgement before generating a Device Provisioning QR when the DPC is not declared approved for GMS provisioning;
+- labels that path for AOSP/non-GMS or explicitly supported test targets rather than implying universal Android compatibility.
+
+## Google-certified Android limitation
+
+Google-certified Android can block a custom DPC that is not approved for Android Enterprise provisioning. BlazeRental RC3 does not claim universal Device Owner provisioning support on those devices.
+
+Official policy reference:
+https://support.google.com/work/android/answer/16694822
+
+## QR contracts
+
+**Standard Enrollment QR**
+- scanned inside already-installed BlazeRental;
+- schema `blazerental.enrollment.v1`;
+- 10-minute one-time server binding token;
+- no Device Owner claim.
+
+**Device Provisioning QR**
+- scanned from Android Setup Wizard on new/factory-reset devices;
+- schema `blazerental.provisioning.v1`;
+- exact HTTPS TEST APK asset;
+- canonical padded Base64URL SHA-256 package checksum;
+- Android integrated provisioning activities;
+- one-hour one-time server enrollment token;
+- explicit custom-DPC/GMS warning gate.
+
+## Promotion boundary
+
+Still a prerelease. Stable promotion requires physical Setup Wizard validation on intended hardware/Android versions, production signing continuity, and a supported policy/compliance path for the intended deployment environment.

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental.2-rc.2"
+PROFILE_VERSION="0.5.2-rental.2-rc.3"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -154,6 +154,7 @@ APK_VERSION=
 APK_VERSION_CODE=
 APK_CHANNEL=
 PRODUCTION_READY=0
+GMS_DPC_APPROVED=0
 EOF
 fi
 chmod 644 /usr/share/blazepwifi/rental-provisioning.env
@@ -285,8 +286,13 @@ echo "Android API:       http://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
 PROV_READY="$(awk -F= '$1=="READY"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
 PROV_CHANNEL="$(awk -F= '$1=="APK_CHANNEL"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
+PROV_GMS="$(awk -F= '$1=="GMS_DPC_APPROVED"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
 if [ "$PROV_READY" = 1 ]; then
-  echo "Device provisioning: available ($PROV_CHANNEL channel)"
+  if [ "$PROV_GMS" = 1 ]; then
+    echo "Device provisioning: available ($PROV_CHANNEL channel; GMS DPC approval declared)"
+  else
+    echo "Device provisioning: TEST/AOSP-non-GMS only ($PROV_CHANNEL channel; custom DPC not GMS-approved)"
+  fi
 else
   echo "Device provisioning: unavailable (exact APK metadata not installed)"
 fi

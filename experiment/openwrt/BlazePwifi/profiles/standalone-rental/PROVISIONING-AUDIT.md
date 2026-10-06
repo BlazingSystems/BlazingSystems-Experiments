@@ -35,6 +35,20 @@ Two QR formats are intentionally separate and must never be treated as interchan
 8. The previous Rental release workflow reused a v0.5.1 TEST APK. The provisioning RC builds, test-signs, verifies, and publishes its exact Launcher3 APK in the same pipeline and injects the exact checksum metadata into OpenWrt bundles/images.
 9. The generic 0.5.2 compatibility test had a stale version whitelist; this was corrected so CI failures are meaningful.
 
+## Google-certified Android / custom DPC compatibility
+
+Current Android Enterprise policy can block custom DPC installation during enterprise enrollment when the DPC is not verified/approved by Android Enterprise. BlazeRental must therefore not advertise custom Device Owner QR provisioning as universally production-compatible on GMS/Play-Protect devices.
+
+The server metadata carries `GMS_DPC_APPROVED`. When it is `0`, both the API and UI require an explicit custom-DPC acknowledgement and label the QR for AOSP/non-GMS or explicitly supported test targets only.
+
+Android Enterprise also states that device-financing / hardware-lease control solutions are not permitted scenarios for DPC approval. Production planning must account for that policy constraint rather than assuming an approval path exists.
+
+Official reference: https://support.google.com/work/android/answer/16694822
+
+## Checksum canonicalization
+
+Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC3 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
+
 ## Release gate
 
 The provisioning implementation is intentionally released first as a release candidate.
