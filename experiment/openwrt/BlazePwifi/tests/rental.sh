@@ -49,6 +49,42 @@ echo "$OUT" | grep -q '"allowed_packages":"com.android.chrome,com.example.game"'
 echo "$OUT" | grep -q '"preferred_vendo":"vendo-02"'
 echo "$OUT" | grep -q '"admin_salt":"[0-9a-f]'
 echo "$OUT" | grep -q '"policy_sig":"[0-9a-f]'
+echo "$OUT" | grep -q '"coin_window_expires_ms":0'
+echo "$OUT" | grep -q '"coin_window_sig":"[0-9a-f]'
+
+# Opening a rental coin window is authenticated, server-timed and recoverable
+# through status. The returned reservation state has its own HMAC.
+NC=coinopen123
+SIGC="$(bp_rental_hmac "$DSEC" "coin_start|$NC|$DSEC")"
+COIN="$(printf 'action=coin_start&device_id=%s&nonce=%s&sig=%s' "$DID" "$NC" "$SIGC" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$COIN" | grep -q '"ok":true'
+echo "$COIN" | grep -q '"vendo":"vendo-02"'
+CS="$(printf '%s' "$COIN" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+CE="$(printf '%s' "$COIN" | sed -n 's/.*"expires_ms":\([0-9]*\).*/\1/p')"
+CG="$(printf '%s' "$COIN" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
+[ -n "$CS" ] && [ -n "$CE" ] && [ "$CE" -gt "$CS" ]
+[ "$CG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$CS|$CE|vendo-02")" ]
+[ -f "$BP_TARGET_DIR/vendo-02.tsv" ]
+[ "$(cut -f6 "$BP_TARGET_DIR/vendo-02.tsv")" = rental ]
+
+NS=coinstatus123
+SIGS="$(bp_rental_hmac "$DSEC" "status|$NS|$DSEC")"
+COINSTATUS="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$NS" "$SIGS" | REQUEST_METHOD=POST sh "$CGI")"
+SS="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+SE="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_expires_ms":\([0-9]*\).*/\1/p')"
+SV="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_vendo":"\([^"]*\)".*/\1/p')"
+SG="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
+[ "$SE" = "$CE" ] && [ "$SV" = vendo-02 ]
+[ "$SG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$SS|$SE|$SV")" ]
+
+NX=coinstop123
+SIGX="$(bp_rental_hmac "$DSEC" "coin_stop|$NX|$DSEC")"
+STOP="$(printf 'action=coin_stop&device_id=%s&nonce=%s&sig=%s' "$DID" "$NX" "$SIGX" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$STOP" | grep -q '"ok":true'
+XS="$(printf '%s' "$STOP" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+XG="$(printf '%s' "$STOP" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
+[ "$XG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$XS|0|")" ]
+[ ! -f "$BP_TARGET_DIR/vendo-02.tsv" ]
 
 R1="$(bp_rental_apply_coin "$DID" vendo-02 aabbccdd 11223344 2)"
 echo "$R1" | grep -q '^credited'
