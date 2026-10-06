@@ -126,8 +126,14 @@ jobs:
           if (-not (Test-Path $app)) { throw 'Installed SoftTimer EXE missing' }
           if (-not (Test-Path $watchdog)) { throw 'Installed watchdog EXE missing' }
 
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) { throw 'SoftTimer startup task was not created' }
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) { throw 'Watchdog startup task was not created' }
+          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) {
+            if (Test-Path $setupLog) { Get-Content $setupLog -Tail 250 }
+            throw 'SoftTimer startup task was not created'
+          }
+          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) {
+            if (Test-Path $setupLog) { Get-Content $setupLog -Tail 250 }
+            throw 'Watchdog startup task was not created'
+          }
 
           $uninstaller=Get-ChildItem $install -Filter 'unins*.exe' | Select-Object -First 1
           if (-not $uninstaller) { throw 'Native uninstaller EXE missing' }
