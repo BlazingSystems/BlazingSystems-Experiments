@@ -13,6 +13,6 @@ done
 grep -q 'BlazeRentalLauncher' "$WF"
 grep -q 'esp8266' "$WF"
 grep -q 'esp32' "$WF"
-grep -Eq 'BlazeRental-v0\.(4|5)\.0' "$WF"
+grep -Eq 'BlazeRental-v0\.(4\.0|5\.[01])' "$WF"
 grep -q '"release": "0.4.0"' "$ROOT/releases/0.4.0/manifest.json"
 echo "v0.4 compatibility build matrix contract passed"
