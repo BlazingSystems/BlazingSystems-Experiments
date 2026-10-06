@@ -71,6 +71,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v053_console_ops.sh
       - name: BlazePwifi v0.5.3 WireGuard network-survival validation
         run: sh experiment/openwrt/BlazePwifi/tests/v053_wireguard_apply.sh
+      - name: BlazePwifi v0.5.3 ZeroTier compatibility and activation validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v053_zerotier_apply.sh
       - name: BlazePwifi v0.4 build matrix validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation
