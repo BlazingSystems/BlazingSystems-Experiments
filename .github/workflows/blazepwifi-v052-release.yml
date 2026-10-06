@@ -84,7 +84,7 @@ jobs:
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           test -n "$GATE" -a -s "$GATE"
           test "$(jq -r .status "$GATE")" = passed
-          test "$(jq -r .release "$GATE")" = 0.5.1
+          test "$(jq -r .release "$GATE")" = 0.5.2
           test "$(jq -r .commit "$GATE")" = "${{ steps.req.outputs.sha }}"
 
       - name: Download locked production APK when available
@@ -97,7 +97,7 @@ jobs:
           mkdir -p artifacts/signed
           gh run download "$SIGN_RUN" --repo "${{ github.repository }}" --name BlazeRental-v0.5.2-production-signed --dir artifacts/signed
           test -s artifacts/signed/BlazeRental.apk
-          test "$(jq -r .release artifacts/signed/SIGNING-MANIFEST.json)" = 0.5.1
+          test "$(jq -r .release artifacts/signed/SIGNING-MANIFEST.json)" = 0.5.2
           test "$(jq -r .candidate_sha artifacts/signed/SIGNING-MANIFEST.json)" = "${{ steps.req.outputs.sha }}"
 
       - name: Assemble release assets
@@ -146,7 +146,7 @@ jobs:
           cp experiment/openwrt/BlazePwifi/releases/0.5.2/README.md release-out/README.md
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           cp "$GATE" release-out/CANDIDATE-GATE.json
-          jq -n --arg release "0.5.1" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" \
+          jq -n --arg release "0.5.2" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" \
             '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:($sign!="0"),transactional_update:"blazepwifi-overlay-v1",rollback_rescue:"0.5.1-rescue-for-0.5.2",android_package:"com.blazesystems.blazerental"}' \
             > release-out/RELEASE-MANIFEST.json
           (cd release-out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
@@ -166,7 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG=v0.5.2
-          NOTES=experiment/openwrt/BlazePwifi/releases/0.5.1/README.md
+          NOTES=experiment/openwrt/BlazePwifi/releases/0.5.2/README.md
           EXTRA=()
           if [ "$SIGN_RUN" = 0 ]; then EXTRA+=(--prerelease); fi
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
