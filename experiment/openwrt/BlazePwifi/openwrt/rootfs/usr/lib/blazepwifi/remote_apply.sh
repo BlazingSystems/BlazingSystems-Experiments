@@ -170,7 +170,12 @@ bp_remote_connected_routes() {
     sh -c "$BP_REMOTE_CONNECTED_ROUTES_HOOK"
     return
   fi
-  ip -4 route show scope link 2>/dev/null | awk '
+  ip -4 route show scope link 2>/dev/null | awk -v wg="$BP_REMOTE_WG_IF" '
+    {
+      dev=""
+      for(i=1;i<=NF;i++) if($i=="dev" && i<NF) dev=$(i+1)
+      if(dev==wg) next
+    }
     $1=="default"{next}
     $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/ {print $1; next}
     $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print $1"/32"}
@@ -252,6 +257,7 @@ bp_remote_snapshot_create() {
     name="${pair%%:*}"; file="${pair#*:}"
     if [ -f "$file" ]; then
       cp -p "$file" "$snap/$name" || return 1
+      chmod 600 "$snap/$name" 2>/dev/null || true
     else
       : > "$snap/$name.absent"
     fi
