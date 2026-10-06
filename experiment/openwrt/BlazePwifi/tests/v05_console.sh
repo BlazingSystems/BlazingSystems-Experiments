@@ -39,6 +39,7 @@ grep -Fq 'activation is intentionally not applied yet' "$ADMIN"
 grep -Fq "let terminalToken='',remoteLoadGeneration=0" "$W/admin/console-v05.js"
 grep -Fq 'generation!==remoteLoadGeneration' "$W/admin/console-v05.js"
 grep -Fq '++remoteLoadGeneration' "$W/admin/console-v05.js"
+grep -Fq 'renderRemoteStatus(x.remote||{})' "$W/admin/console-v05.js"
 ! grep -Fq 'localStorage' "$W/admin/console-v05.js"
 ! grep -Fq 'sessionStorage' "$W/admin/console-v05.js"
 
