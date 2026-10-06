@@ -73,7 +73,7 @@ public final class LeaseClient {
         coinWindowReceivedCents = 0;
     }
 
-    public static boolean sync(Context context) {
+    public static synchronized boolean sync(Context context) {
         try {
             String base = RentalLeaseStore.server(context);
             if (base.length() == 0) return false;
