@@ -201,6 +201,7 @@ bp_remote_zerotier_apply 192.168.1.10
 [ "$(bp_remote_zt_runtime_get address)" = 10.77.0.2/24 ]
 [ "$(bp_remote_runtime_get wg_listener)" = 10.77.0.2:8443 ]
 [ ! -e "$BP_REMOTE_PENDING" ]
+[ ! -d "$BP_REMOTE_APPLY_ROOT/snapshots/$(bp_remote_runtime_get apply_id)" ]
 [ -e "$ADMIN_STATE" ]
 grep -q '^zerotier.blazepwifi=network' "$BP_REMOTE_ZT_CONFIG"
 grep -q '^zerotier.blazepwifi.allow_managed=1' "$BP_REMOTE_ZT_CONFIG"
@@ -232,6 +233,7 @@ set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
 [ "$(bp_remote_activation_state)" = active_staged_changes ]
 [ -e "$ADMIN_STATE" ]
 [ ! -e "$BP_REMOTE_PENDING" ]
+[ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
 ZT_STATUS=OK
 
 # Unsafe managed default route must be rejected and rolled back.
@@ -258,6 +260,7 @@ bp_remote_guard "$WATCH_ID"
 [ "$(bp_remote_runtime_get last_error)" = watchdog-timeout ]
 [ -e "$ADMIN_STATE" ]
 [ ! -e "$BP_REMOTE_PENDING" ]
+[ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
 
 # WireGuard cannot be applied over an active ZeroTier transport.
 bp_remote_save wireguard 1 1 1 BlazePwifi-Test Lab 10.20.0.0/24 30 120   198.51.100.8 51820 10.20.0.2/32 BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB= 10.20.0.0/24 25 10.20.0.1 1420 ''
@@ -284,6 +287,12 @@ grep -q '^zerotier.global.enabled=0' "$BP_REMOTE_ZT_CONFIG"
 ! grep -q '^zerotier.blazepwifi=' "$BP_REMOTE_ZT_CONFIG"
 [ ! -e "$ADMIN_STATE" ]
 [ ! -e "$BP_REMOTE_PENDING" ]
+
+# Boot guard removes completed/orphaned historical snapshots when no transaction is pending.
+mkdir -p "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old"
+printf 'secret-old\n' > "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old/zerotier"
+bp_remote_guard_boot
+[ ! -d "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old" ]
 
 # A staged ZeroTier apply is refused while an active non-ZeroTier transport exists.
 bp_remote_runtime_write active fake-wireguard "$(bp_remote_profile_hash)" "$(bp_now)" "" 10.20.0.2:8443 "" 123
