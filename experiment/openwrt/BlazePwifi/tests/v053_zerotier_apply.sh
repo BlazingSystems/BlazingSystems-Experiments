@@ -2,7 +2,24 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+STAGE=setup
+cleanup_test() {
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "ZeroTier survival test FAILED at stage=$STAGE rc=$rc" >&2
+    echo "--- ops.log ---" >&2
+    cat "$OPS_LOG" >&2 2>/dev/null || true
+    echo "--- zerotier config ---" >&2
+    cat "$BP_REMOTE_ZT_CONFIG" >&2 2>/dev/null || true
+    echo "--- remote runtime ---" >&2
+    cat "$BP_REMOTE_RUNTIME" >&2 2>/dev/null || true
+    echo "--- zerotier runtime ---" >&2
+    cat "$BP_REMOTE_ZT_RUNTIME" >&2 2>/dev/null || true
+  fi
+  rm -rf "$TMP"
+  exit "$rc"
+}
+trap cleanup_test EXIT
 
 export BP_STATE="$TMP/state"
 export BP_RUN="$TMP/run"
@@ -167,7 +184,7 @@ save_zt() {
   bp_remote_save zerotier 1 1 1 BlazePwifi-Test Lab 10.77.0.0/24 30 120     '' 51820 '' '' '' 25 '' 1420 "$nwid"
 }
 
-# Exact untouched OpenWrt sample may be removed; no other ZeroTier config may be.
+STAGE=identity-preparation
 NODE="$(bp_remote_zt_identity_prepare)"
 [ "$NODE" = abcdef1234 ]
 ! grep -q '^zerotier.earth' "$BP_REMOTE_ZT_CONFIG"
@@ -177,7 +194,7 @@ RUNTIME_JSON="$(bp_remote_runtime_status_json)"
 printf '%s' "$RUNTIME_JSON" | grep -q '"node_id":"abcdef1234"'
 ! printf '%s' "$RUNTIME_JSON" | grep -q '00112233445566778899aabbccddeeff'
 
-# Legacy and foreign layouts are refused instead of overwritten.
+STAGE=config-ownership-guards
 printf 'zerotier.global.join=0123456789abcdef\n' >> "$BP_REMOTE_ZT_CONFIG"
 set +e; bp_remote_zt_config_compatible; RC=$?; set -e
 [ "$RC" -eq 2 ]
@@ -187,9 +204,11 @@ set +e; bp_remote_zt_config_compatible; RC=$?; set -e
 [ "$RC" -eq 3 ]
 sed -i '/^zerotier.foreign/d' "$BP_REMOTE_ZT_CONFIG"
 
+STAGE=initial-profile-validation
 save_zt 0123456789abcdef
 bp_remote_zt_live_validate 192.168.1.10
 
+STAGE=first-live-apply
 # Successful apply requires ONLINE/TUNNELED + network OK + interface + assigned IPv4.
 bp_remote_zerotier_apply 192.168.1.10
 [ "$(bp_remote_runtime_get state)" = active ]
@@ -215,10 +234,12 @@ ACTIVE_FW="$(cat "$BP_REMOTE_FIREWALL_CONFIG")"
 ACTIVE_PROFILE="$(bp_remote_runtime_get profile_sha)"
 ACTIVE_LISTENER="$(bp_remote_runtime_get wg_listener)"
 
+STAGE=staged-profile-change
 # Changing network ID is staged until the next successful transaction.
 save_zt fedcba9876543210
 [ "$(bp_remote_activation_state)" = active_staged_changes ]
 
+STAGE=access-denied-rollback
 # ACCESS_DENIED must restore the previously active ZeroTier config/runtime/listener.
 ZT_STATUS=ACCESS_DENIED
 set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
@@ -236,6 +257,7 @@ set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
 [ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
 ZT_STATUS=OK
 
+STAGE=unsafe-route-rollback
 # Unsafe managed default route must be rejected and rolled back.
 ZT_ROUTES=default
 set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
@@ -245,6 +267,7 @@ set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
 [ -e "$ADMIN_STATE" ]
 ZT_ROUTES=10.77.0.0/24
 
+STAGE=watchdog-rollback
 # Watchdog owns a ZeroTier transaction and restores the active snapshot exactly.
 WATCH_ID=zt-watchdog
 bp_remote_snapshot_create "$WATCH_ID"
@@ -262,6 +285,7 @@ bp_remote_guard "$WATCH_ID"
 [ ! -e "$BP_REMOTE_PENDING" ]
 [ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
 
+STAGE=wireguard-conflict
 # WireGuard cannot be applied over an active ZeroTier transport.
 bp_remote_save wireguard 1 1 1 BlazePwifi-Test Lab 10.20.0.0/24 30 120   198.51.100.8 51820 10.20.0.2/32 BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB= 10.20.0.0/24 25 10.20.0.1 1420 ''
 set +e; bp_remote_wg_live_validate 192.168.1.10; WG_RC=$?; set -e
@@ -270,6 +294,7 @@ set +e; bp_remote_wg_live_validate 192.168.1.10; WG_RC=$?; set -e
 # Restore staged ZeroTier profile before disabling the active prior tunnel.
 save_zt fedcba9876543210
 
+STAGE=remote-path-disable-rejection
 # Disable cannot be initiated over the ZeroTier path being removed.
 ROUTE_SIG='via= dev=ztblaze123'
 set +e; bp_remote_zerotier_disable 10.77.0.10; DISABLE_RC=$?; set -e
@@ -277,6 +302,7 @@ set +e; bp_remote_zerotier_disable 10.77.0.10; DISABLE_RC=$?; set -e
 [ "$(bp_remote_zt_runtime_get active)" = 1 ]
 ROUTE_SIG='via=192.168.1.1 dev=br-lan'
 
+STAGE=local-disable
 # Local disable is transactional and preserves stable identity for reuse.
 bp_remote_zerotier_disable 192.168.1.10
 [ "$(bp_remote_runtime_get state)" = staged ]
@@ -288,16 +314,19 @@ grep -q '^zerotier.global.enabled=0' "$BP_REMOTE_ZT_CONFIG"
 [ ! -e "$ADMIN_STATE" ]
 [ ! -e "$BP_REMOTE_PENDING" ]
 
+STAGE=orphan-snapshot-cleanup
 # Boot guard removes completed/orphaned historical snapshots when no transaction is pending.
 mkdir -p "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old"
 printf 'secret-old\n' > "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old/zerotier"
 bp_remote_guard_boot
 [ ! -d "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old" ]
 
+STAGE=zerotier-conflict
 # A staged ZeroTier apply is refused while an active non-ZeroTier transport exists.
 bp_remote_runtime_write active fake-wireguard "$(bp_remote_profile_hash)" "$(bp_now)" "" 10.20.0.2:8443 "" 123
 bp_remote_zt_runtime_write 0 fedcba9876543210 abcdef1234 "" "" staged
 set +e; bp_remote_zt_live_validate 192.168.1.10; ZT_RC=$?; set -e
 [ "$ZT_RC" -eq 43 ]
 
+STAGE=complete
 echo "v0.5.3-dev.5 ZeroTier apply/rollback survival tests passed"
