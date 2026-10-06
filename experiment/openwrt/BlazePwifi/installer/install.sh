@@ -168,6 +168,7 @@ uci commit firewall
 /etc/init.d/firewall reload 2>/dev/null || true
 /etc/init.d/uhttpd restart
 /etc/init.d/blazepwifi enable
+/etc/init.d/blazepwifi-remote-guard enable 2>/dev/null || true
 /etc/init.d/blazepwifi restart
 sleep 2
 
