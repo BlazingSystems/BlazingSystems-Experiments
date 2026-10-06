@@ -25,6 +25,7 @@ public final class RentalLeaseStore {
                 .putString("server", safe(extras.getString("server_url")))
                 .putString("enrollment", safe(extras.getString("enrollment_token")))
                 .putString("device_name", safe(extras.getString("device_name")))
+                .putString("enrollment_source", "device_owner_provisioning")
                 .apply();
     }
 
@@ -33,6 +34,7 @@ public final class RentalLeaseStore {
                 .putString("server", safe(server))
                 .putString("enrollment", safe(token))
                 .putString("device_name", safe(name))
+                .putString("enrollment_source", "standard_manual")
                 .putBoolean("setup_complete", false)
                 .remove("device_id")
                 .remove("device_secret")
@@ -232,6 +234,7 @@ public final class RentalLeaseStore {
     public static String deviceSecret(Context c) { return prefs(c).getString("device_secret", ""); }
     public static String deviceName(Context c) { return prefs(c).getString("device_name", "Rental phone"); }
     public static boolean isEnrolled(Context c) { return deviceSecret(c).length() > 0; }
+    public static String enrollmentSource(Context c) { return prefs(c).getString("enrollment_source", ""); }
 
     private static String safe(String value) { return value == null ? "" : value.trim(); }
 }

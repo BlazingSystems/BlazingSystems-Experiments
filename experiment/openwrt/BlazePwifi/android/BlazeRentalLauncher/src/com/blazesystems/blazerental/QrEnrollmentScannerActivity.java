@@ -51,7 +51,7 @@ public class QrEnrollmentScannerActivity extends Activity
         FrameLayout.LayoutParams fp = new FrameLayout.LayoutParams(side, side, Gravity.CENTER);
         root.addView(scanFrame, fp);
         TextView hint = new TextView(this);
-        hint.setText("Scan BlazePwifi enrollment QR");
+        hint.setText("Scan BlazePwifi Standard Enrollment QR");
         hint.setTextSize(18f);
         hint.setGravity(Gravity.CENTER);
         hint.setTextColor(0xffffffff);
@@ -132,6 +132,14 @@ public class QrEnrollmentScannerActivity extends Activity
             String name = "Rental phone";
             if (raw.trim().startsWith("{")) {
                 JSONObject json = new JSONObject(raw);
+                if (json.has("android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME")
+                        || "blazerental.provisioning.v1".equals(json.optString("schema", ""))) {
+                    throw new IllegalStateException("PROVISIONING_QR");
+                }
+                String schema = json.optString("schema", "");
+                if (schema.length() > 0 && !"blazerental.enrollment.v1".equals(schema)) {
+                    throw new IllegalArgumentException();
+                }
                 server = json.optString("server_url", "");
                 token = json.optString("enrollment_token", "");
                 name = json.optString("device_name", name);
@@ -169,9 +177,14 @@ public class QrEnrollmentScannerActivity extends Activity
                     });
                 }
             }).start();
+        } catch (IllegalStateException e) {
+            decoded = false;
+            Toast.makeText(this,
+                    "This is a Device Provisioning QR. Factory reset the phone and scan it from Android Setup Wizard.",
+                    Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             decoded = false;
-            Toast.makeText(this, "Not a valid BlazePwifi enrollment QR",
+            Toast.makeText(this, "Not a valid BlazePwifi Standard Enrollment QR",
                     Toast.LENGTH_SHORT).show();
         }
     }
