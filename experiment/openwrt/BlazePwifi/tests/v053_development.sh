@@ -20,7 +20,7 @@ grep -Fq 'BlazeRental-$VERSION-release-unsigned.apk' "$WF"
 # Rollback for the development line is anchored to the exact frozen v0.5.2
 # application candidate, then raised above current versionCode as a forward install.
 grep -Fq 'bf2992977fe8504d21b107df02826032c31d3a62' "$WF"
-grep -Fq 's/versionCode 50200/versionCode 50291/' "$WF"
+grep -Fq 's/versionCode 50200/versionCode 50299/' "$WF"
 grep -Fq '0.5.2-rescue-for-$VERSION' "$WF"
 
 # The permanent v0.5.2 production identity/recovery material remains preserved.
