@@ -8,7 +8,7 @@ ADMIN="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/BlazeA
 [ "$(cat "$ROOT/VERSION")" = "0.5.3-dev.1" ]
 grep -Fq 'versionCode 50290' "$GRADLE"
 grep -Fq 'versionName "0.5.3-dev.1"' "$GRADLE"
-grep -Fq 'BuildConfig.VERSION_NAME' "$ADMIN"
+grep -Fq 'appVersionName()' "$ADMIN"
 
 # Current development artifacts must never masquerade as the frozen v0.5.2 release.
 grep -Fq 'name: BlazePwifi-android-current' "$WF"
