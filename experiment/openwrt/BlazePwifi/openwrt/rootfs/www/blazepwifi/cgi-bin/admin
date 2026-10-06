@@ -6,6 +6,7 @@
 . "${BP_RENTAL_POLICY_LIB:-/usr/lib/blazepwifi/rental_policy.sh}"
 [ ! -r "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}" ] || . "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
+. "${BP_MEMBER_LIB:-/usr/lib/blazepwifi/member.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 . "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
 . "${BP_REMOTE_APPLY_LIB:-/usr/lib/blazepwifi/remote_apply.sh}"
@@ -15,6 +16,7 @@ admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 action="$(bp_param action)"; now="$(bp_now)"
 bp_rental_init
 bp_rental_policy_v2_init
+bp_member_init
 
 bp_admin_server_url() {
   supplied="$(bp_param server_url)"
@@ -247,6 +249,132 @@ EOF
     bp_auth_audit rental_update_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$version:$code"
     body="$(bp_rental_update_json)"
     bp_json "$(printf '{"ok":true,"update":%s}' "$body")"
+    ;;
+  member_list)
+    require_role viewer
+    body="$(bp_member_public_list_json)"
+    revision="$(bp_member_global_revision)"
+    bp_json "$(printf '{"ok":true,"revision":%s,"members":%s}' "$revision" "$body")"
+    ;;
+  member_events)
+    require_role viewer
+    user="$(bp_param username)"
+    if [ -n "$user" ]; then user="$(bp_member_norm "$user")" || bp_fail "invalid member"; fi
+    limit="$(bp_param limit)"; [ -n "$limit" ] || limit=64
+    body="$(bp_member_events_json "$limit" "$user")"
+    bp_json "$(printf '{"ok":true,"events":%s}' "$body")"
+    ;;
+  member_create)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    user="$(bp_param username)"; label="$(bp_param label)"; password="$(bp_param password)"
+    bp_member_lock || bp_fail "member state busy"
+    revision="$(bp_member_create "$user" "$label" "$password" "admin:$BP_AUTH_USER")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "invalid member username or password; username must be 2-32 safe characters and password at least 8 characters" ;;
+      3) bp_fail "member already exists" ;;
+      *) bp_fail "member creation failed" ;;
+    esac
+    bp_auth_audit member_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
+    ;;
+  member_update)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    user="$(bp_param username)"; label="$(bp_param label)"; enabled="$(bp_param enabled)"
+    [ -n "$label" ] || label="@keep"
+    [ -n "$enabled" ] || enabled="@keep"
+    bp_member_lock || bp_fail "member state busy"
+    revision="$(bp_member_patch "$user" "$label" "$enabled" "admin:$BP_AUTH_USER")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "invalid member update" ;;
+      3) bp_fail "unknown member" ;;
+      *) bp_fail "member update failed" ;;
+    esac
+    bp_auth_audit member_update "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
+    ;;
+  member_balance)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    user="$(bp_param username)"; mode="$(bp_param mode)"; seconds="$(bp_param seconds)"
+    case "$mode" in add|subtract|set) ;; *) bp_fail "invalid balance mode";; esac
+    bp_member_lock || bp_fail "member state busy"
+    result="$(bp_member_balance_change "$user" "$mode" "$seconds" "admin:$BP_AUTH_USER" "")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "invalid balance value" ;;
+      3) bp_fail "unknown member" ;;
+      4) bp_fail "insufficient banked time" ;;
+      *) bp_fail "member balance update failed" ;;
+    esac
+    applied="$(printf '%s' "$result" | cut -f1)"; revision="$(printf '%s' "$result" | cut -f2)"
+    bp_auth_audit member_balance "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$mode:$seconds:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","applied_seconds":%s,"revision":%s}' "$(bp_json_escape "$user")" "${applied:-0}" "${revision:-0}")"
+    ;;
+  member_transfer)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    from="$(bp_param from_username)"; to="$(bp_param to_username)"; seconds="$(bp_param seconds)"
+    bp_member_lock || bp_fail "member state busy"
+    result="$(bp_member_transfer "$from" "$to" "$seconds" "admin:$BP_AUTH_USER" "")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "invalid transfer" ;;
+      3) bp_fail "unknown member" ;;
+      4) bp_fail "insufficient banked time" ;;
+      *) bp_fail "member transfer failed" ;;
+    esac
+    applied="$(printf '%s' "$result" | cut -f1)"; revision="$(printf '%s' "$result" | cut -f2)"
+    bp_auth_audit member_transfer "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$from>$to:$seconds:$revision"
+    bp_json "$(printf '{"ok":true,"seconds":%s,"revision":%s}' "${applied:-0}" "${revision:-0}")"
+    ;;
+  member_password)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    user="$(bp_param username)"; password="$(bp_param password)"
+    bp_member_lock || bp_fail "member state busy"
+    revision="$(bp_member_set_password "$user" "$password" "admin:$BP_AUTH_USER")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "member password must be at least 8 characters" ;;
+      3) bp_fail "unknown member" ;;
+      *) bp_fail "member password reset failed" ;;
+    esac
+    bp_auth_audit member_password "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
+    ;;
+  member_delete)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    user="$(bp_param username)"
+    bp_member_lock || bp_fail "member state busy"
+    revision="$(bp_member_delete "$user" "admin:$BP_AUTH_USER")"
+    rc=$?
+    bp_member_unlock
+    case "$rc" in
+      0) ;;
+      2) bp_fail "invalid member" ;;
+      3) bp_fail "unknown member" ;;
+      *) bp_fail "member deletion failed" ;;
+    esac
+    bp_auth_audit member_delete "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
     ;;
   controller_list)
     require_role viewer
