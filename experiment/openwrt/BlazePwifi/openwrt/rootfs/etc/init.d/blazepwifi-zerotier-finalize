@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+START=98
+STOP=04
+USE_PROCD=0
+
+start() {
+  [ -r /usr/lib/blazepwifi/common.sh ] || return 0
+  [ -r /usr/lib/blazepwifi/console_ops.sh ] || return 0
+  [ -r /usr/lib/blazepwifi/remote_apply.sh ] || return 0
+  [ -r /usr/lib/blazepwifi/zerotier_apply.sh ] || return 0
+  . /usr/lib/blazepwifi/common.sh
+  . /usr/lib/blazepwifi/console_ops.sh
+  . /usr/lib/blazepwifi/remote_apply.sh
+  . /usr/lib/blazepwifi/zerotier_apply.sh
+  bp_remote_zt_boot_finalize >/tmp/blazepwifi/zerotier-finalize.log 2>&1 || true
+}
+
+stop() {
+  :
+}
