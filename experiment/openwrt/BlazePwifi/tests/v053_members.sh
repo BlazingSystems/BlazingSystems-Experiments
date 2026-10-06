@@ -83,6 +83,14 @@ echo "$OUT" | grep -q '"banked_seconds":600'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 600 ]
 [ "$(awk -F '\t' -v e="$BANK_EVENT" '$1==e {c++} END{print c+0}' "$BP_MEMBER_EVENTS")" -eq 1 ]
 
+# The same event ID cannot be reused for a different member/source/action.
+set +e
+bp_member_balance_change bob add 60 softtimer:other "$BANK_EVENT" >/dev/null
+COLLISION_RC=$?
+set -e
+[ "$COLLISION_RC" -eq 5 ]
+[ "$(printf '%s' "$(bp_member_line bob)" | cut -f8)" -eq 0 ]
+
 RESTORE_EVENT=22222222222222222222222222222222
 RESTORE_NONCE=1000000000000005
 RESTORE_PROOF="$(proof_for "$ALICE_HASH" "$RESTORE_NONCE")"
