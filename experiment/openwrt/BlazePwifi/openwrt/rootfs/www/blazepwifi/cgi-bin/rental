@@ -185,8 +185,7 @@ EOF
     ;;
   coin_stop)
     did="$(bp_param device_id)"
-    printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}
- || bp_fail "invalid device id"
+    printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}$' || bp_fail "invalid device id"
     line="$(bp_rental_device_line "$did")"
     [ -n "$line" ] || bp_fail "unknown device"
     secret="$(printf '%s' "$line" | cut -f2)"
