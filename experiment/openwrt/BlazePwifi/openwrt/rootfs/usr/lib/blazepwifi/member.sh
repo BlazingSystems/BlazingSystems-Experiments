@@ -77,8 +77,11 @@ bp_member_hash_password() {
 bp_member_verify_password() {
   user="$1"; pass="$2"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 1
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-  enabled="$3"; scheme="$4"; salt="$5"; stored="$6"; rounds="$7"
+  enabled="$(printf '%s' "$line" | cut -f3)"
+  scheme="$(printf '%s' "$line" | cut -f4)"
+  salt="$(printf '%s' "$line" | cut -f5)"
+  stored="$(printf '%s' "$line" | cut -f6)"
+  rounds="$(printf '%s' "$line" | cut -f7)"
   [ "$enabled" = 1 ] || return 1
   case "$scheme" in
     sha256i)
@@ -109,8 +112,10 @@ bp_member_create() {
   label="$(bp_member_clean "$2")"; pass="$3"; source="$(bp_member_clean "$4")"
   [ -z "$(bp_member_line "$user")" ] || return 3
   verifier="$(bp_member_hash_password "$pass")" || return $?
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $verifier; IFS="$oldifs"
-  scheme="$1"; salt="$2"; hash="$3"; rounds="$4"
+  scheme="$(printf '%s' "$verifier" | cut -f1)"
+  salt="$(printf '%s' "$verifier" | cut -f2)"
+  hash="$(printf '%s' "$verifier" | cut -f3)"
+  rounds="$(printf '%s' "$verifier" | cut -f4)"
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   bp_member_write "$user" "$label" 1 "$scheme" "$salt" "$hash" "$rounds" 0 "$rev" "$now" "$source"
   bp_member_event_record "admin:$rev:$user" "$now" "$user" create 0 0 "$source" ""
@@ -121,8 +126,13 @@ bp_member_patch() {
   user="$(bp_member_norm "$1")" || return 2
   label="$2"; enabled="$3"; source="$(bp_member_clean "$4")"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-  oldlabel="$2"; oldenabled="$3"; scheme="$4"; salt="$5"; hash="$6"; rounds="$7"; banked="$8"
+  oldlabel="$(printf '%s' "$line" | cut -f2)"
+  oldenabled="$(printf '%s' "$line" | cut -f3)"
+  scheme="$(printf '%s' "$line" | cut -f4)"
+  salt="$(printf '%s' "$line" | cut -f5)"
+  hash="$(printf '%s' "$line" | cut -f6)"
+  rounds="$(printf '%s' "$line" | cut -f7)"
+  banked="$(printf '%s' "$line" | cut -f8)"
   [ "$label" = "@keep" ] && label="$oldlabel"
   [ "$enabled" = "@keep" ] && enabled="$oldenabled"
   case "$enabled" in 0|1) ;; *) return 2;; esac
@@ -138,10 +148,13 @@ bp_member_set_password() {
   pass="$2"; source="$(bp_member_clean "$3")"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
   verifier="$(bp_member_hash_password "$pass")" || return $?
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-  label="$2"; enabled="$3"; banked="$8"
-  IFS="$(printf '\t')"; set -- $verifier; IFS="$oldifs"
-  scheme="$1"; salt="$2"; hash="$3"; rounds="$4"
+  label="$(printf '%s' "$line" | cut -f2)"
+  enabled="$(printf '%s' "$line" | cut -f3)"
+  banked="$(printf '%s' "$line" | cut -f8)"
+  scheme="$(printf '%s' "$verifier" | cut -f1)"
+  salt="$(printf '%s' "$verifier" | cut -f2)"
+  hash="$(printf '%s' "$verifier" | cut -f3)"
+  rounds="$(printf '%s' "$verifier" | cut -f4)"
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source"
   bp_member_event_record "admin:$rev:$user" "$now" "$user" password_reset 0 "$banked" "$source" ""
@@ -164,8 +177,13 @@ bp_member_balance_change() {
     [ -z "$(bp_member_event_line "$event_id")" ] || return 5
   fi
 
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-  label="$2"; enabled="$3"; scheme="$4"; salt="$5"; hash="$6"; rounds="$7"; banked="$8"
+  label="$(printf '%s' "$line" | cut -f2)"
+  enabled="$(printf '%s' "$line" | cut -f3)"
+  scheme="$(printf '%s' "$line" | cut -f4)"
+  salt="$(printf '%s' "$line" | cut -f5)"
+  hash="$(printf '%s' "$line" | cut -f6)"
+  rounds="$(printf '%s' "$line" | cut -f7)"
+  banked="$(printf '%s' "$line" | cut -f8)"
   case "$banked" in ''|*[!0-9]*) banked=0;; esac
 
   case "$mode" in
@@ -214,10 +232,12 @@ bp_member_transfer() {
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   newf=$((fbank-seconds)); newt=$((tbank+seconds))
 
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $fl; IFS="$oldifs"
-  bp_member_write "$from" "$2" "$3" "$4" "$5" "$6" "$7" "$newf" "$rev" "$now" "$source"
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $tl; IFS="$oldifs"
-  bp_member_write "$to" "$2" "$3" "$4" "$5" "$6" "$7" "$newt" "$rev" "$now" "$source"
+  bp_member_write "$from" "$(printf '%s' "$fl" | cut -f2)" "$(printf '%s' "$fl" | cut -f3)" \
+    "$(printf '%s' "$fl" | cut -f4)" "$(printf '%s' "$fl" | cut -f5)" "$(printf '%s' "$fl" | cut -f6)" \
+    "$(printf '%s' "$fl" | cut -f7)" "$newf" "$rev" "$now" "$source"
+  bp_member_write "$to" "$(printf '%s' "$tl" | cut -f2)" "$(printf '%s' "$tl" | cut -f3)" \
+    "$(printf '%s' "$tl" | cut -f4)" "$(printf '%s' "$tl" | cut -f5)" "$(printf '%s' "$tl" | cut -f6)" \
+    "$(printf '%s' "$tl" | cut -f7)" "$newt" "$rev" "$now" "$source"
 
   [ -n "$event_id" ] || event_id="admin:$rev:$from>$to"
   bp_member_event_record "$event_id" "$now" "$from" transfer "-$seconds" "$seconds" "$source" "$newf:$to:$newt"
