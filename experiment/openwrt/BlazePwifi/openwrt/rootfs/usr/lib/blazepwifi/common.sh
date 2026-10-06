@@ -48,12 +48,27 @@ bp_tmp_suffix() {
 bp_flock_wait() {
 	fd="$1"; timeout="${2:-5}"
 	case "$fd:$timeout" in *[!0-9:]*|:*) return 1;; esac
-	elapsed=0
-	while ! flock -n "$fd" 2>/dev/null; do
-		[ "$elapsed" -ge "$timeout" ] 2>/dev/null && return 1
-		sleep 1
-		elapsed=$((elapsed+1))
-	done
+
+	# BusyBox flock on OpenWrt does not provide GNU flock -w. Polling once per
+	# second causes artificial lock starvation under bursts: 12 short writers
+	# can consume a 10-second timeout even when each critical section is fast.
+	# Prefer decisecond polling when the local sleep supports fractions.
+	if sleep 0.1 2>/dev/null; then
+		limit=$((timeout * 10))
+		step=0
+		while ! flock -n "$fd" 2>/dev/null; do
+			[ "$step" -ge "$limit" ] 2>/dev/null && return 1
+			sleep 0.1
+			step=$((step+1))
+		done
+	else
+		elapsed=0
+		while ! flock -n "$fd" 2>/dev/null; do
+			[ "$elapsed" -ge "$timeout" ] 2>/dev/null && return 1
+			sleep 1
+			elapsed=$((elapsed+1))
+		done
+	fi
 	return 0
 }
 

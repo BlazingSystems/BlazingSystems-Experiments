@@ -115,6 +115,8 @@ echo 'stress: migration replay blocked'
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
 
 # Concurrent writers must serialize without losing rows or sharing temp paths.
+# This also guards the BusyBox-compatible sub-second flock retry path against
+# the old one-writer-per-second starvation behavior.
 i=1
 while [ "$i" -le 12 ]; do
   n="$i"
@@ -138,6 +140,31 @@ while [ "$i" -le 12 ]; do
   i=$((i+1))
 done
 echo 'stress: concurrent writers ok'
+
+# A second immediate burst must also complete. This catches lock polling
+# implementations that only pass once because contention timing was favorable.
+i=13
+while [ "$i" -le 24 ]; do
+  n="$i"
+  (
+    . "$BP_LIB"
+    bp_init_dirs
+    d="$(printf '%032x' "$n")"
+    m="$(printf '02:00:00:00:02:%02x' "$n")"
+    bp_lock || exit 1
+    bp_account_write "$d" "$n" 0 0 0 0 "$m" "10.0.2.$n" ""
+    bp_unlock
+  ) &
+  i=$((i+1))
+done
+wait
+i=13
+while [ "$i" -le 24 ]; do
+  d="$(printf '%032x' "$i")"
+  [ "$(bp_get_credit "$d")" -eq "$i" ]
+  i=$((i+1))
+done
+echo 'stress: repeated concurrent writers ok'
 
 echo 'BlazePwifi persistence/replay stress checks passed'
 

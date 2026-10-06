@@ -263,11 +263,11 @@ jobs:
           BASE="https://the.earth.li/~sgtatham/putty/$PUTTY_VER"
           curl --fail --location --proto '=https' --tlsv1.2 "$BASE/w64/plink.exe" -o "$OUT/plink.exe"
           curl --fail --location --proto '=https' --tlsv1.2 "$BASE/w64/pscp.exe" -o "$OUT/pscp.exe"
-          curl --fail --location --proto '=https' --tlsv1.2 "https://www.chiark.greenend.org.uk/~sgtatham/putty/licence.html" -o "$OUT/PuTTY-LICENCE.html"
+          cp "$PROFILE/windows/PuTTY-LICENCE.txt" "$OUT/PuTTY-LICENCE.txt"
 
           echo "50479953865b30775056441b10fdcb984126ba4f98af4f64756902a807b453e7  $OUT/plink.exe" | sha256sum -c -
           echo "5aa48b142333bc7d097aed9a75284bd66b325c26558c8b9b6f37c276f3a5173a  $OUT/pscp.exe" | sha256sum -c -
-          test -s "$OUT/PuTTY-LICENCE.html"
+          echo "732276c40fed5867a614ff8bf42ef8053301c0c7f6ade17d726f2772dc9fe706  $OUT/PuTTY-LICENCE.txt" | sha256sum -c -
           file "$OUT/plink.exe" | grep -qi 'PE32'
           file "$OUT/pscp.exe" | grep -qi 'PE32'
 
@@ -283,7 +283,7 @@ jobs:
           cp "$PROFILE/windows/Reset-BlazePwifi-Admin-Password.bat" "$RESET/"
           cp "$PROFILE/windows/Reset-BlazePwifi-Admin-Password.ps1" "$RESET/"
           cp "$OUT/plink.exe" "$RESET/"
-          cp "$OUT/PuTTY-LICENCE.html" "$RESET/"
+          cp "$OUT/PuTTY-LICENCE.txt" "$RESET/"
           (
             cd "$RESET"
             sha256sum * > SHA256SUMS
