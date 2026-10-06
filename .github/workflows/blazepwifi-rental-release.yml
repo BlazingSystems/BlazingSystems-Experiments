@@ -1,0 +1,169 @@
+name: BlazePwifi Standalone Rental release
+
+on:
+  push:
+    branches: [blazepwifi-rental-v0.5.0-rc1]
+    paths:
+      - 'experiment/openwrt/BlazePwifi/profiles/standalone-rental/**'
+      - '.github/workflows/blazepwifi-rental-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: blazepwifi-rental-v0.5.0-rc1
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static profile validation
+        run: sh experiment/openwrt/BlazePwifi/profiles/standalone-rental/tests/static.sh
+      - name: Confirm v0.5 protocol baseline
+        run: |
+          grep -q '^0.5.0$' experiment/openwrt/BlazePwifi/VERSION
+          grep -q 'policy_sig_v3' experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental
+          grep -q 'rental_policy_v2' experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental
+
+  openwrt_bundle:
+    needs: validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble complete OpenWrt standalone bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE=experiment/openwrt/BlazePwifi/profiles/standalone-rental
+          OUT=BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.1
+          mkdir -p "$OUT/rootfs"
+          cp -a "$PROFILE/openwrt/." "$OUT/"
+          cp -a experiment/openwrt/BlazePwifi/openwrt/rootfs/. "$OUT/rootfs/"
+          cp "$PROFILE/README.md" "$OUT/RELEASE-README.md"
+          chmod +x "$OUT/"*.sh "$OUT/rental-profile"
+          tar -czf "$OUT.tar.gz" "$OUT"
+          sha256sum "$OUT.tar.gz" > "$OUT.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-Rental-Standalone-OpenWrt
+          path: |
+            BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.1.tar.gz
+            BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.1.tar.gz.sha256
+          if-no-files-found: error
+
+  esp8266:
+    needs: validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP8266 core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp8266:esp8266
+      - name: Compile ESP8266 standalone rental server
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKETCH=experiment/openwrt/BlazePwifi/profiles/standalone-rental/esp8266/BlazeRentalStandalone8266
+          OUT=dist-rental/esp8266
+          mkdir -p "$OUT"
+          arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 --output-dir "$OUT" "$SKETCH"
+          cp "$SKETCH/BlazeRentalStandalone8266.ino" "$OUT/"
+          cp "$SKETCH/BlazeRentalStandaloneCore.h" "$OUT/"
+          (cd "$OUT" && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-Rental-Standalone-ESP8266
+          path: dist-rental/esp8266/
+          if-no-files-found: error
+
+  esp32:
+    needs: validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+      - name: Compile ESP32 standalone rental server
+        shell: bash
+        run: |
+          set -euo pipefail
+          SKETCH=experiment/openwrt/BlazePwifi/profiles/standalone-rental/esp32/BlazeRentalStandalone32
+          OUT=dist-rental/esp32
+          mkdir -p "$OUT"
+          arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir "$OUT" "$SKETCH"
+          cp "$SKETCH/BlazeRentalStandalone32.ino" "$OUT/"
+          cp "$SKETCH/BlazeRentalStandaloneCore.h" "$OUT/"
+          (cd "$OUT" && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-Rental-Standalone-ESP32
+          path: dist-rental/esp32/
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/heads/blazepwifi-rental-v0.5.0-rc1'
+    needs: [validate, openwrt_bundle, esp8266, esp32]
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.5.0-rental-rc.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: BlazePwifi-Rental-Standalone-*
+          path: artifacts
+      - name: Assemble release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-out
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' -o -name '*.bin' -o -name '*.ino' -o -name '*.h' \) -print0 | while IFS= read -r -d '' f; do
+            b="$(basename "$f")"
+            d="release-out/$b"
+            if [ -e "$d" ]; then
+              parent="$(basename "$(dirname "$f")")"
+              d="release-out/${parent}-${b}"
+            fi
+            cp "$f" "$d"
+          done
+          gh release download v0.5.0 --repo "${{ github.repository }}" --pattern 'BlazeRental-v0.5.0-TEST.apk' --dir release-out || true
+          cp experiment/openwrt/BlazePwifi/releases/0.5.0-rental-rc.1/README.md release-out/README.md
+          jq -n --arg release "0.5.0-rental-rc.1" --arg sha "$GITHUB_SHA" \
+            '{release:$release,commit:$sha,base:"BlazePwifi 0.5.0",edition:"rental-standalone",openwrt_upgrade_to_full:true,esp_upgrade_to_full:false,esp_convertible_multicoin:true,targets:["r281","ruijie_rg-ew1200g-pro-v1.1","generic_openwrt_24.10_25.12","esp8266","esp32"],status:"release-candidate"}' \
+            > release-out/RELEASE-MANIFEST.json
+          (cd release-out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-Rental-v0.5.0-rc1-release-stage
+          path: release-out/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Publish prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOTES=experiment/openwrt/BlazePwifi/releases/0.5.0-rental-rc.1/README.md
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "${{ github.repository }}" --target "$GITHUB_SHA" --title "BlazePwifi Standalone Rental Server v0.5.0-rental-rc.1" --notes-file "$NOTES" --prerelease
+          else
+            gh release create "$TAG" --repo "${{ github.repository }}" --target "$GITHUB_SHA" --title "BlazePwifi Standalone Rental Server v0.5.0-rental-rc.1" --notes-file "$NOTES" --prerelease
+          fi
+          find release-out -maxdepth 1 -type f -print0 | xargs -0 -r gh release upload "$TAG" --repo "${{ github.repository }}" --clobber
+          gh api "repos/${{ github.repository }}/releases/tags/$TAG" > release.json
+          jq -e '.assets[] | select(.name|contains("OpenWrt"))' release.json >/dev/null
+          jq -e '.assets[] | select(.name|contains("BlazeRentalStandalone8266"))' release.json >/dev/null
+          jq -e '.assets[] | select(.name|contains("BlazeRentalStandalone32"))' release.json >/dev/null
