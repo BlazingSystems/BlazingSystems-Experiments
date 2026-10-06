@@ -125,7 +125,15 @@
       </div></div>
       <div class="card"><div class="card-body"><div class="card-title">ZeroTier profile</div>
         <label><span class="field-label">Network ID</span><input id="ztNetworkId" class="field mono" maxlength="16" placeholder="16 hexadecimal characters"></label>
-        <p class="muted" style="margin-top:10px">The node still requires authorization in your ZeroTier network. In dev.3, ZeroTier remains profile/staging only; live activation is not enabled yet.</p>
+        <div class="form-grid" style="margin-top:10px">
+          <label><span class="field-label">Lifecycle state</span><input id="ztLifecycleState" class="field" readonly value="staged"></label>
+          <label><span class="field-label">ZeroTier version / layout</span><input id="ztVersionState" class="field" readonly value="—"></label>
+          <label><span class="field-label">Node ID</span><input id="ztNodeId" class="field mono" readonly value=""></label>
+          <label><span class="field-label">Virtual device</span><input id="ztDevice" class="field mono" readonly value=""></label>
+          <label class="span2"><span class="field-label">Managed IPv4</span><input id="ztIpv4" class="field mono" readonly value=""></label>
+        </div>
+        <div class="toolbar" style="margin-top:12px"><button id="ztPrepareButton" class="btn" type="button" onclick="BlazeConsole.prepareZeroTier()">Prepare / Join</button><button id="ztActivateButton" class="btn primary" type="button" onclick="BlazeConsole.activateZeroTier()">Activate Management</button><button id="ztDisableButton" class="btn danger" type="button" onclick="BlazeConsole.disableZeroTier()">Disable ZeroTier Management</button></div>
+        <p id="ztHelp" class="muted" style="margin-top:10px">Prepare joins the network but does not expose management. Authorize this node in ZeroTier Central. If OpenWrt reports reboot required, reboot manually, then return and activate management.</p>
       </div></div>
     </div>
 
@@ -133,7 +141,7 @@
       <div class="form-grid"><label><span class="field-label">Admin password</span><input id="remotePassword" class="field" type="password" autocomplete="current-password" placeholder="Required for save, key, apply and disable"></label><div style="align-self:end" class="toolbar"><button class="btn" onclick="BlazeConsole.saveRemote()">Validate & save profile</button><button id="wgApplyButton" class="btn primary" onclick="BlazeConsole.applyWireGuard()">Test & Apply WireGuard</button><button id="wgDisableButton" class="btn danger" onclick="BlazeConsole.disableWireGuard()">Disable live WireGuard</button></div></div>
       <div id="remoteConfigState" class="small muted" style="margin-top:10px">Admin role is required to edit the profile.</div>
     </div></div>
-    <div class="notice warn"><b>WireGuard dev.3 safety model:</b> apply is transactional and requires an actual handshake before it is accepted. A watchdog restores the previous network/firewall/runtime state on failure or reboot. Apply/disable must be started from a local/non-WireGuard management path. IPv4 management routes only; default/full-tunnel and directly connected route overlaps are blocked. <b>ZeroTier live activation remains disabled.</b></div>
+    <div class="notice warn"><b>Remote Access safety model:</b> WireGuard remains transactional with handshake/watchdog rollback. ZeroTier dev.4 uses a two-phase prepare/activate flow: it accepts private managed addressing only, explicitly blocks ZeroTier default/global/DNS takeover, never auto-reboots from the browser, exposes only the restricted admin HTTPS service, creates no LAN/WAN forwarding, and requires activation/disable from a local/non-ZeroTier management path.</div>
   </section>
 
   <section id="page-vouchers" class="section"><div class="page-head"><div><h2>Vouchers & Rates</h2><p>Create vouchers and manage rate packages.</p></div></div>
