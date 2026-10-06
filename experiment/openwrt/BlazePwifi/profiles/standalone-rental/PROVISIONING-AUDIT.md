@@ -68,3 +68,12 @@ Do not promote Device Owner provisioning to stable production status until:
 ## Non-goals
 
 The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, or privileged platform exploits.
+
+
+## ESP scope in RC3
+
+ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC3 does not claim Android Device Provisioning QR parity on ESP.
+
+Current ESP Rental Server onboarding is a manual one-time server/token enrollment flow. The ESP firmware does not embed the OpenWrt QR renderer or release-bound Android DPC APK/checksum metadata. Adding those features must be evaluated separately against ESP flash/RAM limits and must use the same distinct Standard Enrollment vs Device Provisioning contract if implemented.
+
+Therefore RC3 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.

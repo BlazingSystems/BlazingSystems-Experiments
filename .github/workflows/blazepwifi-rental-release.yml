@@ -538,12 +538,17 @@ jobs:
               checksum_encoding:"canonical padded Base64URL",
               version_code:50204,
               android_12_integrated_provisioning:true,
-              physical_setup_wizard_validation_pending:true
+              physical_setup_wizard_validation_pending:true,
+              server_scope:"openwrt_only_in_rc3",
+              esp_server_device_provisioning:false
             },
             esp:{
               modes:["Rental Server","Rental Server + Local Coin Slot","Remote Coin Slot Interface"],
               default_physical_slots_per_esp:1,
               remote_coin_binding:true,
+              enrollment_ui:"manual_one_time_token_only",
+              standard_qr_rendering:false,
+              device_provisioning_qr:false,
               wifi_setup_validated_before_save:true,
               recovery_after_failed_saved_wifi_attempts:5
             }

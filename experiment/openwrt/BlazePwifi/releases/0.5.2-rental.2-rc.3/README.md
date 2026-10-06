@@ -38,3 +38,8 @@ https://support.google.com/work/android/answer/16694822
 ## Promotion boundary
 
 Still a prerelease. Stable promotion requires physical Setup Wizard validation on intended hardware/Android versions, production signing continuity, and a supported policy/compliance path for the intended deployment environment.
+
+
+## RC3 target scope
+
+Device Provisioning QR in this candidate is **OpenWrt-server only**. ESP8266/ESP32 Rental Server mode keeps manual one-time token enrollment and does not claim QR provisioning parity in RC3. This limitation is encoded in the release manifest.

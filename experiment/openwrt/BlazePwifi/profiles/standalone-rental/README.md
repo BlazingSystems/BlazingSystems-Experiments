@@ -22,3 +22,10 @@ Google-certified Android devices can block non-approved DPCs during enterprise S
 Fresh Standalone Rental console credentials remain `admin / admin`. The Windows package includes the one-click administrator reset tool.
 
 Standalone OpenWrt installation remains network-neutral: it does not take ownership of `network`, `wireless`, or `firewall`.
+
+
+## RC3 target scope
+
+Android Device Provisioning QR is implemented on the **OpenWrt Rental Server** path in RC3.
+
+ESP8266/ESP32 Rental Server mode continues to support manual one-time server/token enrollment, but does not yet render Standard Enrollment QR or Android Device Provisioning QR. The release manifest declares this explicitly rather than implying OpenWrt/ESP feature parity.
