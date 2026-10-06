@@ -3,15 +3,15 @@
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.2** on `blazepwifi-v0.5.3-dev2-console-ops`. Exact green branch head `e917171d2a3875fd54183d552c02f8afcdb7862f`, branch workflow `37500821733` — PASS. Reconciled PR #18 merge tree `dee385974b7142afa4e8a56fc47d611f62a10ccf`, PR workflow `37500829258` — PASS.  
+**Active development:** **v0.5.3-dev.3** on `blazepwifi-v0.5.3-dev3-wireguard-apply`. Exact green branch candidate `c60645729e6fbd9b9af6db8b11af13c3b58b7ae3`, workflow `37516557416` — PASS.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
 
 The post-v0.5.2 hardening work is implemented and artifact-validated. This is a **development line**, not a production v0.5.3 release.
 
-- Development identity: `0.5.3-dev.2`.
-- Android development versionCode: `50291`.
+- Development identity: `0.5.3-dev.3`.
+- Android development versionCode: `50292`.
 - Reserved development range: `50290–50298`.
 - Frozen v0.5.2 rollback rescue versionCode: `50299`.
 - Reserved final v0.5.3 production versionCode: `50300`.
@@ -53,6 +53,19 @@ The post-v0.5.2 hardening work is implemented and artifact-validated. This is a 
 - PR #18 reconciles dev.2 with the four newer unrelated BlazePisonet SoftTimer commits on `main`. Synthetic merge tree `dee385974b7142afa4e8a56fc47d611f62a10ccf` passed workflow `37500829258`, including browser runtime, x86 QEMU, Android Device Owner emulator and final candidate gate.
 - During PR validation a real UI race was found and fixed: an unconditional delayed startup `loadRemote()` could reset the selected remote mode while the operator was editing. The fixed console no longer preloads editable remote config in the background, suppresses stale async responses, and renders the authoritative save response immediately.
 - Android Device Owner emulator explicitly passed `0.5.3-dev.2` using `candidate/android/BlazeRental-0.5.3-dev.2-ci.apk`.
+- **dev.3 transactional WireGuard live activation is green on the Full BlazePwifi branch:**
+  - WireGuard private key is generated/stored on-device with restrictive permissions; browser/API exposes only the public key.
+  - Blaze-owned UCI network/firewall sections are used; existing LAN/WAN/EasyMode sections stay outside dev.3 ownership.
+  - Unsafe routes are rejected before apply: default/full tunnel, overly broad routes, directly connected overlaps and current-admin-path capture.
+  - Apply uses network/firewall/runtime snapshots, a detached watchdog and boot-time recovery.
+  - Success requires interface start, firewall reload, a verified WireGuard handshake, and unchanged default/current management route signatures.
+  - Failure restores the previous network/firewall/runtime state, including an older active Blaze WireGuard tunnel when updating it.
+  - Remote admin uses a dedicated WireGuard-only HTTPS service with a restricted admin-only web root; the normal LAN admin/captive portal/Rental/Vendo surface is not exposed on the remote listener.
+  - Remote Terminal permission is enforced server-side on the WireGuard admin path.
+  - Console now exposes device public-key generation, staged profile save, Test & Apply, activation/handshake status and safe disable.
+  - ZeroTier live activation remains staged-only in dev.3.
+  - Exact branch workflow `37516557416` passed validation, browser runtime, Android build, Device Owner emulator, x86 QEMU, ESP8266/ESP32, Ruijie, required Orange Pi targets, update bundle and final candidate gate.
+- Current `main` has one newer **Standalone Rental RC4 documentation/audit** commit that does not overlap dev.3. Those Standalone files are not to be edited by Full BlazePwifi work.
 - No v0.5.3 production tag/release has been created.
 - No production signing key was rotated or exposed.
 - Frozen v0.5.2 release/tag and dedicated signing/recovery workflows remain unchanged.
