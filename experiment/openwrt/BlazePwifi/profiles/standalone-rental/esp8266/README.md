@@ -1,16 +1,31 @@
-# ESP Standalone Rental Server
+# ESP Standalone Rental Server — rc.2
 
-The same firmware has two persistent roles:
+One firmware, three persistent operating modes:
 
-1. **Standalone Rental Server** — the ESP owns enrollment, leases, v3 policy signing and local coin inputs.
-2. **MultiCoin Controller** — the ESP stops owning rental time and exposes each configured GPIO coin input as a separate logical BlazePwifi vendo to a remote full/standalone OpenWrt BlazePwifi server.
+1. **Rental Server** — authoritative BlazeRental server with manual credit and support for separately paired remote ESP coin interfaces. No local coinslot is required.
+2. **Rental Server + Local Coin Slot** — same rental server plus **one** configurable local physical coinslot. Remote ESP coin interfaces are still supported.
+3. **Remote Coin Slot Interface** — the local rental database is left dormant and the ESP becomes one authenticated remote coinslot for either a Standalone Rental Server or a full BlazePwifi server.
 
-Defaults:
-- ESP8266: 2 logical coin slots, up to 6 rental devices.
-- ESP32: 4 logical coin slots, up to 18 rental devices.
+The default hardware model is **one physical coinslot per ESP**, dynamically assigned to whichever rental phone opens a coin window. Multi-slot-per-board is intentionally not part of this rental branch.
 
-No external Arduino libraries are required beyond the normal ESP8266/ESP32 board core. State is stored in LittleFS.
+## First boot and recovery
 
-On first boot the setup AP is open until a 12+ character administrator password is created. After setup, configure an AP password from the configuration file or reflash/reset LittleFS as appropriate.
+First boot starts `BlazeRental-Setup-<chip>`. Open `http://192.168.4.1/`, scan/select Wi-Fi, enter credentials and an administrator password. The firmware tests association + DHCP **before saving**. On success it shows the assigned IP, persists configuration, and reboots.
 
-The firmware expects isolated/dry-contact coin signals. Do not connect a 12 V coin acceptor directly to an ESP GPIO.
+Normal boots make five bounded attempts to connect to saved Wi-Fi. If all five fail, the ESP marks recovery, reboots once, and returns to the setup AP. An ISP/DNS outage does not disable the local rental service as long as Wi-Fi association and DHCP succeeded.
+
+After setup the administrator uses only:
+
+```
+http://<assigned-ip>/
+```
+
+The BlazeRental application protocol remains at `/cgi-bin/rental`; remote coin interfaces use `/cgi-bin/vendo`.
+
+## Remote coin binding
+
+Rental Server modes show a generated **Remote coin binding key** in the root admin console. Put the server IP/URL and that key into another ESP running **Remote Coin Slot Interface** mode. The interface then uses the same signed BlazePwifi vendo protocol used by OpenWrt/full BlazePwifi.
+
+No external Arduino libraries are required beyond the ESP8266/ESP32 board core and LittleFS support included with those cores.
+
+**Electrical safety:** use an isolated/dry-contact or properly level-shifted coinslot signal. Never connect a 12 V coin acceptor directly to an ESP GPIO.
