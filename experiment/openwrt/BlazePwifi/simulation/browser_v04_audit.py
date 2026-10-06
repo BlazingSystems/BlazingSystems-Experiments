@@ -282,6 +282,12 @@ with sync_playwright() as p:
     page.check("#remoteManagement")
     page.fill("#remotePassword","browser-password")
     page.click('button:has-text("Validate & save profile")')
+    for _ in range(50):
+        page.wait_for_timeout(100)
+        if any(x["action"]=="remote_config_set" for x in admin_mutations):
+            break
+    assert any(x["action"]=="remote_config_set" for x in admin_mutations), admin_mutations
+    assert mock_console_state["remote_config"]["mode"]=="wireguard", mock_console_state["remote_config"]
     page.wait_for_function("document.getElementById('remoteModeState').textContent === 'wireguard'")
     assert "live transport apply remains safety-locked" in page.locator("#remoteConfigState").inner_text().lower()
 
