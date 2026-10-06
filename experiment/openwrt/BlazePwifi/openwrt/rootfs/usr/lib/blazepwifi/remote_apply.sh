@@ -525,6 +525,7 @@ bp_remote_wg_write_uci() {
   fi
 
   uci commit network
+  chmod 600 "$BP_REMOTE_NETWORK_CONFIG" 2>/dev/null || return 1
   uci commit firewall
 }
 
