@@ -787,7 +787,6 @@ bp_remote_zt_uci_show() {
 bp_remote_zt_config_compatible() {
   zt_show="$(bp_remote_zt_uci_show)"
   printf '%s\n' "$zt_show" | grep -Eq '\.join=' && return 2
-
   for zt_section in $(printf '%s\n' "$zt_show" | awk -F= '$2=="network"{print $1}'); do
     [ "$zt_section" = "zerotier.$BP_REMOTE_ZT_SECTION" ] || return 3
   done
@@ -801,48 +800,19 @@ bp_remote_zt_identity_prepare() {
   bp_remote_apply_init
   bp_remote_zt_live_supported || return 11
   bp_remote_zt_config_compatible || return 40
-
   zt_secret="$(uci -q get zerotier.global.secret 2>/dev/null || true)"
   if [ -z "$zt_secret" ]; then
     zt_secret="$(zerotier-idtool generate 2>/dev/null | head -n1 | tr -d '\r\n')" || return 1
   fi
   zt_node="${zt_secret%%:*}"
-  printf '%s' "$zt_node" | grep -Eq '^[0-9A-Fa-f]{10}
-  bp_remote_apply_init
-  state="$(bp_remote_runtime_get state staged)"
-  if [ "$state" = active ]; then
-    applied="$(bp_remote_runtime_get profile_sha)"
-    current="$(bp_remote_profile_hash)"
-    [ "$applied" = "$current" ] || { printf 'active_staged_changes'; return; }
-  fi
-  printf '%s' "$state"
-}
-
-bp_remote_runtime_status_json() {
-  state="$(bp_remote_activation_state)"
-  public="$(bp_remote_runtime_get public_key)"
-  [ -n "$public" ] || public="$(bp_remote_wg_public_key_existing 2>/dev/null || true)"
-  handshake="$(bp_remote_runtime_get last_handshake 0)"
-  applied_at="$(bp_remote_runtime_get applied_at 0)"
-  last_error="$(bp_remote_runtime_get last_error)"
-  if bp_remote_live_supported; then supported=true; else supported=false; fi
-  printf '{"activation_state":"%s","apply_supported":%s,"public_key":"%s","applied_at":%s,"last_handshake":%s,"last_error":"%s"}' \
-    "$(bp_json_escape "$state")" "$supported" "$(bp_json_escape "$public")" "${applied_at:-0}" "${handshake:-0}" "$(bp_json_escape "$last_error")"
-}
-# End of BlazePwifi remote apply engine.
- || return 2
-
+  printf '%s' "$zt_node" | grep -Eq '^[0-9A-Fa-f]{10}$' || return 2
   zt_global_type="$(uci -q get zerotier.global 2>/dev/null || true)"
   [ "$zt_global_type" = zerotier ] || uci set zerotier.global=zerotier
   uci set "zerotier.global.secret=$zt_secret"
-  if ! uci -q get zerotier.global.enabled >/dev/null 2>&1; then
-    uci set zerotier.global.enabled=0
-  fi
+  if ! uci -q get zerotier.global.enabled >/dev/null 2>&1; then uci set zerotier.global.enabled=0; fi
   uci commit zerotier || return 1
   chmod 600 "$BP_REMOTE_ZT_CONFIG" 2>/dev/null || return 1
-
-  bp_remote_zt_runtime_write \
-    "$(bp_remote_zt_runtime_get active 0)" "$(bp_remote_zt_runtime_get network_id)" \
+  bp_remote_zt_runtime_write "$(bp_remote_zt_runtime_get active 0)" "$(bp_remote_zt_runtime_get network_id)" \
     "$(printf '%s' "$zt_node" | tr A-F a-f)" "$(bp_remote_zt_runtime_get interface)" \
     "$(bp_remote_zt_runtime_get address)" "$(bp_remote_zt_runtime_get status staged)"
   printf '%s' "$zt_node" | tr A-F a-f
@@ -862,41 +832,11 @@ bp_remote_zt_live_validate() {
   [ "$(bp_remote_get mode disabled)" = zerotier ] || return 10
   bp_remote_zt_live_supported || return 11
   bp_remote_zt_config_compatible || return 40
-
   current_state="$(bp_remote_runtime_get state staged)"
   current_zt="$(bp_remote_zt_runtime_get active 0)"
-  case "$current_state" in
-    active|active_staged_changes)
-      [ "$current_zt" = 1 ] || return 43
-      ;;
-  esac
-
+  case "$current_state" in active|active_staged_changes) [ "$current_zt" = 1 ] || return 43;; esac
   zt_nwid="$(bp_remote_get zt_network_id)"
-  printf '%s' "$zt_nwid" | grep -Eq '^[0-9A-Fa-f]{16}
-  bp_remote_apply_init
-  state="$(bp_remote_runtime_get state staged)"
-  if [ "$state" = active ]; then
-    applied="$(bp_remote_runtime_get profile_sha)"
-    current="$(bp_remote_profile_hash)"
-    [ "$applied" = "$current" ] || { printf 'active_staged_changes'; return; }
-  fi
-  printf '%s' "$state"
-}
-
-bp_remote_runtime_status_json() {
-  state="$(bp_remote_activation_state)"
-  public="$(bp_remote_runtime_get public_key)"
-  [ -n "$public" ] || public="$(bp_remote_wg_public_key_existing 2>/dev/null || true)"
-  handshake="$(bp_remote_runtime_get last_handshake 0)"
-  applied_at="$(bp_remote_runtime_get applied_at 0)"
-  last_error="$(bp_remote_runtime_get last_error)"
-  if bp_remote_live_supported; then supported=true; else supported=false; fi
-  printf '{"activation_state":"%s","apply_supported":%s,"public_key":"%s","applied_at":%s,"last_handshake":%s,"last_error":"%s"}' \
-    "$(bp_json_escape "$state")" "$supported" "$(bp_json_escape "$public")" "${applied_at:-0}" "${handshake:-0}" "$(bp_json_escape "$last_error")"
-}
-# End of BlazePwifi remote apply engine.
- || return 12
-
+  printf '%s' "$zt_nwid" | grep -Eq '^[0-9A-Fa-f]{16}$' || return 12
   if [ "$(bp_remote_get management 0)" = 1 ]; then
     zt_allowlist="$(bp_remote_get source_allowlist)"
     [ -n "$zt_allowlist" ] || return 17
@@ -907,7 +847,6 @@ bp_remote_runtime_status_json() {
       [ "$zt_prefix" -ge 8 ] 2>/dev/null || return 17
     done
   fi
-
   zt_if="$(bp_remote_zt_runtime_get interface)"
   if [ "$current_zt" = 1 ] && [ -n "$zt_if" ]; then
     route_sig="$(bp_remote_route_signature "$source_ip" 2>/dev/null || true)"
@@ -920,7 +859,6 @@ bp_remote_zt_write_uci() {
   zt_nwid="$(bp_remote_get zt_network_id)"
   bp_remote_zt_config_compatible || return 1
   bp_remote_zt_identity_prepare >/dev/null || return 1
-
   zt_global_type="$(uci -q get zerotier.global 2>/dev/null || true)"
   [ "$zt_global_type" = zerotier ] || uci set zerotier.global=zerotier
   uci set zerotier.global.enabled=1
@@ -933,15 +871,12 @@ bp_remote_zt_write_uci() {
   uci set "zerotier.$BP_REMOTE_ZT_SECTION.allow_dns=0"
   uci commit zerotier || return 1
   chmod 600 "$BP_REMOTE_ZT_CONFIG" 2>/dev/null || return 1
-  return 0
 }
 
 bp_remote_zt_remove_uci() {
   bp_remote_zt_config_compatible || return 1
   uci -q delete "zerotier.$BP_REMOTE_ZT_SECTION" || true
-  if uci -q get zerotier.global >/dev/null 2>&1; then
-    uci set zerotier.global.enabled=0
-  fi
+  if uci -q get zerotier.global >/dev/null 2>&1; then uci set zerotier.global.enabled=0; fi
   uci commit zerotier || return 1
   chmod 600 "$BP_REMOTE_ZT_CONFIG" 2>/dev/null || return 1
 }
@@ -960,17 +895,13 @@ bp_remote_zt_wait_health() {
     case "$zt_node_status" in ONLINE|TUNNELED) zt_node_ok=1;; *) zt_node_ok=0;; esac
     if [ "$zt_node_ok" = 1 ] && [ "$zt_status" = OK ] && [ -n "$zt_if" ] && [ "$zt_if" != "-" ] && bp_remote_ipv4_cidr_valid "$zt_addr"; then
       BP_REMOTE_ZT_NODE_ID="$(printf '%s' "$zt_node" | tr A-F a-f)"
-      BP_REMOTE_ZT_IF="$zt_if"
-      BP_REMOTE_ZT_ADDR="$zt_addr"
-      BP_REMOTE_ZT_STATUS="$zt_status"
+      BP_REMOTE_ZT_IF="$zt_if"; BP_REMOTE_ZT_ADDR="$zt_addr"; BP_REMOTE_ZT_STATUS="$zt_status"
       export BP_REMOTE_ZT_NODE_ID BP_REMOTE_ZT_IF BP_REMOTE_ZT_ADDR BP_REMOTE_ZT_STATUS
       return 0
     fi
     now="$(bp_now)"
     [ $((now-start)) -lt "$wait_seconds" ] 2>/dev/null || {
-      BP_REMOTE_ZT_STATUS="${zt_status:-unavailable}"
-      export BP_REMOTE_ZT_STATUS
-      return 1
+      BP_REMOTE_ZT_STATUS="${zt_status:-unavailable}"; export BP_REMOTE_ZT_STATUS; return 1;
     }
     sleep 1
   done
@@ -978,40 +909,27 @@ bp_remote_zt_wait_health() {
 
 bp_remote_zt_routes() {
   zt_if="$1"
-  if [ -n "${BP_REMOTE_ZT_ROUTES_HOOK:-}" ]; then
-    BP_REMOTE_ZT_ROUTE_IF="$zt_if" sh -c "$BP_REMOTE_ZT_ROUTES_HOOK"
-    return
-  fi
+  if [ -n "${BP_REMOTE_ZT_ROUTES_HOOK:-}" ]; then BP_REMOTE_ZT_ROUTE_IF="$zt_if" sh -c "$BP_REMOTE_ZT_ROUTES_HOOK"; return; fi
   ip -4 route show dev "$zt_if" 2>/dev/null | awk '
     $1=="default" {print "default"; next}
     $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/ {print $1; next}
-    $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print $1"/32"}
-  '
+    $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print $1"/32"}'
 }
 
 bp_remote_zt_other_connected_routes() {
   zt_if="$1"
-  if [ -n "${BP_REMOTE_ZT_CONNECTED_ROUTES_HOOK:-}" ]; then
-    BP_REMOTE_ZT_ROUTE_IF="$zt_if" sh -c "$BP_REMOTE_ZT_CONNECTED_ROUTES_HOOK"
-    return
-  fi
+  if [ -n "${BP_REMOTE_ZT_CONNECTED_ROUTES_HOOK:-}" ]; then BP_REMOTE_ZT_ROUTE_IF="$zt_if" sh -c "$BP_REMOTE_ZT_CONNECTED_ROUTES_HOOK"; return; fi
   ip -4 route show scope link 2>/dev/null | awk -v zt="$zt_if" -v wg="$BP_REMOTE_WG_IF" '
-    {
-      dev=""
-      for(i=1;i<=NF;i++) if($i=="dev" && i<NF) dev=$(i+1)
-      if(dev==zt || dev==wg) next
-    }
+    {dev=""; for(i=1;i<=NF;i++) if($i=="dev" && i<NF) dev=$(i+1); if(dev==zt || dev==wg) next}
     $1=="default"{next}
     $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/ {print $1; next}
-    $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print $1"/32"}
-  '
+    $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print $1"/32"}'
 }
 
 bp_remote_zt_route_validate() {
   zt_if="$1"; zt_addr="$2"; source_ip="${3:-}"
   zt_routes="$(bp_remote_zt_routes "$zt_if")"
   [ -n "$zt_routes" ] || return 1
-
   for zt_route in $zt_routes; do
     [ "$zt_route" != default ] || return 2
     bp_remote_ipv4_cidr_valid "$zt_route" || return 2
@@ -1022,7 +940,6 @@ bp_remote_zt_route_validate() {
       bp_remote_ipv4_overlap "$zt_route" "$zt_local" && return 3
     done
   done
-
   if [ "$(bp_remote_get management 0)" = 1 ]; then
     zt_allowlist="$(bp_remote_get source_allowlist)"
     for zt_source in $(bp_remote_split_cidrs "$zt_allowlist"); do
@@ -1034,18 +951,13 @@ bp_remote_zt_route_validate() {
       [ "$contained" = 1 ] || return 4
     done
   fi
-
   route_sig="$(bp_remote_route_signature "$source_ip" 2>/dev/null || true)"
   case "$route_sig" in *"dev=$zt_if"*) return 5;; esac
-  return 0
 }
 
 bp_remote_zt_write_firewall() {
-  zt_if="$1"
-  management="$(bp_remote_get management 0)"
-  allowlist="$(bp_remote_get source_allowlist)"
+  zt_if="$1"; management="$(bp_remote_get management 0)"; allowlist="$(bp_remote_get source_allowlist)"
   admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
-
   uci -q delete "firewall.$BP_REMOTE_ZT_FW_ZONE" || true
   uci -q delete "firewall.$BP_REMOTE_ZT_FW_ADMIN" || true
   uci set "firewall.$BP_REMOTE_ZT_FW_ZONE=zone"
@@ -1054,7 +966,6 @@ bp_remote_zt_write_firewall() {
   uci set "firewall.$BP_REMOTE_ZT_FW_ZONE.output=ACCEPT"
   uci set "firewall.$BP_REMOTE_ZT_FW_ZONE.forward=REJECT"
   uci add_list "firewall.$BP_REMOTE_ZT_FW_ZONE.device=$zt_if"
-
   if [ "$management" = 1 ]; then
     uci set "firewall.$BP_REMOTE_ZT_FW_ADMIN=rule"
     uci set "firewall.$BP_REMOTE_ZT_FW_ADMIN.name=Allow-BlazePwifi-ZeroTier-Admin"
@@ -1062,9 +973,7 @@ bp_remote_zt_write_firewall() {
     uci set "firewall.$BP_REMOTE_ZT_FW_ADMIN.proto=tcp"
     uci set "firewall.$BP_REMOTE_ZT_FW_ADMIN.dest_port=$admin_port"
     uci set "firewall.$BP_REMOTE_ZT_FW_ADMIN.target=ACCEPT"
-    for zt_source in $(bp_remote_split_cidrs "$allowlist"); do
-      uci add_list "firewall.$BP_REMOTE_ZT_FW_ADMIN.src_ip=$zt_source"
-    done
+    for zt_source in $(bp_remote_split_cidrs "$allowlist"); do uci add_list "firewall.$BP_REMOTE_ZT_FW_ADMIN.src_ip=$zt_source"; done
   fi
   uci commit firewall
 }
@@ -1076,25 +985,20 @@ bp_remote_zt_remove_firewall() {
 }
 
 bp_remote_zt_listener_apply() {
-  zt_addr="$1"
-  management="$(bp_remote_get management 0)"
-  listener=""
+  zt_addr="$1"; management="$(bp_remote_get management 0)"; listener=""
   if [ "$management" = 1 ]; then
     zt_ip="$(printf '%s' "$zt_addr" | cut -d/ -f1)"
     admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
     listener="$zt_ip:$admin_port"
   fi
-
   bp_remote_runtime_write applying "$(bp_remote_runtime_get apply_id)" "$(bp_remote_runtime_get profile_sha)" 0 "" \
     "$listener" "$(bp_remote_runtime_get public_key)" 0
   if [ -n "$listener" ]; then
-    bp_remote_admin_start || return 1
-    bp_remote_admin_running || return 1
+    bp_remote_admin_start || return 1; bp_remote_admin_running || return 1
   else
     bp_remote_admin_stop || return 1
   fi
-  BP_REMOTE_NEW_LISTENER="$listener"
-  export BP_REMOTE_NEW_LISTENER
+  BP_REMOTE_NEW_LISTENER="$listener"; export BP_REMOTE_NEW_LISTENER
 }
 
 bp_remote_zerotier_apply() {
@@ -1102,13 +1006,11 @@ bp_remote_zerotier_apply() {
   bp_remote_apply_init
   [ ! -e "$BP_REMOTE_PENDING" ] || return 20
   bp_remote_zt_live_validate "$source_ip" || return $?
-
-  zt_node="$(bp_remote_zt_identity_prepare)" || return 41
+  bp_remote_zt_identity_prepare >/dev/null || return 41
   profile_sha="$(bp_remote_profile_hash)"
   source_sig="$(bp_remote_route_signature "$source_ip" 2>/dev/null || true)"
   default_sig="$(bp_remote_default_signature 2>/dev/null || true)"
   [ -n "$default_sig" ] || return 22
-
   id="$(date +%Y%m%d%H%M%S)-zt-$(bp_tmp_suffix)"
   bp_remote_lock || return 23
   bp_remote_snapshot_create "$id" || { bp_remote_unlock; return 23; }
@@ -1116,22 +1018,14 @@ bp_remote_zerotier_apply() {
   bp_remote_runtime_write applying "$id" "$profile_sha" 0 "" "$(bp_remote_runtime_get wg_listener)" "$(bp_remote_runtime_get public_key)" 0
   bp_remote_unlock
   bp_remote_guard_spawn "$id"
-
   if ! bp_remote_zt_write_uci; then bp_remote_rollback_pending "$id" zerotier-uci-failed; return 44; fi
   bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_zt_service_restart; then bp_remote_rollback_pending "$id" zerotier-service-failed; return 45; fi
   bp_remote_pending_owned "$id" || return 30
-  if ! bp_remote_zt_wait_health; then
-    bp_remote_rollback_pending "$id" "zerotier-${BP_REMOTE_ZT_STATUS:-health-timeout}"
-    return 46
-  fi
+  if ! bp_remote_zt_wait_health; then bp_remote_rollback_pending "$id" "zerotier-${BP_REMOTE_ZT_STATUS:-health-timeout}"; return 46; fi
   bp_remote_pending_owned "$id" || return 30
-  if bp_remote_zt_route_validate "$BP_REMOTE_ZT_IF" "$BP_REMOTE_ZT_ADDR" "$source_ip"; then
-    :
-  else
-    zt_route_rc=$?
-    bp_remote_rollback_pending "$id" "zerotier-route-safety-$zt_route_rc"
-    return 47
+  if bp_remote_zt_route_validate "$BP_REMOTE_ZT_IF" "$BP_REMOTE_ZT_ADDR" "$source_ip"; then :; else
+    zt_route_rc=$?; bp_remote_rollback_pending "$id" "zerotier-route-safety-$zt_route_rc"; return 47
   fi
   bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_zt_write_firewall "$BP_REMOTE_ZT_IF"; then bp_remote_rollback_pending "$id" zerotier-firewall-write-failed; return 48; fi
@@ -1141,7 +1035,6 @@ bp_remote_zerotier_apply() {
   bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" zerotier-route-survival-failed; return 29; fi
   bp_remote_pending_owned "$id" || return 30
-
   bp_remote_lock || { bp_remote_rollback_pending "$id" zerotier-finalize-lock-failed; return 30; }
   line="$(bp_remote_pending_read 2>/dev/null || true)"
   [ "$(printf '%s' "$line" | cut -f1)" = "$id" ] || { bp_remote_unlock; return 30; }
@@ -1150,7 +1043,6 @@ bp_remote_zerotier_apply() {
   bp_remote_pending_clear
   bp_remote_runtime_write active "$id" "$profile_sha" "$(bp_now)" "" "$listener" "$(bp_remote_runtime_get public_key)" 0
   bp_remote_unlock
-  return 0
 }
 
 bp_remote_zerotier_disable() {
@@ -1165,14 +1057,12 @@ bp_remote_zerotier_disable() {
   [ -n "$default_sig" ] || return 22
   profile_sha="$(bp_remote_profile_hash)"
   id="$(date +%Y%m%d%H%M%S)-zt-disable-$(bp_tmp_suffix)"
-
   bp_remote_lock || return 23
   bp_remote_snapshot_create "$id" || { bp_remote_unlock; return 23; }
   bp_remote_pending_write "$id" "$profile_sha" "$source_ip" "$source_sig" "$default_sig" zerotier || { bp_remote_unlock; return 23; }
   bp_remote_runtime_write disabling "$id" "$profile_sha" 0 "" "$(bp_remote_runtime_get wg_listener)" "$(bp_remote_runtime_get public_key)" 0
   bp_remote_unlock
   bp_remote_guard_spawn "$id"
-
   if ! bp_remote_admin_stop; then bp_remote_rollback_pending "$id" zerotier-disable-admin-stop-failed; return 49; fi
   bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_zt_remove_firewall; then bp_remote_rollback_pending "$id" zerotier-disable-firewall-write-failed; return 48; fi
@@ -1182,15 +1072,12 @@ bp_remote_zerotier_disable() {
   bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" zerotier-disable-route-survival-failed; return 29; fi
   bp_remote_pending_owned "$id" || return 30
-
   bp_remote_lock || { bp_remote_rollback_pending "$id" zerotier-disable-finalize-lock-failed; return 30; }
-  zt_node="$(bp_remote_zt_runtime_get node_id)"
-  zt_nwid="$(bp_remote_get zt_network_id)"
+  zt_node="$(bp_remote_zt_runtime_get node_id)"; zt_nwid="$(bp_remote_get zt_network_id)"
   bp_remote_pending_clear
   bp_remote_zt_runtime_write 0 "$zt_nwid" "$zt_node" "" "" staged
   bp_remote_runtime_write staged "$id" "$profile_sha" "$(bp_now)" "" "" "$(bp_remote_runtime_get public_key)" 0
   bp_remote_unlock
-  return 0
 }
 
 bp_remote_activation_state() {
