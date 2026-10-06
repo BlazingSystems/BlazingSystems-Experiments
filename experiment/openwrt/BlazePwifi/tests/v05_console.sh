@@ -87,6 +87,8 @@ grep -Fq 'bp_remote_wg_link_precreate' "$REMOTE_APPLY"
 [ "$(grep -Fc 'bp_remote_wireguard_disable()' "$REMOTE_APPLY")" -eq 1 ]
 ! grep -Fq 'BP_REMOTE_UHTTPD_CONFIG' "$REMOTE_APPLY"
 ! grep -Fq 'uhttpd.blazepwifi_admin' "$REMOTE_APPLY"
+grep -Fq 'START=60' "$ROOT/openwrt/rootfs/etc/init.d/blazepwifi-remote-guard"
+grep -Fq 'START=75' "$REMOTE_ADMIN"
 grep -Fq '/www/blazepwifi/cgi-bin/admin-session' "$REMOTE_ADMIN"
 ! grep -Fq '/www/blazepwifi/cgi-bin/api' "$REMOTE_ADMIN"
 ! grep -Fq '/www/blazepwifi/cgi-bin/rental' "$REMOTE_ADMIN"
