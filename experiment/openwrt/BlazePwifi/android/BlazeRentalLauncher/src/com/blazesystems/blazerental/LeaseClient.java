@@ -1,6 +1,7 @@
 package com.blazesystems.blazerental;
 
 import android.content.Context;
+import android.os.SystemClock;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -12,7 +13,40 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public final class LeaseClient {
+    private static volatile long coinWindowDeadlineElapsedMs;
+    private static volatile String coinWindowVendo = "";
+
     private LeaseClient() {}
+
+    private static void recordCoinWindow(long serverNowMs, long expiresMs, String vendo) {
+        if (serverNowMs <= 0L || expiresMs <= serverNowMs) {
+            clearCoinWindow();
+            return;
+        }
+        long duration = Math.min(10L * 60L * 1000L, expiresMs - serverNowMs);
+        coinWindowVendo = vendo == null ? "" : vendo;
+        coinWindowDeadlineElapsedMs = SystemClock.elapsedRealtime() + duration;
+    }
+
+    public static long coinWindowRemainingMs() {
+        long deadline = coinWindowDeadlineElapsedMs;
+        if (deadline <= 0L) return 0L;
+        long remaining = deadline - SystemClock.elapsedRealtime();
+        if (remaining <= 0L) {
+            clearCoinWindow();
+            return 0L;
+        }
+        return remaining;
+    }
+
+    public static String coinWindowVendo() {
+        return coinWindowRemainingMs() > 0L ? coinWindowVendo : "";
+    }
+
+    public static void clearCoinWindow() {
+        coinWindowDeadlineElapsedMs = 0L;
+        coinWindowVendo = "";
+    }
 
     public static boolean sync(Context context) {
         try {
@@ -55,6 +89,13 @@ public final class LeaseClient {
             long leaseUntil = response.optLong("lease_until_ms", 0L);
             if (serverNow <= 0L || leaseUntil < serverNow) return false;
             RentalLeaseStore.recordLease(context, serverNow, leaseUntil);
+            if (enrolling) {
+                clearCoinWindow();
+            } else {
+                recordCoinWindow(serverNow,
+                        response.optLong("coin_window_expires_ms", 0L),
+                        response.optString("coin_window_vendo", ""));
+            }
 
             if (!enrolling) {
                 String allowed = response.optString("allowed_packages", "*");
@@ -174,9 +215,43 @@ public final class LeaseClient {
             if (!response.optBoolean("ok", false)) {
                 return response.optString("error", "Unable to start coin slot.");
             }
-            return "Insert coin at " + response.optString("vendo", "selected controller") + ".";
+            long serverNow = response.optLong("server_time_ms", 0L);
+            long expires = response.optLong("expires_ms", 0L);
+            String vendo = response.optString("vendo", "selected controller");
+            if (serverNow <= 0L || expires <= serverNow) {
+                clearCoinWindow();
+                return "Invalid coin-window response.";
+            }
+            recordCoinWindow(serverNow, expires, vendo);
+            return "Insert coin at " + vendo + ".";
         } catch (Exception ignored) {
             return "Unable to start coin slot.";
+        }
+    }
+
+    public static String coinStop(Context context) {
+        try {
+            String base = RentalLeaseStore.server(context);
+            String secret = RentalLeaseStore.deviceSecret(context);
+            String deviceId = RentalLeaseStore.deviceId(context);
+            if (base.length() == 0 || secret.length() == 0 || deviceId.length() == 0) {
+                clearCoinWindow();
+                return "Rental phone is not enrolled.";
+            }
+            String nonce = Hmac.nonce();
+            String body = "action=coin_stop&nonce=" + enc(nonce)
+                    + "&device_id=" + enc(deviceId)
+                    + "&sig=" + enc(Hmac.sha256Hex(secret,
+                    "coin_stop|" + nonce + "|" + secret));
+            JSONObject response = post(base, body);
+            if (response == null) return "Server unavailable.";
+            if (!response.optBoolean("ok", false)) {
+                return response.optString("error", "Unable to close coin slot.");
+            }
+            clearCoinWindow();
+            return "Coin window closed.";
+        } catch (Exception ignored) {
+            return "Unable to close coin slot.";
         }
     }
 
