@@ -1,10 +1,15 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
+Version: v0.5.2-rental.2-rc.2
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
 3. Enter the OpenWrt router IP/hostname, SSH username and password.
 4. Confirm the router SSH host-key fingerprint on first connection.
-5. The installer uploads the pinned OpenWrt bundle, detects R281/EW1200G Pro/generic OpenWrt, installs the full BlazePwifi software in Rental Standalone mode, and opens the Rental console.
+5. The installer probes the board before deployment.
+6. If it detects notion,r281 it automatically uses the R281/EasyMode-specific installation path.
+7. Other supported OpenWrt devices use the generic target-detection path.
+
+The R281 path is BusyBox-compatible and does not use GNU tar-only extraction options.
 
 Normal Rental Standalone installation does not intentionally modify network, wireless or firewall UCI packages.
 
@@ -17,7 +22,28 @@ The SSH password is written only to a temporary local file for plink/pscp and is
 The package includes PuTTY command-line SSH tools (plink/pscp) solely for deployment. See the included PuTTY licence file.
 
 
-rc.3 hotfix:
-- First-time PuTTY host-key output is captured instead of becoming a PowerShell NativeCommandError.
-- A GUI trust dialog is shown automatically on the first SSH connection.
-- No manual PuTTY launch or host-key pre-caching is required.
+Fresh-install Rental console credentials:
+  Username: admin
+  Password: admin
+
+Existing admin accounts are preserved on upgrade. Change the default password later in Rental settings.
+
+
+PASSWORD RESET:
+  Double-click Reset-BlazePwifi-Admin-Password.bat.
+  It works with Standalone Rental and full BlazePwifi.
+  It resets only to:
+    Username: admin
+    Password: admin
+  No manual file upload to the router is required.
+
+
+HOTFIX 0.5.2-rental.2-rc.2:
+- Fixes CSRF validation failures on mutating Rental admin actions such as QR enrollment.
+- Sends CSRF in both HTTP header and POST body.
+- Refreshes the authenticated session and retries once if a CSRF token becomes stale.
+
+
+PROVISIONING RC:
+  Standard Enrollment QR and Android Device Provisioning QR are separate.
+  Device Provisioning uses the exact APK/checksum shipped with this release candidate.

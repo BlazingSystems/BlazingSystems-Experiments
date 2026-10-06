@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.0-rental-rc.3"
+PROFILE_VERSION="0.5.2-rental.2-rc.2"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -89,6 +89,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-rental-standalone-backups/$STAMP"
 mkdir -p "$BACKUP/cgi"
 for p in /etc/config/uhttpd /etc/config/blazepwifi; do [ -f "$p" ] && cp -p "$p" "$BACKUP/" || true; done
+[ -f /usr/share/blazepwifi/rental-provisioning.env ] && cp -p /usr/share/blazepwifi/rental-provisioning.env "$BACKUP/" || true
 [ -d /etc/blazepwifi ] && cp -a /etc/blazepwifi "$BACKUP/etc-blazepwifi" || true
 [ -d /usr/lib/blazepwifi ] && cp -a /usr/lib/blazepwifi "$BACKUP/usr-lib-blazepwifi" || true
 [ -d "$WEB_ROOT/rental" ] && cp -a "$WEB_ROOT/rental" "$BACKUP/web-rental" || true
@@ -97,7 +98,7 @@ for f in rental blaze-rental-admin blaze-rental-login blaze-rental-session blaze
 done
 
 if [ "$PREINSTALLED" -eq 0 ]; then
-  note "Installing complete BlazePwifi v0.5 payload; hotspot core remains dormant..."
+  note "Installing complete BlazePwifi 0.5.2 payload; hotspot core remains dormant..."
   EXISTING_CFG=0
   [ -f /etc/config/blazepwifi ] && { EXISTING_CFG=1; cp -p /etc/config/blazepwifi "$BACKUP/blazepwifi.original"; }
   cp -a "$ROOTFS/." /
@@ -140,6 +141,23 @@ cp -p /www/blazepwifi/vendor/qrcode/LICENSE "$WEB_ROOT/rental/vendor/qrcode-LICE
 chmod 755 "$CGI_DIR/rental" "$CGI_DIR"/blaze-rental-*
 chmod 644 "$WEB_ROOT/rental/index.html" "$WEB_ROOT/rental/vendor/"*
 
+mkdir -p /usr/share/blazepwifi
+if [ -f "$SELF/rental-provisioning.env" ]; then
+  cp -p "$SELF/rental-provisioning.env" /usr/share/blazepwifi/rental-provisioning.env
+else
+  cat > /usr/share/blazepwifi/rental-provisioning.env <<'EOF'
+READY=0
+APK_URL=
+APK_CHECKSUM=
+APK_SHA256=
+APK_VERSION=
+APK_VERSION_CODE=
+APK_CHANNEL=
+PRODUCTION_READY=0
+EOF
+fi
+chmod 644 /usr/share/blazepwifi/rental-provisioning.env
+
 ensure(){ k="$1"; v="$2"; uci -q get "blazepwifi.main.$k" >/dev/null 2>&1 || uci set "blazepwifi.main.$k=$v"; }
 uci -q get blazepwifi.main >/dev/null 2>&1 || uci set blazepwifi.main='core'
 uci set blazepwifi.main.edition='rental-standalone'
@@ -181,9 +199,30 @@ BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_
 
 BOOT=""
 if ! grep -q "^admin$(printf '\t')" /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
-  BOOT="$(randhex 12)"
-  BP_LIB=/usr/lib/blazepwifi/common.sh /usr/lib/blazepwifi/auth.sh --set-bootstrap admin admin "$BOOT" || die "Unable to create administrator."
-  printf '%s\n' "$BOOT" > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
+  BOOT="admin"
+  BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh \
+  sh -c '
+    set -eu
+    . "$BP_LIB"
+    . "$BP_AUTH_LIB"
+    bp_auth_init
+    salt="$(bp_auth_random_hex 8 2>/dev/null || true)"
+    [ -n "$salt" ] || salt="$(printf "%s|%s|admin-default" "$(date +%s)" "$$" | bp_sha256 | cut -c1-16)"
+    rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"
+    case "$rounds" in ""|*[!0-9]*) rounds=2048;; esac
+    [ "$rounds" -ge 1 ] 2>/dev/null || rounds=2048
+    hash="$(bp_auth_sha256i admin "$salt" "$rounds")"
+    tmp="$BP_STATE/.admin-users.default.$$"
+    awk -F "\t" '"'"'$1!="admin"{print}'"'"' "$BP_ADMIN_USERS" > "$tmp"
+    printf "admin\tadmin\tsha256i\t%s\t%s\t%s\t0\n" "$salt" "$hash" "$rounds" >> "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$BP_ADMIN_USERS"
+    : > "$BP_ADMIN_SESSIONS"
+    : > "$BP_AUTH_FAILURES"
+    chmod 600 "$BP_ADMIN_SESSIONS" "$BP_AUTH_FAILURES"
+    bp_auth_verify_password admin admin
+  ' || die "Unable to create verified default administrator."
+  printf 'admin\n' > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
   chmod 600 /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 fi
 
@@ -244,11 +283,19 @@ echo "Rental console:    https://$LAN_IP/rental/"
 echo "Android server:    http://$LAN_IP"
 echo "Android API:       http://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
+PROV_READY="$(awk -F= '$1=="READY"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
+PROV_CHANNEL="$(awk -F= '$1=="APK_CHANNEL"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
+if [ "$PROV_READY" = 1 ]; then
+  echo "Device provisioning: available ($PROV_CHANNEL channel)"
+else
+  echo "Device provisioning: unavailable (exact APK metadata not installed)"
+fi
 echo "Full server core:  installed but DISABLED"
 echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
 echo "Backup:            $BACKUP"
 echo "Admin username:    admin"
-[ -n "$BOOT" ] && echo "Bootstrap password: $BOOT"
+[ -n "$BOOT" ] && echo "Default password:   admin"
+[ -n "$BOOT" ] && echo "Change it later in Rental settings."
 echo
 echo "Existing root/admin UI preserved."
 echo "No network, wireless or firewall UCI package was modified."

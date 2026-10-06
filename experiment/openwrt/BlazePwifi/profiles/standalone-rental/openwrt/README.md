@@ -1,22 +1,58 @@
-# OpenWrt Rental Standalone — rc.2
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.2
 
-The installer is intentionally **network-neutral**. It does not change the router's WAN, LAN, Wi-Fi, cellular, repeater or firewall UCI packages.
+The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
 After installation:
 
-- existing router/basic UI stays at whatever routes the device already uses;
+- existing router/basic UI stays where the device already provides it;
 - BlazePwifi Rental management is added at `https://LocalIP/rental/`;
-- BlazeRental phones use `http://LocalIP` as their server URL;
+- BlazeRental phones use `http://LocalIP`;
 - authenticated remote ESP coinslot interfaces use `http://LocalIP:4455/cgi-bin/vendo`.
 
-The complete BlazePwifi v0.5 payload is installed, but the hotspot core is disabled. Conversion to full BlazePwifi is explicit:
+## R281 / EasyMode path
+
+When the Windows OneClick installer detects `/tmp/sysinfo/board_name = notion,r281`, it automatically runs `install-r281.sh`.
+
+That R281-specific entry verifies:
+
+- OpenWrt 24.10.x;
+- uHTTPd home `/www`;
+- CGI prefix `/cgi-bin`;
+- existing HTTPS :443.
+
+The Windows deployer extracts the bundle with plain BusyBox-supported `tar -xzf ... -C ...` and then enters the archive's single top-level directory. No GNU-only archive options are used.
+
+## Full conversion
+
+The complete BlazePwifi payload remains installed but the hotspot core stays disabled. Conversion to full BlazePwifi is explicit:
 
 ```sh
 /usr/sbin/blazepwifi-rental-upgrade --full
 ```
 
-Only that conversion step is allowed to activate BlazePwifi firewall/hotspot ownership.
+Only that conversion step may activate BlazePwifi hotspot/firewall ownership.
 
-Supported installer target hints are `r281`, `ew1200g-pro`, `generic`, and `auto` (default). OpenWrt 24.10.x and 25.12.x are accepted by the RC installer.
 
-The preferred release path is the Windows one-click installer package; manual tarball installation remains supported.
+## Fresh-install Rental login
+
+```text
+Username: admin
+Password: admin
+```
+
+Existing admin accounts are preserved. The normal password-change action still requires a stronger password.
+
+
+## 0.5.2-rental.2-rc.2 UI hotfix
+
+Rental mutations now submit CSRF through both the custom header and form body, with one authenticated token refresh/retry on mismatch. This specifically fixes QR enrollment creation on R281/uHTTPd paths where custom CGI headers may not be reliable.
+
+
+## QR enrollment architecture
+
+This release candidate deliberately separates:
+
+- **Standard Enrollment QR** — for BlazeRental already installed; binding only.
+- **Device Provisioning QR** — for Android Setup Wizard on a new/factory-reset phone; exact DPC APK URL/checksum plus one-time server binding extras.
+
+Device Provisioning is fail-closed when exact APK metadata is not installed.

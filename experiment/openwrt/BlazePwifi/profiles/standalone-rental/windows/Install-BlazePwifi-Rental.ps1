@@ -103,7 +103,7 @@ function Prompt-Password {
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Plink = Join-Path $Here "plink.exe"
 $Pscp = Join-Path $Here "pscp.exe"
-$BundleName = "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.3.tar.gz"
+$BundleName = "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.2.tar.gz"
 $Bundle = Get-ChildItem -Path $Here -Filter $BundleName -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if (!(Test-Path $Plink) -or !(Test-Path $Pscp)) {
@@ -209,6 +209,24 @@ try {
     }
 
     Write-Host "SSH connection OK." -ForegroundColor Green
+
+    $detectArgs = $base + $HostKeyArgs + @("$SshUser@$HostName","cat /tmp/sysinfo/board_name 2>/dev/null || true")
+    $detect = Invoke-NativeCapture -FilePath $Plink -Arguments $detectArgs
+    if ($detect.ExitCode -ne 0) {
+        Write-Host $detect.Output
+        Show-Error "Connected over SSH, but hardware detection failed."
+        exit 9
+    }
+
+    $BoardName = $detect.Output.Trim()
+    $UseR281Installer = ($BoardName -eq "notion,r281")
+    Write-Host "Detected board: $BoardName" -ForegroundColor Cyan
+    if ($UseR281Installer) {
+        Write-Host "R281 detected: using the R281/EasyMode-specific installer path." -ForegroundColor Green
+    } else {
+        Write-Host "Using the generic target-detection installer path." -ForegroundColor DarkCyan
+    }
+
     Write-Host "Uploading Rental Standalone package..." -ForegroundColor Cyan
 
     $scpArgs = @("-scp","-P",$Port.ToString(),"-batch","-pwfile",$PwFile) + $HostKeyArgs +
@@ -220,14 +238,31 @@ try {
         exit 8
     }
 
-    $remote = @'
+    $RemoteEntry = if ($UseR281Installer) { "sh ./install-r281.sh" } else { "sh ./install.sh --target=auto" }
+
+    # R281 uses BusyBox tar. Extract with portable options only, then enter
+    # the archive's single top-level bundle directory.
+    $remoteTemplate = @'
 set -e
-rm -rf /tmp/blazepwifi-rental-install
-mkdir -p /tmp/blazepwifi-rental-install
-tar -xzf /tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.3.tar.gz -C /tmp/blazepwifi-rental-install --strip-components=1
-cd /tmp/blazepwifi-rental-install
-sh ./install.sh --target=auto
+ARCHIVE=/tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.2.tar.gz
+UNPACK=/tmp/blazepwifi-rental-unpack
+rm -rf "$UNPACK"
+mkdir -p "$UNPACK"
+tar -xzf "$ARCHIVE" -C "$UNPACK"
+set -- "$UNPACK"/*
+[ "$#" -eq 1 ] || {
+  echo "ERROR: expected one top-level directory in Rental bundle; found $#" >&2
+  exit 31
+}
+INSTALL_DIR="$1"
+[ -d "$INSTALL_DIR" ] || {
+  echo "ERROR: Rental bundle top-level entry is not a directory." >&2
+  exit 32
+}
+cd "$INSTALL_DIR"
+__BLAZE_INSTALL_ENTRY__
 '@
+    $remote = $remoteTemplate.Replace("__BLAZE_INSTALL_ENTRY__", $RemoteEntry)
 
     Write-Host ""
     Write-Host "Installing on OpenWrt..." -ForegroundColor Cyan
@@ -245,7 +280,7 @@ sh ./install.sh --target=auto
     Write-Host "Rental console: https://$HostName/rental/" -ForegroundColor Green
     Write-Host "Android server: http://$HostName" -ForegroundColor Green
 
-    Show-Info "BlazePwifi Rental Standalone was installed.`r`n`r`nRental console:`r`nhttps://$HostName/rental/`r`n`r`nAndroid server:`r`nhttp://$HostName`r`n`r`nThe console window contains the generated bootstrap password if this was a first install."
+    Show-Info "BlazePwifi Rental Standalone was installed.`r`n`r`nRental console:`r`nhttps://$HostName/rental/`r`n`r`nAndroid server:`r`nhttp://$HostName`r`n`r`nFresh-install Rental login is admin / admin. Change it later in Rental settings."
     try { Start-Process "https://$HostName/rental/" } catch {}
 }
 finally {
