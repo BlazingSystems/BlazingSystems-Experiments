@@ -437,7 +437,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.ref == 'refs/heads/blazepwifi-rental-v0.5.2-hotfix2'
+    # AUDIT HOLD: re-enable only after retry-safe v2 enrollment and all gates pass.
+    if: false
     needs: [validate, android_test, openwrt_bundle, windows_installer, esp8266, esp32, firmware]
     runs-on: ubuntu-22.04
     env:
