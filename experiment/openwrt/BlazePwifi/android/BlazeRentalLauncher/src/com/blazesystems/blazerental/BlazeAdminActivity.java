@@ -294,6 +294,32 @@ public class BlazeAdminActivity extends Activity {
         section("Notifications / overlay");
         specialAccessButtons();
 
+        section("Software update");
+        addStatus("BlazeRental build", BlazeRentalUpdateManager.statusLine(this));
+        if (BlazeRentalUpdateManager.lastError(this).length() > 0) {
+            addStatus("Last update error", BlazeRentalUpdateManager.lastError(this));
+        }
+
+        Button checkUpdate = secondary("CHECK BLAZEPWIFI FOR UPDATE");
+        content.addView(checkUpdate, full());
+        checkUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { syncNow(false); }
+        });
+
+        Button installUpdate = primary("INSTALL AVAILABLE UPDATE");
+        content.addView(installUpdate, full());
+        installUpdate.setEnabled(BlazeRentalUpdateManager.hasAvailableUpdate(this));
+        installUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { runSoftwareUpdate(false); }
+        });
+
+        Button rollbackUpdate = secondary("ROLL BACK TO LAST STABLE RESCUE");
+        content.addView(rollbackUpdate, full());
+        rollbackUpdate.setEnabled(BlazeRentalUpdateManager.hasRollbackRescue(this));
+        rollbackUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { runSoftwareUpdate(true); }
+        });
+
         section("Diagnostics");
         addStatus("Package", getPackageName());
         addStatus("Android", Build.VERSION.RELEASE + " / API " + Build.VERSION.SDK_INT);
@@ -352,10 +378,43 @@ public class BlazeAdminActivity extends Activity {
                                 ok ? "BlazePwifi synchronization complete" : "Server rejected synchronization",
                                 Toast.LENGTH_LONG).show();
                         if (returnToSetup) showInitialSetup();
+                        else if (ok) showDashboard();
                     }
                 });
             }
         }).start();
+    }
+
+    private void runSoftwareUpdate(final boolean rollback) {
+        final String title = rollback ? "Rollback BlazeRental?" : "Install BlazeRental update?";
+        final String message = rollback
+                ? "The rescue APK uses a higher version code but restores the previous stable BlazeRental code. Device Owner state and app data are preserved."
+                : "BlazeRental will download the published APK, verify SHA-256, package identity and signing certificate, then use Android PackageInstaller.";
+        new AlertDialog.Builder(this)
+                .setTitle(title).setMessage(message)
+                .setPositiveButton(rollback ? "Rollback" : "Install",
+                        new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) {
+                        Toast.makeText(BlazeAdminActivity.this,
+                                rollback ? "Preparing rollback rescue..." : "Preparing update...",
+                                Toast.LENGTH_LONG).show();
+                        new Thread(new Runnable() {
+                            @Override public void run() {
+                                final String result = rollback
+                                        ? BlazeRentalPackageUpdater.installRollbackRescue(BlazeAdminActivity.this)
+                                        : BlazeRentalPackageUpdater.installAvailable(BlazeAdminActivity.this);
+                                runOnUiThread(new Runnable() {
+                                    @Override public void run() {
+                                        Toast.makeText(BlazeAdminActivity.this,
+                                                result == null ? "Update request submitted" : result,
+                                                Toast.LENGTH_LONG).show();
+                                        showDashboard();
+                                    }
+                                });
+                            }
+                        }, rollback ? "BlazeRental-rollback" : "BlazeRental-update").start();
+                    }
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void buildAppInventory() {
