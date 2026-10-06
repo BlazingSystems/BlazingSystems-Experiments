@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental-rc.1
+Version: v0.5.2-rental-rc.2
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -20,3 +20,10 @@ After installation:
 The SSH password is written only to a temporary local file for plink/pscp and is overwritten/deleted at the end of the run.
 
 The package includes PuTTY command-line SSH tools (plink/pscp) solely for deployment. See the included PuTTY licence file.
+
+
+Fresh-install Rental console credentials:
+  Username: admin
+  Password: admin
+
+Existing admin accounts are preserved on upgrade. Change the default password later in Rental settings.

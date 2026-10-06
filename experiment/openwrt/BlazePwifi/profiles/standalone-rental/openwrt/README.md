@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental-rc.1
+# OpenWrt Rental Standalone — v0.5.2-rental-rc.2
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -31,3 +31,13 @@ The complete BlazePwifi payload remains installed but the hotspot core stays dis
 ```
 
 Only that conversion step may activate BlazePwifi hotspot/firewall ownership.
+
+
+## Fresh-install Rental login
+
+```text
+Username: admin
+Password: admin
+```
+
+Existing admin accounts are preserved. The normal password-change action still requires a stronger password.

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental-rc.1"
+PROFILE_VERSION="0.5.2-rental-rc.2"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -181,8 +181,9 @@ BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_
 
 BOOT=""
 if ! grep -q "^admin$(printf '\t')" /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
-  BOOT="$(randhex 12)"
-  BP_LIB=/usr/lib/blazepwifi/common.sh /usr/lib/blazepwifi/auth.sh --set-bootstrap admin admin "$BOOT" || die "Unable to create administrator."
+  BOOT="admin"
+  BP_AUTH_ALLOW_WEAK_BOOTSTRAP=1 BP_LIB=/usr/lib/blazepwifi/common.sh \
+    /usr/lib/blazepwifi/auth.sh --set-password admin admin "$BOOT" || die "Unable to create default administrator."
   printf '%s\n' "$BOOT" > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
   chmod 600 /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 fi
@@ -248,7 +249,8 @@ echo "Full server core:  installed but DISABLED"
 echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
 echo "Backup:            $BACKUP"
 echo "Admin username:    admin"
-[ -n "$BOOT" ] && echo "Bootstrap password: $BOOT"
+[ -n "$BOOT" ] && echo "Default password:   admin"
+[ -n "$BOOT" ] && echo "Change it later in Rental settings."
 echo
 echo "Existing root/admin UI preserved."
 echo "No network, wireless or firewall UCI package was modified."

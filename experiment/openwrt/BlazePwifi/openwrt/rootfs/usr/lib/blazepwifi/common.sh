@@ -9,7 +9,19 @@ BP_TARGET_DIR="$BP_STATE/targets"
 BP_LEGACY_CREDITS="$BP_STATE/credits.tsv"
 BP_LEGACY_SESSIONS="$BP_STATE/sessions.tsv"
 BP_POST_BODY=""
-if [ "${REQUEST_METHOD:-GET}" = POST ]; then IFS= read -r BP_POST_BODY; fi
+if [ "${REQUEST_METHOD:-GET}" = POST ]; then
+	case "${CONTENT_LENGTH:-}" in
+		''|*[!0-9]*)
+			IFS= read -r BP_POST_BODY || true
+			;;
+		0)
+			BP_POST_BODY=""
+			;;
+		*)
+			BP_POST_BODY="$(dd bs=1 count="$CONTENT_LENGTH" 2>/dev/null || true)"
+			;;
+	esac
+fi
 
 bp_cfg() { uci -q get "blazepwifi.main.$1"; }
 bp_now() { date +%s; }
@@ -33,10 +45,22 @@ bp_tmp_suffix() {
 	hexdump -n 6 -e '6/1 "%02x"' /dev/urandom 2>/dev/null || date +%s
 }
 
+bp_flock_wait() {
+	fd="$1"; timeout="${2:-5}"
+	case "$fd:$timeout" in *[!0-9:]*|:*) return 1;; esac
+	elapsed=0
+	while ! flock -n "$fd" 2>/dev/null; do
+		[ "$elapsed" -ge "$timeout" ] 2>/dev/null && return 1
+		sleep 1
+		elapsed=$((elapsed+1))
+	done
+	return 0
+}
+
 bp_lock() {
 	mkdir -p "$BP_RUN"
 	exec 9>"$BP_RUN/account.lock"
-	if ! flock -w 10 9; then
+	if ! bp_flock_wait 9 10; then
 		exec 9>&-
 		return 1
 	fi

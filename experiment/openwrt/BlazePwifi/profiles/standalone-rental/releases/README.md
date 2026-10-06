@@ -2,24 +2,20 @@
 
 ## Latest
 
-### [v0.5.2-rental-rc.1](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental-rc.1)
+### v0.5.2-rental-rc.2
 
-**Recommended existing OpenWrt installer:**
+Login/bootstrap correction over rc.1:
 
-[Windows OneClick v0.5.2-rental-rc.1](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.2-rental-rc.1/BlazePwifi-Rental-Standalone-Windows-OneClick-v0.5.2-rental-rc.1.zip)
-
-Main fixes:
-
-- follows BlazePwifi 0.5.2 implementation;
-- R281 is detected before deployment and uses `install-r281.sh`;
-- BusyBox-safe archive extraction replaces the GNU-only tar command;
-- first-time SSH host-key GUI handling from 0.5.0-rental-rc.3 is retained;
-- CI now performs an actual BusyBox extraction regression before publishing.
-
-[Local release notes](./v0.5.2-rental-rc.1.md)
+- fresh OpenWrt installs use `admin / admin`;
+- password can be changed later;
+- robust uHTTPd POST-body parsing using `CONTENT_LENGTH`;
+- BusyBox-compatible `flock -n` retry locking for R281;
+- R281 BusyBox-specific deployment from rc.1 retained;
+- first-SSH GUI host-key handling retained.
 
 ## Older
 
-- [v0.5.0-rental-rc.3](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.3) — first-SSH hotfix, superseded by R281 BusyBox fix.
-- [v0.5.0-rental-rc.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.2) — superseded.
-- [v0.5.0-rental-rc.1](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.1) — superseded.
+- v0.5.2-rental-rc.1 — R281 BusyBox installer fix.
+- v0.5.0-rental-rc.3 — first-SSH host-key fix.
+- v0.5.0-rental-rc.2 — superseded.
+- v0.5.0-rental-rc.1 — superseded.
