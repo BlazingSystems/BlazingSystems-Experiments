@@ -45,6 +45,7 @@ public final class RentalLeaseStore {
                 .putString("device_name", safe(name))
                 .putString("server_cert_sha256", normalizePin(certPin))
                 .putBoolean("setup_complete", false)
+                .remove("enrollment_request_nonce")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
@@ -60,7 +61,17 @@ public final class RentalLeaseStore {
                 .putString("device_id", safe(id))
                 .putString("device_secret", safe(secret))
                 .remove("enrollment")
+                .remove("enrollment_request_nonce")
                 .apply();
+    }
+
+    public static synchronized String enrollmentRequestNonce(Context context) {
+        SharedPreferences p = prefs(context);
+        String nonce = p.getString("enrollment_request_nonce", "");
+        if (nonce.length() > 0) return nonce;
+        nonce = Hmac.nonce();
+        p.edit().putString("enrollment_request_nonce", nonce).apply();
+        return nonce;
     }
 
     public static void recordLease(Context context, long serverNowMs, long leaseUntilMs) {
@@ -167,6 +178,7 @@ public final class RentalLeaseStore {
                 .putBoolean("setup_complete", false)
                 .remove("server")
                 .remove("enrollment")
+                .remove("enrollment_request_nonce")
                 .remove("server_cert_sha256")
                 .remove("device_id")
                 .remove("device_secret")
