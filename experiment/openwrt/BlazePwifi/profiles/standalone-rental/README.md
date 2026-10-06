@@ -1,63 +1,31 @@
 # BlazePwifi Standalone Rental Server
 
-## Release status
+Latest stable server line: **v0.5.2-rental.1**  
+Provisioning architecture candidate: **v0.5.2-rental.2-rc.4**
 
-**Latest stable:** `v0.5.2-rental.1`
+The provisioning candidate keeps two independent Android onboarding modes:
 
-**Latest provisioning candidate:** `v0.5.2-rental.2-rc.2`
+- **Standard Enrollment QR** — BlazeRental already installed; scanned inside BlazeRental; server binding only; no Device Owner claim.
+- **Device Provisioning QR** — Android Setup Wizard on a factory-reset phone; exact APK/checksum; Device Owner only where the platform permits that DPC; then server binding.
 
-The provisioning candidate intentionally remains a prerelease because its Device Owner APK is TEST-signed and real factory-reset Android Setup Wizard validation is still required.
+RC4 adds:
 
-## Two different QR systems
+- canonical padded Base64URL SHA-256 provisioning checksum;
+- exact signer-certificate and APK digests in release evidence;
+- one metadata builder shared by OpenWrt tar/OneClick and prebuilt firmware images;
+- explicit custom-DPC/GMS compatibility gating;
+- GMS approval state in provisioning metadata and API responses;
+- AOSP/non-GMS / explicit-test warning when the custom DPC is not approved.
 
-### Standard Enrollment QR
+Google-certified Android devices can block non-approved DPCs during enterprise Setup Wizard provisioning. The project does not describe this custom-DPC path as universally production-compatible. See [PROVISIONING-AUDIT.md](./PROVISIONING-AUDIT.md).
 
-For phones where BlazeRental is already installed.
+Fresh Standalone Rental console credentials remain `admin / admin`. The Windows package includes the one-click administrator reset tool.
 
-- scanned inside BlazeRental;
-- schema `blazerental.enrollment.v1`;
-- binds the app to the Rental Server;
-- does **not** provision Android or grant Device Owner.
+Standalone OpenWrt installation remains network-neutral: it does not take ownership of `network`, `wireless`, or `firewall`.
 
-### Device Provisioning QR
 
-For a new or factory-reset, owned/authorized Android phone.
+## RC4 target scope
 
-- scanned by Android Setup Wizard;
-- schema `blazerental.provisioning.v1`;
-- contains the exact DPC component, HTTPS APK URL, APK checksum, minimum version code, one-time server enrollment data, and optional Wi-Fi configuration;
-- Android installs/verifies BlazeRental and provisions Device Owner where supported;
-- BlazeRental must then successfully bind to the Rental Server before managed provisioning is considered complete.
+Android Device Provisioning QR is implemented on the **OpenWrt Rental Server** path in RC4.
 
-These QR formats are deliberately incompatible. BlazeRental's in-app scanner rejects Device Provisioning payloads.
-
-## RC2 audit status
-
-`v0.5.2-rental.2-rc.2` passed:
-
-- Standalone Rental validation and release pipeline;
-- exact TEST APK build/signature/package/version verification;
-- OpenWrt bundle and Windows OneClick packaging;
-- R281/BusyBox compatibility gates;
-- ESP8266 and ESP32 builds;
-- EW1200G Pro and x86 images;
-- repository-wide BlazePwifi validation;
-- persistence/replay stress tests;
-- browser, x86, Ruijie, Orange Pi, ESP, and Android emulator simulations.
-
-The Android emulator audit is useful compatibility coverage, but it is **not** represented as proof of factory-reset Setup Wizard QR provisioning.
-
-## Credentials
-
-Fresh Standalone Rental installation:
-
-```text
-Username: admin
-Password: admin
-```
-
-The Windows package also includes the one-click administrator reset tool for Standalone Rental and full BlazePwifi.
-
-## Standalone boundary
-
-Standalone installation preserves the router's existing network, wireless, and firewall configuration. Full-network behavior remains gated behind explicit conversion to full BlazePwifi.
+ESP8266/ESP32 Rental Server mode continues to support manual one-time server/token enrollment, but does not yet render Standard Enrollment QR or Android Device Provisioning QR. The release manifest declares this explicitly rather than implying OpenWrt/ESP feature parity.

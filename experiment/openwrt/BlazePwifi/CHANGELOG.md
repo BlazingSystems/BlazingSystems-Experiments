@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.3-dev.3 — development
+
+- Enabled transactional **live WireGuard activation/disable** for Full BlazePwifi while keeping ZeroTier live activation staged-only.
+- Added on-device WireGuard private-key generation/storage with restrictive permissions. The private key is never accepted from or returned to the browser; only the device public key is exposed after explicit admin re-authentication.
+- Added Blaze-owned UCI sections for the live tunnel and firewall path so dev.3 does not replace or take ownership of existing LAN/WAN/EasyMode network sections.
+- Blocked unsafe WireGuard routing before apply: no default/full-tunnel routes, no overly broad routes, no overlap with directly connected networks, and no route that would capture the current admin source path.
+- Added transactional network/firewall/runtime snapshots, a detached rollback watchdog, and boot-time recovery for any apply/disable interrupted by process failure or reboot.
+- A candidate WireGuard apply is accepted only after the interface starts, firewall reload succeeds, a real WireGuard handshake is observed, and the default/current management route signatures remain unchanged.
+- Failed apply/disable restores the previous network/firewall/runtime state, including a previously active Blaze WireGuard tunnel when updating an existing deployment.
+- Added a dedicated WireGuard-only remote-admin HTTPS service with a restricted web root containing only the admin page/assets and admin CGI endpoints. The normal LAN admin uHTTPd and captive-portal/Rental/Vendo CGI surface are not rebound or exposed through this listener.
+- Enforced Remote Terminal permission server-side for requests arriving through the WireGuard management listener; local/LAN admin behavior remains unchanged.
+- Added explicit Management Console controls for local WireGuard public-key generation, staged profile save, **Test & Apply WireGuard**, live activation/handshake status, and safe disable from a local/non-WireGuard path.
+- Added WireGuard runtime dependency to Full BlazePwifi image/install paths.
+- Added regression coverage for route helper isolation, IPv4 admin-source recognition, private-key config permissions, exact restricted-admin CGI allowlist, watchdog ownership, transaction-engine EOF integrity, rollback behavior and browser management flow.
+- Development identity advanced to `0.5.3-dev.3` / Android versionCode `50292`.
+- Exact green branch candidate: `c60645729e6fbd9b9af6db8b11af13c3b58b7ae3`, workflow `37516557416` — PASS.
+- Frozen v0.5.2 production/tag/signing/recovery workflows remain untouched.
+
 ## 0.5.3-dev.2 — development
 
 - Added a hardened Advanced Terminal to the Full BlazePwifi Management Console. It is disabled by default and requires admin role, fresh password re-authentication, CSRF, current admin-session/IP binding, short TTL/idle expiry, one active session per admin, one command at a time, bounded runtime/output and audit logging.

@@ -44,8 +44,11 @@ grep -q '25.12' "$ROOT/installer/install.sh"
 
 for x in \
   openwrt/rootfs/etc/init.d/blazepwifi \
+  openwrt/rootfs/etc/init.d/blazepwifi-remote-admin \
+  openwrt/rootfs/etc/init.d/blazepwifi-remote-guard \
   openwrt/rootfs/etc/uci-defaults/99-blazepwifi \
   openwrt/rootfs/usr/sbin/blazepwifi-core \
+  openwrt/rootfs/usr/sbin/blazepwifi-remote-guard \
   openwrt/rootfs/usr/lib/blazepwifi/auth.sh \
   openwrt/rootfs/usr/lib/blazepwifi/controller.sh \
   openwrt/rootfs/usr/lib/blazepwifi/rental.sh \

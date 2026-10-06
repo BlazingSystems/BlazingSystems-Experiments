@@ -32,18 +32,33 @@ async function loadStorage(){
 function setRemoteEditable(enabled){
   ['#remoteMode','#remoteNodeName','#remoteSiteLabel','#remoteAllowlist','#remoteHeartbeat','#remoteOffline',
    '#remoteMonitoring','#remoteManagement','#remoteTerminal','#wgEndpoint','#wgPort','#wgAddress',
-   '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword']
+   '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword',
+   '#wgKeyButton','#wgApplyButton','#wgDisableButton']
     .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
 }
 function renderRemoteStatus(r){
   r=r||{};
-  const wg=q('#wgState'),zt=q('#ztState');
+  const rt=r.runtime||{},wg=q('#wgState'),zt=q('#ztState');
   if(wg){wg.textContent=r.wireguard||'Unavailable';wg.className='metric-value small '+(String(r.wireguard).indexOf('online:')===0?'good':'');}
   if(zt){zt.textContent=r.zerotier||'Unavailable';zt.className='metric-value small '+(String(r.zerotier).indexOf('ONLINE')>=0?'good':'');}
   const mode=q('#remoteModeState');if(mode)mode.textContent=r.mode||'disabled';
-  const ready=q('#remoteReadyState');if(ready)ready.textContent=r.mode==='disabled'?'Remote access off':(r.ready?'Profile complete · activation staged':'Profile incomplete');
+  const activation=String(rt.activation_state||'staged');
+  const ready=q('#remoteReadyState');
+  if(ready){
+    if(r.mode==='disabled')ready.textContent='Remote access off';
+    else if(activation==='active')ready.textContent='Live WireGuard active';
+    else if(activation==='active_staged_changes')ready.textContent='Live tunnel active · staged changes not applied';
+    else ready.textContent=r.ready?'Profile complete · '+activation:'Profile incomplete';
+  }
   const node=q('#remoteNodeState');if(node)node.textContent=r.node_name||'BlazePwifi';
   const site=q('#remoteSiteState');if(site)site.textContent=r.site_label||'No site label';
+  const act=q('#wgActivationState');if(act){act.textContent=activation;act.className='metric-value small '+(activation==='active'?'good':'');}
+  const hs=q('#wgHandshakeState');
+  if(hs){
+    const stamp=Number(rt.last_handshake||0);
+    hs.textContent=stamp>0?'Handshake '+new Date(stamp*1000).toLocaleString():(rt.last_error?'Last error: '+rt.last_error:(rt.apply_supported?'No verified handshake yet':'Live apply unavailable'));
+  }
+  const pub=q('#wgLocalPublicKey');if(pub)pub.value=rt.public_key||'';
 }
 async function loadRemote(){
   const generation=++remoteLoadGeneration;
@@ -72,7 +87,17 @@ async function loadRemote(){
   set('#ztNetworkId',v.zt_network_id||'');
   const check=(id,val)=>{const n=q(id);if(n)n.checked=String(val)==='1'||val===true};
   check('#remoteMonitoring',v.monitoring);check('#remoteManagement',v.management);check('#remoteTerminal',v.terminal);
-  if(state)state.textContent='Validated profile storage is active. Live transport apply remains safety-locked in this development build.';
+  if(state){
+    const rt=(x.remote&&x.remote.runtime)||{};
+    if(v.mode==='wireguard'&&String(rt.activation_state||'staged')==='active_staged_changes')
+      state.textContent='Profile saved. The existing WireGuard tunnel is still active with the previous applied profile; use Test & Apply to activate these staged changes.';
+    else if(v.mode==='wireguard')
+      state.textContent='WireGuard profile validated. Save and apply are separate operations; live activation requires a handshake and route-survival checks.';
+    else if(v.mode==='zerotier')
+      state.textContent='ZeroTier profile validated and staged. Live ZeroTier activation remains disabled in dev.3.';
+    else
+      state.textContent='Remote access profile is disabled/staged.';
+  }
 }
 async function saveRemote(){
   // Invalidate any in-flight page-load refresh before committing a new profile.
@@ -96,7 +121,46 @@ async function saveRemote(){
   // The save response is authoritative. Render it immediately so a delayed
   // follow-up status request cannot leave the operator looking at stale state.
   renderRemoteStatus(x.remote||{});
-  C().toast('Remote profile validated and stored. Live transport activation remains safety-locked.');
+  C().toast('Remote profile validated and stored. Use Test & Apply for WireGuard live activation.');
+  await loadRemote();
+}
+async function generateWireGuardKey(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to generate/show the device WireGuard key.',true);return}
+  const x=await C().api('remote_wireguard_key',{password});
+  if(pass)pass.value='';
+  if(!x.ok){C().toast(x.error||'Unable to prepare WireGuard key',true);return}
+  const pub=q('#wgLocalPublicKey');if(pub)pub.value=x.public_key||'';
+  C().toast('WireGuard device public key is ready. Configure this public key on your hub.');
+  await loadRemote();
+}
+async function applyWireGuard(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to apply WireGuard.',true);return}
+  if(!confirm('Test and apply the staged WireGuard profile? Start this only from a local/non-WireGuard admin path. BlazePwifi will require a real handshake and automatically restore the previous network if health checks fail.'))return;
+  const state=q('#remoteConfigState');if(state)state.textContent='Applying WireGuard transaction and waiting for a verified handshake…';
+  const x=await C().api('remote_wireguard_apply',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'WireGuard apply rolled back safely.';C().toast(x.error||'WireGuard apply failed and was rolled back',true);await loadRemote();return}
+  renderRemoteStatus(x.remote||{});
+  if(state)state.textContent='WireGuard is active. The previous network snapshot is no longer pending because handshake and route-survival checks passed.';
+  C().toast('WireGuard activated successfully.');
+  await loadRemote();
+}
+async function disableWireGuard(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to disable WireGuard.',true);return}
+  if(!confirm('Disable the live WireGuard tunnel? This must be initiated from a local/non-WireGuard admin path.'))return;
+  const state=q('#remoteConfigState');if(state)state.textContent='Disabling WireGuard transaction…';
+  const x=await C().api('remote_wireguard_disable',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'WireGuard disable failed safely.';C().toast(x.error||'WireGuard disable failed safely',true);await loadRemote();return}
+  renderRemoteStatus(x.remote||{});
+  if(state)state.textContent='Live WireGuard is disabled. The profile and device key remain staged for future use.';
+  C().toast('Live WireGuard disabled.');
   await loadRemote();
 }
 async function runTool(){
@@ -205,7 +269,7 @@ function onPage(name){
   if(name==='tools')loadTerminal();
   if(name==='lan')loadLan();
 }
-window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
+window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,generateWireGuardKey,applyWireGuard,disableWireGuard,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
 // Do not preload editable Remote Access configuration in the background.
  // It is loaded on page entry/explicit refresh so a delayed startup request
  // cannot overwrite operator edits.
