@@ -33,7 +33,7 @@ function setRemoteEditable(enabled){
   ['#remoteMode','#remoteNodeName','#remoteSiteLabel','#remoteAllowlist','#remoteHeartbeat','#remoteOffline',
    '#remoteMonitoring','#remoteManagement','#remoteTerminal','#wgEndpoint','#wgPort','#wgAddress',
    '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword',
-   '#wgKeyButton','#wgApplyButton','#wgDisableButton']
+   '#wgKeyButton','#wgApplyButton','#wgDisableButton','#ztPrepareButton','#ztActivateButton','#ztDisableButton']
     .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
 }
 function renderRemoteStatus(r){
@@ -59,6 +59,23 @@ function renderRemoteStatus(r){
     hs.textContent=stamp>0?'Handshake '+new Date(stamp*1000).toLocaleString():(rt.last_error?'Last error: '+rt.last_error:(rt.apply_supported?'No verified handshake yet':'Live apply unavailable'));
   }
   const pub=q('#wgLocalPublicKey');if(pub)pub.value=rt.public_key||'';
+  const ztr=r.zerotier_runtime||{};
+  const zstate=String(ztr.state||'staged');
+  const zlife=q('#ztLifecycleState');if(zlife)zlife.value=zstate;
+  const zver=q('#ztVersionState');if(zver)zver.value=(ztr.version||'unknown')+' · '+(ztr.layout||'unknown');
+  const znode=q('#ztNodeId');if(znode)znode.value=ztr.node_id||'';
+  const zdev=q('#ztDevice');if(zdev)zdev.value=ztr.device||'';
+  const zip=q('#ztIpv4');if(zip)zip.value=ztr.ipv4||'';
+  const zhelp=q('#ztHelp');
+  if(zhelp){
+    if(zstate==='awaiting_authorization')zhelp.textContent='Authorize node '+(ztr.node_id||'')+' in ZeroTier Central, then Refresh/Prepare again.';
+    else if(zstate==='reboot_required')zhelp.textContent='ZeroTier joined, but OpenWrt has not created the virtual device yet. Reboot manually, then return and activate management.';
+    else if(zstate==='awaiting_address'||zstate==='joining')zhelp.textContent='ZeroTier is joining/configuring. Wait for an assigned managed IPv4 address, then refresh.';
+    else if(zstate==='ready')zhelp.textContent='ZeroTier is authorized and has a managed IPv4 address. You can activate restricted BlazePwifi management now.';
+    else if(zstate==='active')zhelp.textContent='ZeroTier management is active on the managed IPv4 address. LAN/WAN forwarding remains disabled.';
+    else if(zstate==='join_error')zhelp.textContent='ZeroTier join error: '+(ztr.last_error||'unknown');
+    else zhelp.textContent='Prepare joins the network but does not expose management. Authorize the node in ZeroTier Central before activation.';
+  }
 }
 async function loadRemote(){
   const generation=++remoteLoadGeneration;
@@ -93,8 +110,10 @@ async function loadRemote(){
       state.textContent='Profile saved. The existing WireGuard tunnel is still active with the previous applied profile; use Test & Apply to activate these staged changes.';
     else if(v.mode==='wireguard')
       state.textContent='WireGuard profile validated. Save and apply are separate operations; live activation requires a handshake and route-survival checks.';
-    else if(v.mode==='zerotier')
-      state.textContent='ZeroTier profile validated and staged. Live ZeroTier activation remains disabled in dev.3.';
+    else if(v.mode==='zerotier'){
+      const ztr=(x.remote&&x.remote.zerotier_runtime)||{};
+      state.textContent='ZeroTier profile saved. Lifecycle: '+String(ztr.state||'staged')+'. Prepare/join and management activation are separate guarded steps.';
+    }
     else
       state.textContent='Remote access profile is disabled/staged.';
   }
@@ -161,6 +180,41 @@ async function disableWireGuard(){
   renderRemoteStatus(x.remote||{});
   if(state)state.textContent='Live WireGuard is disabled. The profile and device key remain staged for future use.';
   C().toast('Live WireGuard disabled.');
+  await loadRemote();
+}
+async function prepareZeroTier(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'',state=q('#remoteConfigState');
+  if(!password){C().toast('Admin password is required to prepare ZeroTier.',true);return}
+  if(state)state.textContent='Preparing ZeroTier and joining the staged network…';
+  const x=await C().api('remote_zerotier_prepare',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'ZeroTier prepare failed safely.';C().toast(x.error||'ZeroTier prepare failed',true);await loadRemote();return}
+  C().toast('ZeroTier prepare/join completed. Check authorization and readiness state.');
+  await loadRemote();
+}
+async function activateZeroTier(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'',state=q('#remoteConfigState');
+  if(!password){C().toast('Admin password is required to activate ZeroTier management.',true);return}
+  if(!confirm('Activate restricted BlazePwifi management on the prepared ZeroTier interface? Start this only from a local/non-ZeroTier admin path. No LAN/WAN forwarding or default-route takeover will be enabled.'))return;
+  if(state)state.textContent='Activating restricted ZeroTier management…';
+  const x=await C().api('remote_zerotier_activate',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'ZeroTier activation rolled back safely.';C().toast(x.error||'ZeroTier activation failed safely',true);await loadRemote();return}
+  C().toast('ZeroTier management activated successfully.');
+  await loadRemote();
+}
+async function disableZeroTier(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'',state=q('#remoteConfigState');
+  if(!password){C().toast('Admin password is required to disable ZeroTier management.',true);return}
+  if(!confirm('Disable BlazePwifi management on ZeroTier? The ZeroTier network membership will remain prepared.'))return;
+  if(state)state.textContent='Disabling ZeroTier management…';
+  const x=await C().api('remote_zerotier_disable',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'ZeroTier disable failed safely.';C().toast(x.error||'ZeroTier disable failed safely',true);await loadRemote();return}
+  C().toast('ZeroTier management disabled; network membership remains prepared.');
   await loadRemote();
 }
 async function runTool(){
@@ -269,7 +323,7 @@ function onPage(name){
   if(name==='tools')loadTerminal();
   if(name==='lan')loadLan();
 }
-window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,generateWireGuardKey,applyWireGuard,disableWireGuard,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
+window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,generateWireGuardKey,applyWireGuard,disableWireGuard,prepareZeroTier,activateZeroTier,disableZeroTier,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
 // Do not preload editable Remote Access configuration in the background.
  // It is loaded on page entry/explicit refresh so a delayed startup request
  // cannot overwrite operator edits.
