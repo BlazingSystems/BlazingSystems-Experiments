@@ -484,6 +484,8 @@ EOF
       11) bp_fail "ZeroTier is not installed or unavailable on this target" ;;
       12) bp_fail "invalid ZeroTier network ID" ;;
       13) bp_fail "ZeroTier service could not be restarted" ;;
+      14) bp_fail "ZeroTier 1.14.1 or newer is required for safe live activation on OpenWrt" ;;
+      15) bp_fail "disable active ZeroTier management before preparing or switching networks" ;;
       *) bp_fail "ZeroTier prepare/join failed safely" ;;
     esac
     bp_auth_audit remote_zerotier_prepare "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(bp_zt_get state staged)"
@@ -515,6 +517,7 @@ EOF
       16) bp_fail "unable to create ZeroTier rollback snapshot" ;;
       17) bp_fail "invalid ZeroTier management/firewall policy" ;;
       18|19|20|21) bp_fail "ZeroTier activation failed safety checks and was rolled back" ;;
+      22) bp_fail "staged ZeroTier Network ID differs from the prepared network; disable/re-prepare before switching" ;;
       *) bp_fail "ZeroTier activation failed safely" ;;
     esac
     bp_auth_audit remote_zerotier_activate "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "active"
