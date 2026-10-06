@@ -214,7 +214,7 @@ public class BlazeAdminActivity extends Activity {
         content = page();
         addBrandHeader();
         content.addView(title("BlazeRental Control Center"));
-        content.addView(label("Native BlazeRental administration · v" + BuildConfig.VERSION_NAME + " Launcher Edition"));
+        content.addView(label("Native BlazeRental administration · v" + appVersionName() + " Launcher Edition"));
 
         section("Dashboard");
         addStatus("Security", ManagedPolicyController.isDeviceOwner(this)
@@ -868,6 +868,15 @@ public class BlazeAdminActivity extends Activity {
         if (password) input.setInputType(
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         return input;
+    }
+
+    private String appVersionName() {
+        try {
+            String version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            return version == null || version.trim().length() == 0 ? "unknown" : version.trim();
+        } catch (Exception ignored) {
+            return "unknown";
+        }
     }
 
     private TextView title(String text) {
