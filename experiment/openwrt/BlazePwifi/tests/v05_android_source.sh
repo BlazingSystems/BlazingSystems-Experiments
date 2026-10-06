@@ -14,9 +14,17 @@ QR="$L/src/com/blazesystems/blazerental/QrEnrollmentScannerActivity.java"
 MANIFEST="$L/AndroidManifest.xml"
 GRADLE="$L/build.gradle"
 
-[ "$(cat "$ROOT/VERSION")" = "0.5.0" ]
-grep -Fq 'versionCode 50000' "$GRADLE"
-grep -Fq 'versionName "0.5.0"' "$GRADLE"
+case "$(cat "$ROOT/VERSION")" in
+  0.5.0)
+    grep -Fq 'versionCode 50000' "$GRADLE"
+    grep -Fq 'versionName "0.5.0"' "$GRADLE"
+    ;;
+  0.5.1)
+    grep -Fq 'versionCode 50100' "$GRADLE"
+    grep -Fq 'versionName "0.5.1"' "$GRADLE"
+    ;;
+  *) exit 1 ;;
+esac
 grep -Fq 'android:label="BlazeRental"' "$MANIFEST"
 grep -Fq '@drawable/ic_launcher_blaze' "$MANIFEST"
 test -s "$L/res/drawable/ic_launcher_blaze.xml"
