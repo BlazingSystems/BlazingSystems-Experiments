@@ -179,17 +179,25 @@ BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_
   sh -c '. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"; . "$BP_RENTAL_POLICY_LIB"; bp_init_dirs; bp_auth_init; bp_rental_init; bp_rental_policy_v2_init' \
   || die "Unable to initialize rental state."
 
-if [ -s "$SELF/rental-update.tsv" ]; then
-  IFS="$(printf '\t')" read -r UP_VERSION UP_CODE UP_URL UP_SHA UP_RVER UP_RCODE UP_RURL UP_RSHA < "$SELF/rental-update.tsv"
-  BP_LIB=/usr/lib/blazepwifi/common.sh BP_RENTAL_UPDATE_LIB=/usr/lib/blazepwifi/rental_update.sh \
-    sh -c '
-      set -eu
-      . "$BP_LIB"
-      . "$BP_RENTAL_UPDATE_LIB"
-      bp_rental_update_init
-      bp_rental_update_set "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
-    ' sh "$UP_VERSION" "$UP_CODE" "$UP_URL" "$UP_SHA" "$UP_RVER" "$UP_RCODE" "$UP_RURL" "$UP_RSHA" \
-    || die "Invalid BlazeRental update/provisioning metadata in release bundle."
+PROV_STATE=/etc/blazepwifi/state/rental-provisioning.tsv
+if [ -s "$SELF/rental-provisioning.tsv" ]; then
+  IFS="$(printf '\t')" read -r PV_VERSION PV_CODE PV_URL PV_SHA PV_CHANNEL PV_READY PV_SIGNER < "$SELF/rental-provisioning.tsv"
+  printf '%s' "$PV_VERSION" | grep -Eq '^[A-Za-z0-9._+-]{1,48}$' || die "Invalid provisioning APK version."
+  case "$PV_CODE" in ''|*[!0-9]*) die "Invalid provisioning APK version code.";; esac
+  [ "$PV_CODE" -gt 0 ] 2>/dev/null || die "Invalid provisioning APK version code."
+  case "$PV_URL" in https://*) ;; *) die "Provisioning APK URL must use HTTPS.";; esac
+  printf '%s' "$PV_URL" | grep -q '[[:space:][:cntrl:]]' && die "Invalid provisioning APK URL."
+  printf '%s' "$PV_SHA" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Invalid provisioning APK SHA-256."
+  case "$PV_CHANNEL" in test|production) ;; *) die "Invalid provisioning APK channel.";; esac
+  case "$PV_READY" in 0|1) ;; *) die "Invalid provisioning production-ready flag.";; esac
+  printf '%s' "$PV_SIGNER" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Invalid provisioning signer SHA-256."
+  [ "$PV_CHANNEL" != production ] || [ "$PV_READY" = 1 ] || die "Production provisioning channel must be production-ready."
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$PV_VERSION" "$PV_CODE" "$PV_URL" "$(printf '%s' "$PV_SHA" | tr A-F a-f)" \
+    "$PV_CHANNEL" "$PV_READY" "$(printf '%s' "$PV_SIGNER" | tr A-F a-f)" > "$PROV_STATE"
+  chmod 600 "$PROV_STATE"
+else
+  rm -f "$PROV_STATE"
 fi
 
 BOOT=""
@@ -283,8 +291,8 @@ echo "Rental console:    https://$LAN_IP/rental/"
 echo "Android server:    https://$LAN_IP"
 echo "Android API:       https://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
-if [ -s /etc/blazepwifi/state/rental-update.tsv ]; then
-  echo "Device provisioning: signed APK channel available; HTTPS certificate pinned"
+if [ -s /etc/blazepwifi/state/rental-provisioning.tsv ]; then
+  echo "Device provisioning: exact DPC channel available; HTTPS certificate pinned"
   echo "Server cert SHA256: $CERT_PIN"
 else
   echo "Device provisioning: unavailable (signed APK update channel not installed)"
