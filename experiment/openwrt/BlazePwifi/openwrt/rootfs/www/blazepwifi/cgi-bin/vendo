@@ -2,9 +2,13 @@
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
+. "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
+. "${BP_MEMBER_LIB:-/usr/lib/blazepwifi/member.sh}"
 bp_init_dirs
 bp_rental_init
 bp_controller_init
+bp_auth_init
+bp_member_init
 
 vendo_port="$(bp_cfg vendo_port)"
 [ -n "$vendo_port" ] || vendo_port=4455
@@ -40,6 +44,17 @@ heartbeat() {
 bp_lock || bp_fail "vendo state busy"
 heartbeat
 bp_unlock
+
+
+member_snapshot_sig() {
+  revision="$1"; payload_hash="$2"; secret="$(bp_cfg vendo_key)"
+  printf '%s|member_snapshot|%s|%s|%s|%s|%s' "$secret" "$id" "$nonce" "$revision" "$payload_hash" "$secret" | bp_sha256
+}
+
+member_mutation_sig() {
+  action_name="$1"; event_id="$2"; member_token="$3"; result_seconds="$4"; balance_seconds="$5"; revision="$6"; secret="$(bp_cfg vendo_key)"
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' "$secret" "$action_name" "$id" "$nonce" "$event_id" "$member_token" "$result_seconds" "$balance_seconds" "$revision" "$secret" | bp_sha256
+}
 
 case "$action" in
   register|ping)
