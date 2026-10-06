@@ -131,6 +131,9 @@ jobs:
           if (-not (Test-Path $app)) { throw 'Installed SoftTimer EXE missing' }
           if (-not (Test-Path $watchdog)) { throw 'Installed watchdog EXE missing' }
 
+          $verify=Start-Process -FilePath $app -ArgumentList @('--verify-system-integration') -Wait -PassThru
+          if ($verify.ExitCode -ne 0) { throw "SoftTimer native system-integration verification failed with exit code $($verify.ExitCode)" }
+
           if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) { throw 'SoftTimer startup task was not created' }
           if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) { throw 'Watchdog startup task was not created' }
 
