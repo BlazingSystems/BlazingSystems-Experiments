@@ -218,7 +218,6 @@ private:
   bool waitForWifi(uint32_t timeoutMs){
     uint32_t start=millis();
     while(millis()-start<timeoutMs){
-      web.handleClient();
       if(WiFi.status()==WL_CONNECTED && WiFi.localIP()!=IPAddress(0,0,0,0)) return true;
       delay(120);
     }
@@ -391,7 +390,7 @@ private:
 
   void publicApi(){
     String ip=setupMode?WiFi.softAPIP().toString():WiFi.localIP().toString();
-    String s="{\"ok\":true,\"setup_mode\":"+(setupMode?"true":"false")+",\"recovery_mode\":"+(recoveryMode?"true":"false")+
+    String s=String("{\"ok\":true,\"setup_mode\":")+(setupMode?"true":"false")+",\"recovery_mode\":"+(recoveryMode?"true":"false")+
       ",\"configured\":"+(adminHash.length()?"true":"false")+",\"ip\":\""+ip+"\",\"ssid\":\""+json(staSsid)+"\",\"mode\":\""+mode+"\"}";
     jsonSend(s);
   }
