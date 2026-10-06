@@ -283,7 +283,7 @@ bp_member_snapshot_json() {
   while IFS="$(printf '\t')" read -r user label enabled scheme salt hash rounds banked revision updated source; do
     [ -n "$user" ] || continue
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"username":"%s","label":"%s","enabled":%s,"scheme":"%s","salt":"%s","hash":"%s","rounds":%s,"banked_seconds":%s,"revision":%s,"updated":%s}'       "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "$(bp_json_escape "$scheme")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}"
+    printf '{"username":"%s","label":"%s","enabled":%s,"scheme":"%s","salt":"%s","rounds":%s,"banked_seconds":%s,"revision":%s,"updated":%s}'       "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "$(bp_json_escape "$scheme")"       "$(bp_json_escape "$salt")" "${rounds:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}"
   done < "$BP_MEMBERS"
   printf ']'
 }
