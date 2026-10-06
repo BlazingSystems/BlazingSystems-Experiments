@@ -1,6 +1,6 @@
 {
   "build_run_id": 37443570618,
-  "signing_run_id": 0,
+  "signing_run_id": 37448352082,
   "candidate_sha": "bf2992977fe8504d21b107df02826032c31d3a62",
-  "requested_at": "2026-10-06T17:47:00+08:00"
+  "mode": "production-lineage2-promotion"
 }
