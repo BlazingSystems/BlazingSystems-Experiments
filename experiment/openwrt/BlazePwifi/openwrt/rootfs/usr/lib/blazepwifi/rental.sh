@@ -54,7 +54,9 @@ bp_rental_enroll_consume() {
 }
 
 bp_rental_enroll_consume_device() {
-  did="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  did="$1"
+  awk -F '\t' -v d="$did" '$6==d {found=1} END{exit found?0:1}' "$BP_RENTAL_ENROLL" || return 3
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
   awk -F '\t' -v d="$did" '$6!=d {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
     chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
 }
