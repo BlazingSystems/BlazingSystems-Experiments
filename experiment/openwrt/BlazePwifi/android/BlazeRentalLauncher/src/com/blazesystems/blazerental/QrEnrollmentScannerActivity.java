@@ -155,12 +155,12 @@ public class QrEnrollmentScannerActivity extends Activity
                 String supplied = uri.getQueryParameter("name");
                 if (supplied != null && supplied.length() > 0) name = supplied;
             }
-            if (server == null || !(server.startsWith("http://") || server.startsWith("https://"))
+            if (server == null || !RentalLeaseStore.isValidServerOrigin(server, false)
                     || token == null || token.indexOf('.') <= 0) {
                 throw new IllegalArgumentException();
             }
             String normalizedPin = RentalLeaseStore.normalizePin(certPin);
-            if (server.startsWith("https://") && normalizedPin.length() != 64) {
+            if (RentalLeaseStore.isHttpsServerOrigin(server) && normalizedPin.length() != 64) {
                 throw new IllegalArgumentException("HTTPS enrollment requires certificate pin");
             }
             if (RentalLeaseStore.isEnrolled(this)) {

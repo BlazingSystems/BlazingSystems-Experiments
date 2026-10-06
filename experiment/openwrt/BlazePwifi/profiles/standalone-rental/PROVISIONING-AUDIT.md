@@ -34,6 +34,8 @@ Two QR formats are intentionally separate and must never be treated as interchan
 - Expired or malformed abandoned enrollment rows are purged under the enrollment lock whenever a new QR token is created.
 - The active enrollment table is capped (default 512, bounded configurable range 16-4096) so repeated unused QR generation cannot grow R281 state without bound.
 - QR generation fails closed if token creation, durable persistence, or enrollment capacity checks fail; an empty token is never rendered into a QR.
+- Rental Server URLs embedded in either QR contract are origin-only. Userinfo, non-root paths, query strings, and fragments are rejected so the client API path cannot be redirected by URL ambiguity.
+- Android repeats the same origin validation before persisting Standard Enrollment or Device Provisioning data.
 
 ## Corrected findings
 

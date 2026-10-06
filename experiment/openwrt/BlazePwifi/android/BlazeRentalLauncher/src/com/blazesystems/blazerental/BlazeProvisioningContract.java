@@ -42,7 +42,7 @@ public final class BlazeProvisioningContract {
         String certPin = RentalLeaseStore.normalizePin(
                 clean(extras.getString("server_cert_sha256")));
         if (!SCHEMA.equals(schema)) return false;
-        if (!server.startsWith("https://")) return false;
+        if (!RentalLeaseStore.isValidServerOrigin(server, true)) return false;
         if (certPin.length() != 64) return false;
         int dot = token.indexOf('.');
         if (dot < 8 || dot >= token.length() - 16) return false;

@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.PersistableBundle;
 import android.os.SystemClock;
+import java.net.URI;
 
 public final class RentalLeaseStore {
     private static final String PREFS = "blaze_rental_v04";
@@ -19,6 +20,33 @@ public final class RentalLeaseStore {
         return storage(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
+    static boolean isValidServerOrigin(String value, boolean requireHttps) {
+        try {
+            URI uri = new URI(safe(value));
+            String scheme = uri.getScheme();
+            if (scheme == null) return false;
+            if (requireHttps) {
+                if (!"https".equalsIgnoreCase(scheme)) return false;
+            } else if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+                return false;
+            }
+            if (uri.getHost() == null || uri.getHost().length() == 0) return false;
+            if (uri.getRawUserInfo() != null
+                    || uri.getRawQuery() != null
+                    || uri.getRawFragment() != null) return false;
+            String path = uri.getRawPath();
+            if (path != null && path.length() > 0 && !"/".equals(path)) return false;
+            int port = uri.getPort();
+            return port == -1 || (port >= 1 && port <= 65535);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    static boolean isHttpsServerOrigin(String value) {
+        return isValidServerOrigin(value, true);
+    }
+
     public static synchronized boolean acceptProvisioningExtras(
             Context context, PersistableBundle extras) {
         if (extras == null) return false;
@@ -26,7 +54,8 @@ public final class RentalLeaseStore {
         String token = safe(extras.getString("enrollment_token"));
         String name = safe(extras.getString("device_name"));
         String pin = normalizePin(extras.getString("server_cert_sha256"));
-        if (server.length() == 0 || token.length() == 0 || pin.length() != 64) return false;
+        if (!isValidServerOrigin(server, true)
+                || token.length() == 0 || pin.length() != 64) return false;
 
         SharedPreferences p = prefs(context);
         String existingSource = p.getString("enrollment_source", "");

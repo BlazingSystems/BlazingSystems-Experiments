@@ -23,7 +23,15 @@ bp_admin_rental_server_url() {
     esac
     printf '%s' "$supplied" | grep -q '[[:space:][:cntrl:]]' && return 1
     [ "$(printf '%s' "$supplied" | wc -c)" -le 256 ] || return 1
-    printf '%s' "$supplied" | sed 's:/*$::'
+    normalized="$(printf '%s' "$supplied" | sed 's:/*$::')"
+    authority="${normalized#*://}"
+    [ -n "$authority" ] || return 1
+    # Rental APIs are always relative to the origin. Never accept userinfo,
+    # path, query, fragment, or backslash forms that could change URL meaning.
+    case "$authority" in
+      */*|*\?*|*#*|*@*|*\\*) return 1 ;;
+    esac
+    printf '%s' "$normalized"
     return 0
   fi
   host="${HTTP_HOST:-}"
