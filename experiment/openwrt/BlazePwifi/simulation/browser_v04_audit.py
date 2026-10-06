@@ -24,6 +24,11 @@ mock_console_state={
         "activation_state":"staged","apply_supported":True,"public_key":"",
         "applied_at":0,"last_handshake":0,"last_error":""
     },
+    "zerotier_runtime":{
+        "supported":True,"version":"1.14.2","layout":"modern","state":"staged",
+        "network_id":"","node_id":"abcdef1234","device":"","ipv4":"","listener":"",
+        "reboot_required":0,"last_error":""
+    },
     "remote_config":{
         "mode":"disabled","monitoring":1,"management":0,"terminal":0,
         "node_name":"BlazePwifi","site_label":"","source_allowlist":"",
@@ -71,8 +76,9 @@ def mock_admin(action, params=None):
             "mode":cfg["mode"],"ready":cfg["mode"]!="disabled",
             "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
-            "wireguard":"installed","zerotier":"unavailable",
-            "runtime":dict(mock_console_state["remote_runtime"])
+            "wireguard":"installed","zerotier":"ONLINE",
+            "runtime":dict(mock_console_state["remote_runtime"]),
+            "zerotier_runtime":dict(mock_console_state["zerotier_runtime"])
         }}
     if action == "remote_config_get":
         return {"ok":True,"config":dict(mock_console_state["remote_config"])}
@@ -94,7 +100,8 @@ def mock_admin(action, params=None):
             "mode":cfg["mode"],"ready":cfg["mode"]!="disabled",
             "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
-            "wireguard":"installed","zerotier":"unavailable","runtime":dict(rt)
+            "wireguard":"installed","zerotier":"ONLINE","runtime":dict(rt),
+            "zerotier_runtime":dict(mock_console_state["zerotier_runtime"])
         }}
     if action == "remote_wireguard_key":
         rt=mock_console_state["remote_runtime"]
@@ -122,6 +129,27 @@ def mock_admin(action, params=None):
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
             "wireguard":"installed","zerotier":"unavailable","runtime":dict(rt)
         }}
+    if action == "remote_zerotier_prepare":
+        zt=mock_console_state["zerotier_runtime"]
+        cfg=mock_console_state["remote_config"]
+        zt["network_id"]=cfg.get("zt_network_id","")
+        if zt["state"] in ("staged","joining"):
+            zt.update({"state":"awaiting_authorization","device":"","ipv4":"","listener":"",
+                       "reboot_required":0,"last_error":""})
+        else:
+            zt.update({"state":"ready","device":"ztabcdef12","ipv4":"10.147.17.2/24",
+                       "listener":"","reboot_required":0,"last_error":""})
+        return {"ok":True,"zerotier":dict(zt)}
+    if action == "remote_zerotier_activate":
+        zt=mock_console_state["zerotier_runtime"]
+        if zt["state"]!="ready":
+            return {"ok":False,"error":"ZeroTier is not ready"}
+        zt.update({"state":"active","listener":"10.147.17.2:8443","last_error":""})
+        return {"ok":True,"zerotier":dict(zt)}
+    if action == "remote_zerotier_disable":
+        zt=mock_console_state["zerotier_runtime"]
+        zt.update({"state":"ready","listener":"","last_error":""})
+        return {"ok":True,"zerotier":dict(zt)}
     if action == "terminal_status":
         return {"ok":True,"enabled":mock_console_state["terminal_enabled"],
                 "active_sessions":1 if mock_console_state["terminal_open"] else 0,
@@ -345,6 +373,35 @@ with sync_playwright() as p:
     page.click('button:has-text("Disable live WireGuard")')
     page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
 
+    # dev.4 ZeroTier: staged save -> authorization -> ready -> restricted activation -> disable.
+    page.select_option("#remoteMode","zerotier")
+    page.fill("#ztNetworkId","0123456789abcdef")
+    page.fill("#remoteAllowlist","10.147.17.0/24")
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Validate & save profile")')
+    page.wait_for_function("document.getElementById('remoteModeState').textContent === 'zerotier'")
+
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Prepare / Join")')
+    page.wait_for_function("document.getElementById('ztLifecycleState').value === 'awaiting_authorization'")
+    assert "Authorize node" in page.locator("#ztHelp").inner_text()
+
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Prepare / Join")')
+    page.wait_for_function("document.getElementById('ztLifecycleState').value === 'ready'")
+    assert page.locator("#ztIpv4").input_value()=="10.147.17.2/24"
+
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Activate Management")')
+    page.wait_for_function("document.getElementById('ztLifecycleState').value === 'active'")
+    assert "active" in page.locator("#ztHelp").inner_text().lower()
+
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Disable ZeroTier Management")')
+    page.wait_for_function("document.getElementById('ztLifecycleState').value === 'ready'")
+
     # dev.2 Advanced Terminal: enable -> fresh re-auth -> in-memory session -> bounded command -> close.
     page.click('[data-page="tools"]')
     page.wait_for_selector("#page-tools.active")
@@ -363,6 +420,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('closed')")
 
     sensitive_actions={"remote_config_set","remote_wireguard_key","remote_wireguard_apply","remote_wireguard_disable",
+                       "remote_zerotier_prepare","remote_zerotier_activate","remote_zerotier_disable",
                        "terminal_set_enabled","terminal_open","terminal_exec","terminal_close"}
     sensitive=[x for x in admin_mutations if x["action"] in sensitive_actions]
     assert sensitive_actions.issubset({x["action"] for x in sensitive})
@@ -430,6 +488,9 @@ result={
         "wireguard_live_apply":True,
         "wireguard_staged_edit":True,
         "wireguard_safe_disable":True,
+        "zerotier_authorization_flow":True,
+        "zerotier_live_management":True,
+        "zerotier_safe_disable":True,
         "advanced_terminal_session":True,
         "console_errors":False
     }
