@@ -160,25 +160,56 @@ EOF
     policy="$(bp_rental_policy_line "$did")"
     preferred="$(printf '%s' "$policy" | cut -f6)"
     [ "$preferred" = "-" ] && preferred=""
-    vendo="$(bp_param vendo)"
-    [ -n "$vendo" ] || vendo="$preferred"
-    [ -n "$vendo" ] || vendo="$(bp_choose_vendo 2>/dev/null || true)"
-    [ -n "$vendo" ] || bp_fail "select a controller or wait for one to come online"
-    printf '%s' "$vendo" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || bp_fail "invalid controller"
+    requested_vendo="$(bp_param vendo)"
+    [ -n "$requested_vendo" ] || requested_vendo="$preferred"
     window="$(bp_cfg coin_window)"
     [ -n "$window" ] || window=120
-    expires=$((now+window))
-    target_nonce="$(hexdump -n 8 -e '8/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$now")"
-    target_file="$BP_TARGET_DIR/$vendo.tsv"
+    case "$window" in ''|*[!0-9]*) window=120;; esac
+    [ "$window" -ge 10 ] 2>/dev/null && [ "$window" -le 600 ] 2>/dev/null || window=120
+
+    # A Rental device may own only one live coin reservation. Repeated starts
+    # (double tap/network retry) return the existing target instead of replacing
+    # its nonce or resetting accepted-coin progress.
     bp_lock || bp_fail "accounting busy"
+    for active_file in "$BP_TARGET_DIR"/*.tsv; do
+      [ -f "$active_file" ] || continue
+      IFS="$(printf '\t')" read -r active_device active_mac active_nonce active_expires active_vendo active_kind < "$active_file"
+      [ "$active_device" = "$did" ] || continue
+      [ "${active_kind:-hotspot}" = rental ] || continue
+      [ "${active_expires:-0}" -gt "$now" ] 2>/dev/null || continue
+      progress_file="$BP_TARGET_DIR/$active_vendo.progress"
+      received_pulses=0
+      [ -r "$progress_file" ] && received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
+      case "$received_pulses" in ''|*[!0-9]*) received_pulses=0;; esac
+      unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+      case "$unit" in ''|*[!0-9]*) unit=100;; esac
+      received_cents=$((unit*received_pulses))
+      bp_unlock
+      server_ms=$((now*1000))
+      expires_ms=$((active_expires*1000))
+      coin_canonical="coin_window|$did|$server_ms|$expires_ms|$active_vendo|$received_pulses|$received_cents"
+      coin_sig="$(bp_rental_hmac "$secret" "$coin_canonical")" || bp_fail "rental crypto unavailable"
+      bp_json "$(printf '{"ok":true,"reused":true,"vendo":"%s","target_nonce":"%s","server_time_ms":%s,"expires_ms":%s,"received_pulses":%s,"received_cents":%s,"coin_window_sig":"%s"}' "$(bp_json_escape "$active_vendo")" "$(bp_json_escape "$active_nonce")" "$server_ms" "$expires_ms" "$received_pulses" "$received_cents" "$coin_sig")"
+      exit 0
+    done
+
+    vendo="$requested_vendo"
+    [ -n "$vendo" ] || vendo="$(bp_choose_vendo 2>/dev/null || true)"
+    [ -n "$vendo" ] || { bp_unlock; bp_fail "select a controller or wait for one to come online"; }
+    printf '%s' "$vendo" | grep -Eq '^[A-Za-z0-9._-]{1,48}$' || { bp_unlock; bp_fail "invalid controller"; }
+    target_file="$BP_TARGET_DIR/$vendo.tsv"
     if [ -f "$target_file" ]; then
       IFS="$(printf '\t')" read -r old_device old_mac old_nonce old_expires old_vendo old_kind < "$target_file"
       old_kind="${old_kind:-hotspot}"
-      if [ "$old_expires" -gt "$now" ] 2>/dev/null && { [ "$old_device" != "$did" ] || [ "$old_kind" != rental ]; }; then
+      if [ "${old_expires:-0}" -gt "$now" ] 2>/dev/null; then
         bp_unlock
         bp_fail "selected controller is busy"
       fi
+      rm -f "$target_file" "$BP_TARGET_DIR/$vendo.progress"
     fi
+
+    expires=$((now+window))
+    target_nonce="$(hexdump -n 8 -e '8/1 "%02x"' /dev/urandom 2>/dev/null || printf '%s' "$now")"
     target_tmp="$BP_TARGET_DIR/.$vendo.$(bp_tmp_suffix)"
     printf '%s\t-\t%s\t%s\t%s\trental\n' "$did" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
     chmod 600 "$target_tmp"
@@ -187,11 +218,12 @@ EOF
     chmod 600 "$BP_TARGET_DIR/$vendo.progress"
     bp_durable_sync
     bp_unlock
+
     server_ms=$((now*1000))
     expires_ms=$((expires*1000))
     coin_canonical="coin_window|$did|$server_ms|$expires_ms|$vendo|0|0"
     coin_sig="$(bp_rental_hmac "$secret" "$coin_canonical")" || bp_fail "rental crypto unavailable"
-    bp_json "$(printf '{"ok":true,"vendo":"%s","target_nonce":"%s","server_time_ms":%s,"expires_ms":%s,"received_pulses":0,"received_cents":0,"coin_window_sig":"%s"}' "$(bp_json_escape "$vendo")" "$target_nonce" "$server_ms" "$expires_ms" "$coin_sig")"
+    bp_json "$(printf '{"ok":true,"reused":false,"vendo":"%s","target_nonce":"%s","server_time_ms":%s,"expires_ms":%s,"received_pulses":0,"received_cents":0,"coin_window_sig":"%s"}' "$(bp_json_escape "$vendo")" "$target_nonce" "$server_ms" "$expires_ms" "$coin_sig")"
     ;;
   coin_stop)
     did="$(bp_param device_id)"
