@@ -66,7 +66,7 @@ This is a **required architecture rule** for all future BlazePwifi + BlazePisone
 - **BlazePwifi Management Console is the central authority for SoftTimer member accounts whenever BlazePwifi integration is enabled.**
 - Member creation, editing, enable/disable, password reset, banked-time adjustment, deletion/revocation and audit belong in **BlazePwifi Admin → Pisonet Members**.
 - BlazePisonet SoftTimer must not maintain an independent authoritative member balance database while connected to BlazePwifi.
-- SoftTimer may keep a signed/revisioned last-known-good member cache for local authentication and resilience, but the central BlazePwifi member revision and banked-time ledger win during reconciliation.
+- SoftTimer may keep a signed/revisioned last-known-good **metadata** cache for display/discovery and resilience, but dev.3 does not distribute reusable password-verifier hashes to PCs. Central BlazePwifi member revision and banked-time ledger always win.
 - Standalone SoftTimer deployments with no BlazePwifi server may continue using local-only member storage.
 
 ### Member data model
@@ -93,11 +93,11 @@ Required behavior:
 
 1. SoftTimer identifies itself with its configured BlazePwifi controller ID and signed controller request.
 2. SoftTimer periodically requests a member snapshot/revision from BlazePwifi.
-3. BlazePwifi returns only cache-safe member verifier/state fields; plaintext credentials never leave the client/operator input path.
+3. BlazePwifi returns only cache-safe member metadata: username/label/enabled state, password KDF salt/round count, banked balance, revision and timestamps. It does **not** return the stored password verifier/hash. SoftTimer derives a verifier transiently from the password entered by the member and sends only a nonce/controller-bound proof.
 4. SoftTimer atomically replaces/updates its local member cache only after validating the signed response/revision.
 5. When online/integrated, banked-time mutations are sent to BlazePwifi as idempotent events and BlazePwifi is the authority for the resulting balance.
 6. Lost/retried requests must not duplicate banked time, restored time or transfers.
-7. If BlazePwifi is unreachable, cached login may remain available according to policy, but **central member balance mutation must fail closed by default** to prevent the same cached balance being spent on two PCs. A future explicit offline-spend lease design may relax this only with collision-safe reservations.
+7. In dev.3, if BlazePwifi is unreachable, **central member authentication and all balance mutations fail closed**. Cached metadata may still be displayed, but it cannot authorize/spend banked time. A future explicit encrypted/offline-spend lease design may relax this only with collision-safe reservations.
 8. When connectivity returns, the newest authoritative BlazePwifi revision replaces stale cached balance state.
 
 ### Management Console requirements
@@ -138,7 +138,7 @@ Viewer role may read non-secret member status. Operator may create/edit ordinary
 - password-verifier non-disclosure test;
 - browser Management Console member-flow test;
 - SoftTimer build with warnings-as-errors;
-- SoftTimer online sync / offline fail-closed balance test;
+- SoftTimer online sync / nonce-proof authentication / offline fail-closed authentication-and-balance test;
 - duplicate bank/restore/transfer event test;
 - full existing BlazePwifi regression matrix, including Android, ESP, Ruijie, Orange Pi and x86/QEMU gates;
 - no production v0.5.3 tag/signing action from this development branch.
