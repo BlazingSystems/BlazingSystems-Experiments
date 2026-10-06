@@ -23,9 +23,11 @@ start_service() {
   . /usr/lib/blazepwifi/common.sh
   . /usr/lib/blazepwifi/console_ops.sh
   . /usr/lib/blazepwifi/remote_apply.sh
+  [ ! -r /usr/lib/blazepwifi/zerotier_apply.sh ] || . /usr/lib/blazepwifi/zerotier_apply.sh
   bp_remote_apply_init
-  listener="$(bp_remote_runtime_get wg_listener)"
-  state="$(bp_remote_runtime_get state staged)"
+  bp_remote_effective_admin_state
+  listener="$BP_REMOTE_EFFECTIVE_LISTENER"
+  state="$BP_REMOTE_EFFECTIVE_STATE"
   case "$state" in active|applying|active_staged_changes) ;; *) return 0;; esac
   [ -n "$listener" ] || return 0
   [ -s /etc/uhttpd.crt ] && [ -s /etc/uhttpd.key ] || return 0
@@ -39,4 +41,5 @@ start_service() {
 
 service_triggers() {
   procd_add_raw_trigger "interface.blazewg.up" 1000 /etc/init.d/blazepwifi-remote-admin restart
+  procd_add_raw_trigger "interface.blazezt.up" 1000 /etc/init.d/blazepwifi-remote-admin restart
 }
