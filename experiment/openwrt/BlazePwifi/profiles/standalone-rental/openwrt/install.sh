@@ -271,7 +271,9 @@ chmod 600 /etc/blazepwifi/RENTAL_STANDALONE
 [ -s /etc/uhttpd.crt ] || die "HTTPS certificate was not created; Device Provisioning cannot be secured."
 command -v base64 >/dev/null 2>&1 || die "BusyBox/base64 support is required for certificate pinning."
 CERT_PIN="$(awk '/-----BEGIN CERTIFICATE-----/{on=1;next}/-----END CERTIFICATE-----/{exit}on{gsub(/[[:space:]]/,"");printf "%s",$0}' /etc/uhttpd.crt | base64 -d 2>/dev/null | sha256sum | awk '{print $1}')"
-printf '%s' "$CERT_PIN" | grep -Eq '^[0-9a-fA-F]{64}"$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=80 REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
+printf '%s' "$CERT_PIN" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Unable to fingerprint the local HTTPS certificate."
+
+OUT="$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=443 HTTPS=on REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
 printf '%s' "$OUT" | grep -q '"error":"missing authentication"' || die "BlazeRental API smoke test failed."
 
 echo
@@ -282,38 +284,10 @@ echo "Android server:    https://$LAN_IP"
 echo "Android API:       https://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
 if [ -s /etc/blazepwifi/state/rental-update.tsv ]; then
-  echo "Device provisioning: TEST RC channel available; HTTPS certificate pinned"
+  echo "Device provisioning: signed APK channel available; HTTPS certificate pinned"
   echo "Server cert SHA256: $CERT_PIN"
 else
   echo "Device provisioning: unavailable (signed APK update channel not installed)"
-fi
-echo "Full server core:  installed but DISABLED"
-echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
-echo "Backup:            $BACKUP"
-echo "Admin username:    admin"
-[ -n "$BOOT" ] && echo "Default password:   admin"
-[ -n "$BOOT" ] && echo "Change it later in Rental settings."
-echo
-echo "Existing root/admin UI preserved."
-echo "No network, wireless or firewall UCI package was modified."
- || die "Unable to fingerprint the local HTTPS certificate."
-
-OUT="$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=80 REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
-printf '%s' "$OUT" | grep -q '"error":"missing authentication"' || die "BlazeRental API smoke test failed."
-
-echo
-echo "BlazePwifi Rental Standalone $PROFILE_VERSION installed."
-echo "Target:            $TARGET ($BOARD / $MODEL)"
-echo "Rental console:    https://$LAN_IP/rental/"
-echo "Android server:    http://$LAN_IP"
-echo "Android API:       http://$LAN_IP/cgi-bin/rental"
-echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
-PROV_READY="$(awk -F= '$1=="READY"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
-PROV_CHANNEL="$(awk -F= '$1=="APK_CHANNEL"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
-if [ "$PROV_READY" = 1 ]; then
-  echo "Device provisioning: available ($PROV_CHANNEL channel)"
-else
-  echo "Device provisioning: unavailable (exact APK metadata not installed)"
 fi
 echo "Full server core:  installed but DISABLED"
 echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
