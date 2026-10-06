@@ -240,8 +240,11 @@ bp_member_migration_import_new() {
 bp_member_migration_import_update() {
   user="$1"; label="$2"; enabled="$3"; banked="$4"; actor="$5"; original_source="$6"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
-  oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-  scheme="$4"; salt="$5"; hash="$6"; rounds="$7"; oldbank="$8"
+  scheme="$(printf '%s' "$line" | cut -f4)"
+  salt="$(printf '%s' "$line" | cut -f5)"
+  hash="$(printf '%s' "$line" | cut -f6)"
+  rounds="$(printf '%s' "$line" | cut -f7)"
+  oldbank="$(printf '%s' "$line" | cut -f8)"
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   source="$(bp_member_clean "import:$actor")"
   bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source" || return 1
