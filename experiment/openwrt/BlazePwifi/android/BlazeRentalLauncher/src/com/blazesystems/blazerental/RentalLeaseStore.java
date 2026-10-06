@@ -25,7 +25,8 @@ public final class RentalLeaseStore {
                 extras.getString("server_url"),
                 extras.getString("enrollment_token"),
                 extras.getString("device_name"),
-                extras.getString("server_cert_sha256"));
+                extras.getString("server_cert_sha256"),
+                "device_owner_provisioning");
     }
 
     public static void saveManualEnrollment(Context context, String server, String token, String name) {
@@ -34,16 +35,17 @@ public final class RentalLeaseStore {
 
     public static void saveManualEnrollment(Context context, String server, String token,
                                             String name, String certPin) {
-        saveEnrollment(context, server, token, name, certPin);
+        saveEnrollment(context, server, token, name, certPin, "standard_manual");
     }
 
     private static void saveEnrollment(Context context, String server, String token,
-                                       String name, String certPin) {
+                                       String name, String certPin, String source) {
         prefs(context).edit()
                 .putString("server", safe(server))
                 .putString("enrollment", safe(token))
                 .putString("device_name", safe(name))
                 .putString("server_cert_sha256", normalizePin(certPin))
+                .putString("enrollment_source", safe(source))
                 .putBoolean("setup_complete", false)
                 .remove("enrollment_request_nonce")
                 .remove("device_id")
@@ -180,6 +182,7 @@ public final class RentalLeaseStore {
                 .remove("enrollment")
                 .remove("enrollment_request_nonce")
                 .remove("server_cert_sha256")
+                .remove("enrollment_source")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
@@ -263,6 +266,7 @@ public final class RentalLeaseStore {
     public static String deviceId(Context c) { return prefs(c).getString("device_id", ""); }
     public static String deviceSecret(Context c) { return prefs(c).getString("device_secret", ""); }
     public static String deviceName(Context c) { return prefs(c).getString("device_name", "Rental phone"); }
+    public static String enrollmentSource(Context c) { return prefs(c).getString("enrollment_source", ""); }
     public static boolean isEnrolled(Context c) { return deviceSecret(c).length() > 0; }
 
     private static String safe(String value) { return value == null ? "" : value.trim(); }

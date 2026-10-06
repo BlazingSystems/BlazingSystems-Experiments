@@ -56,6 +56,22 @@ public class BlazeAdminActivity extends Activity {
     }
 
     private void route() {
+        boolean deviceOwnerProvisioned = ManagedPolicyController.isDeviceOwner(this)
+                && "device_owner_provisioning".equals(RentalLeaseStore.enrollmentSource(this));
+        if (deviceOwnerProvisioned) {
+            RentalLeaseStore.endAdminWindow(this);
+            ManagedPolicyController.apply(this);
+            if (!RentalLeaseStore.isEnrolled(this) || !RentalLeaseStore.hasAdminVerifier(this)) {
+                showManagedProvisioningPending();
+                return;
+            }
+            if (!RentalLeaseStore.isInitialSetupComplete(this)) {
+                RentalLeaseStore.markInitialSetupComplete(this, true);
+            }
+            showPasswordGate();
+            return;
+        }
+
         if (!RentalLeaseStore.isInitialSetupComplete(this)
                 || !RentalLeaseStore.hasAdminVerifier(this)) {
             RentalLeaseStore.beginInitialSetupWindow(this);
@@ -66,6 +82,40 @@ public class BlazeAdminActivity extends Activity {
         } else {
             showPasswordGate();
         }
+    }
+
+    private void showManagedProvisioningPending() {
+        LinearLayout root = page();
+        TextView brand = label("BLAZERENTAL");
+        root.addView(brand);
+        root.addView(title("BlazeRental Managed Device"));
+        root.addView(label("This phone was provisioned as a managed rental device. "
+                + "Manual first-run setup is disabled. The pinned Rental Server must complete "
+                + "enrollment and supply the administrator policy."));
+        root.addView(label("Server · " + emptyAs(RentalLeaseStore.server(this), "Provisioning data missing")));
+        root.addView(label("Server enrollment · " + (RentalLeaseStore.isEnrolled(this) ? "BOUND" : "PENDING")));
+        root.addView(label("Administrator policy · " + (RentalLeaseStore.hasAdminVerifier(this)
+                ? "READY" : "WAITING FOR OPERATOR")));
+        Button sync = primary("RETRY SECURE SERVER ENROLLMENT / POLICY SYNC");
+        root.addView(sync, full());
+        sync.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Toast.makeText(BlazeAdminActivity.this,
+                        "Synchronizing managed-device policy...", Toast.LENGTH_SHORT).show();
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final boolean ok = LeaseClient.sync(BlazeAdminActivity.this);
+                        if (ok && RentalLeaseStore.isEnrolled(BlazeAdminActivity.this)) {
+                            LeaseClient.sync(BlazeAdminActivity.this);
+                        }
+                        runOnUiThread(new Runnable() {
+                            @Override public void run() { route(); }
+                        });
+                    }
+                }).start();
+            }
+        });
+        setContentView(wrap(root));
     }
 
     private void showInitialSetup() {

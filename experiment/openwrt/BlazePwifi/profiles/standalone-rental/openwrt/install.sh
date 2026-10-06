@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental.2-rc.2"
+PROFILE_VERSION="0.5.2-rental.2-rc.3"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -89,7 +89,6 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-rental-standalone-backups/$STAMP"
 mkdir -p "$BACKUP/cgi"
 for p in /etc/config/uhttpd /etc/config/blazepwifi; do [ -f "$p" ] && cp -p "$p" "$BACKUP/" || true; done
-[ -f /usr/share/blazepwifi/rental-provisioning.env ] && cp -p /usr/share/blazepwifi/rental-provisioning.env "$BACKUP/" || true
 [ -d /etc/blazepwifi ] && cp -a /etc/blazepwifi "$BACKUP/etc-blazepwifi" || true
 [ -d /usr/lib/blazepwifi ] && cp -a /usr/lib/blazepwifi "$BACKUP/usr-lib-blazepwifi" || true
 [ -d "$WEB_ROOT/rental" ] && cp -a "$WEB_ROOT/rental" "$BACKUP/web-rental" || true
@@ -141,23 +140,6 @@ cp -p /www/blazepwifi/vendor/qrcode/LICENSE "$WEB_ROOT/rental/vendor/qrcode-LICE
 chmod 755 "$CGI_DIR/rental" "$CGI_DIR"/blaze-rental-*
 chmod 644 "$WEB_ROOT/rental/index.html" "$WEB_ROOT/rental/vendor/"*
 
-mkdir -p /usr/share/blazepwifi
-if [ -f "$SELF/rental-provisioning.env" ]; then
-  cp -p "$SELF/rental-provisioning.env" /usr/share/blazepwifi/rental-provisioning.env
-else
-  cat > /usr/share/blazepwifi/rental-provisioning.env <<'EOF'
-READY=0
-APK_URL=
-APK_CHECKSUM=
-APK_SHA256=
-APK_VERSION=
-APK_VERSION_CODE=
-APK_CHANNEL=
-PRODUCTION_READY=0
-EOF
-fi
-chmod 644 /usr/share/blazepwifi/rental-provisioning.env
-
 ensure(){ k="$1"; v="$2"; uci -q get "blazepwifi.main.$k" >/dev/null 2>&1 || uci set "blazepwifi.main.$k=$v"; }
 uci -q get blazepwifi.main >/dev/null 2>&1 || uci set blazepwifi.main='core'
 uci set blazepwifi.main.edition='rental-standalone'
@@ -196,6 +178,19 @@ uci commit blazepwifi
 BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_RENTAL_LIB=/usr/lib/blazepwifi/rental.sh BP_RENTAL_POLICY_LIB=/usr/lib/blazepwifi/rental_policy.sh \
   sh -c '. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"; . "$BP_RENTAL_POLICY_LIB"; bp_init_dirs; bp_auth_init; bp_rental_init; bp_rental_policy_v2_init' \
   || die "Unable to initialize rental state."
+
+if [ -s "$SELF/rental-update.tsv" ]; then
+  IFS="$(printf '\t')" read -r UP_VERSION UP_CODE UP_URL UP_SHA UP_RVER UP_RCODE UP_RURL UP_RSHA < "$SELF/rental-update.tsv"
+  BP_LIB=/usr/lib/blazepwifi/common.sh BP_RENTAL_UPDATE_LIB=/usr/lib/blazepwifi/rental_update.sh \
+    sh -c '
+      set -eu
+      . "$BP_LIB"
+      . "$BP_RENTAL_UPDATE_LIB"
+      bp_rental_update_init
+      bp_rental_update_set "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    ' sh "$UP_VERSION" "$UP_CODE" "$UP_URL" "$UP_SHA" "$UP_RVER" "$UP_RCODE" "$UP_RURL" "$UP_RSHA" \
+    || die "Invalid BlazeRental update/provisioning metadata in release bundle."
+fi
 
 BOOT=""
 if ! grep -q "^admin$(printf '\t')" /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
@@ -272,6 +267,36 @@ chmod 600 /etc/blazepwifi/RENTAL_STANDALONE
   /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
   die "uHTTPd failed; configuration rolled back where possible."
 }
+
+[ -s /etc/uhttpd.crt ] || die "HTTPS certificate was not created; Device Provisioning cannot be secured."
+command -v base64 >/dev/null 2>&1 || die "BusyBox/base64 support is required for certificate pinning."
+CERT_PIN="$(awk '/-----BEGIN CERTIFICATE-----/{on=1;next}/-----END CERTIFICATE-----/{exit}on{gsub(/[[:space:]]/,"");printf "%s",$0}' /etc/uhttpd.crt | base64 -d 2>/dev/null | sha256sum | awk '{print $1}')"
+printf '%s' "$CERT_PIN" | grep -Eq '^[0-9a-fA-F]{64}"$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=80 REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
+printf '%s' "$OUT" | grep -q '"error":"missing authentication"' || die "BlazeRental API smoke test failed."
+
+echo
+echo "BlazePwifi Rental Standalone $PROFILE_VERSION installed."
+echo "Target:            $TARGET ($BOARD / $MODEL)"
+echo "Rental console:    https://$LAN_IP/rental/"
+echo "Android server:    https://$LAN_IP"
+echo "Android API:       https://$LAN_IP/cgi-bin/rental"
+echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
+if [ -s /etc/blazepwifi/state/rental-update.tsv ]; then
+  echo "Device provisioning: TEST RC channel available; HTTPS certificate pinned"
+  echo "Server cert SHA256: $CERT_PIN"
+else
+  echo "Device provisioning: unavailable (signed APK update channel not installed)"
+fi
+echo "Full server core:  installed but DISABLED"
+echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
+echo "Backup:            $BACKUP"
+echo "Admin username:    admin"
+[ -n "$BOOT" ] && echo "Default password:   admin"
+[ -n "$BOOT" ] && echo "Change it later in Rental settings."
+echo
+echo "Existing root/admin UI preserved."
+echo "No network, wireless or firewall UCI package was modified."
+ || die "Unable to fingerprint the local HTTPS certificate."
 
 OUT="$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=80 REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
 printf '%s' "$OUT" | grep -q '"error":"missing authentication"' || die "BlazeRental API smoke test failed."
