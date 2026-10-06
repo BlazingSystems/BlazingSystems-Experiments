@@ -131,6 +131,19 @@ public final class LeaseClient {
                 if (salt.length() > 0 && hash.length() > 0) {
                     RentalLeaseStore.recordAdminVerifier(context, salt, hash, rounds);
                 }
+
+                JSONObject update = response.optJSONObject("update");
+                if (update != null && update.optBoolean("available", false)) {
+                    BlazeRentalUpdateManager.recordAvailable(context,
+                            update.optString("version", ""),
+                            update.optInt("version_code", 0),
+                            update.optString("apk_url", ""),
+                            update.optString("apk_sha256", ""),
+                            update.optString("rollback_version", ""),
+                            update.optInt("rollback_version_code", 0),
+                            update.optString("rollback_url", ""),
+                            update.optString("rollback_sha256", ""));
+                }
             }
 
             ManagedPolicyController.apply(context);

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-APK="${1:?usage: android_v05_audit.sh /path/to/BlazeRental-v0.5.0-ci.apk [output-dir]}"
+APK="${1:?usage: android_v05_audit.sh /path/to/BlazeRental-v0.5.1-ci.apk [output-dir]}"
 OUT="${2:-android-v05-audit}"
 PKG="com.blazesystems.blazerental.debug"
 ADMIN="$PKG/com.blazesystems.blazerental.BlazeDeviceAdminReceiver"
@@ -138,10 +138,10 @@ adb logcat -d >"$OUT/logcat.txt"
 
 python3 - "$OUT/audit.json" <<'PY'
 import json,sys
-json.dump({"target":"android-emulator","release":"0.5.0","validation_level":"emulator-device-owner-ui","checks":{
+json.dump({"target":"android-emulator","release":"0.5.1","validation_level":"emulator-device-owner-ui","checks":{
 "blaze_gate_locked":True,"unpaid_drawer_blocked":True,"unpaid_home_escape_blocked":True,
 "secret_admin":True,"daily_driver_without_enrollment":True,"normal_home_preserved":True,
 "all_apps_unrestricted":True,"notifications_adjacent":True,"clear_all_notifications":True,
 "far_left_rental_page":True,"device_owner":True,"ordinary_uninstall_blocked":True,"no_fatal_crash":True}},open(sys.argv[1],"w"),indent=2)
 PY
-echo "Android v0.5 emulator audit passed"
+echo "Android v0.5.1 emulator audit passed"

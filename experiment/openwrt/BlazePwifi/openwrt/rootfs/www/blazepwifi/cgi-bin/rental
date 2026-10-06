@@ -3,6 +3,7 @@
 . "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 . "${BP_RENTAL_POLICY_LIB:-/usr/lib/blazepwifi/rental_policy.sh}"
+[ ! -r "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}" ] || . "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 bp_rental_init
 bp_rental_policy_v2_init
 
@@ -70,8 +71,9 @@ EOF
     v2sig="$(bp_rental_hmac "$secret" "$v2canonical")" || bp_fail "rental crypto unavailable"
     v3canonical="v3|$did|$nonce|$server_ms|$lease_ms|$rev|$mode|$allowed|$hidden|$salt|$hash|$rounds|$preferred|$per|$timer_mode|$timer_toggle|$quick|$notifications|$gesture_type|$gesture_value|$grace"
     v3sig="$(bp_rental_hmac "$secret" "$v3canonical")" || bp_fail "rental crypto unavailable"
+    if command -v bp_rental_update_json >/dev/null 2>&1; then update_meta="$(bp_rental_update_json)"; else update_meta='{"available":false}'; fi
 
-    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"policy_sig":"%s","policy_sig_v2":"%s","policy_sig_v3":"%s"}'       "$did" "$server_ms" "$lease_ms" "${rev:-1}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per"       "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}"       "$(bp_json_escape "$gesture_type")" "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$legacy_sig" "$v2sig" "$v3sig")"
+    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"policy_sig":"%s","policy_sig_v2":"%s","policy_sig_v3":"%s","update":%s}'       "$did" "$server_ms" "$lease_ms" "${rev:-1}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per"       "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}"       "$(bp_json_escape "$gesture_type")" "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$legacy_sig" "$v2sig" "$v3sig" "$update_meta")"
     ;;
   policy_patch)
     did="$(bp_param device_id)"

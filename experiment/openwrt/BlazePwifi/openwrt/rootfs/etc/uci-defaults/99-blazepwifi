@@ -46,6 +46,10 @@ ensure_opt auth_idle_seconds 900
 ensure_opt auth_absolute_seconds 28800
 ensure_opt auth_kdf_rounds 2048
 ensure_opt auth_bind_ip 1
+ensure_opt update_source_url 'https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/'
+ensure_opt update_stability_seconds 600
+ensure_opt update_retention 3
+ensure_opt update_max_mb 64
 
 mkdir -p /etc/blazepwifi/state /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /tmp/blazepwifi
@@ -121,10 +125,11 @@ uci set firewall.blazepwifi_admin.dest_port="$ADMIN_PORT"
 uci set firewall.blazepwifi_admin.target='ACCEPT'
 uci commit firewall
 
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/* 2>/dev/null || true
+chmod +x /etc/init.d/blazepwifi* /usr/sbin/blazepwifi-* /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/* 2>/dev/null || true
 mkdir -p /etc/blazepwifi/state /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /tmp/blazepwifi
 /etc/init.d/blazepwifi enable
+/etc/init.d/blazepwifi-update-guard enable 2>/dev/null || true
 /etc/init.d/firewall reload 2>/dev/null || true
 /etc/init.d/uhttpd restart 2>/dev/null || true
 /etc/init.d/blazepwifi start 2>/dev/null || true

@@ -1,8 +1,66 @@
 # BlazePwifi Project Handover
 
-**Last updated:** 2026-10-05  
+**Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
-**Development state:** BlazePwifi v0.5.0 prerelease is published, validated, and the full released implementation is now integrated into `main`. Android production signing remains blocked only by unavailable locked v0.4 private signing material.
+**Development state:** BlazePwifi v0.5.1 is published and fully build-validated as a prerelease from exact candidate `65f87d775793a1fdc09a9522cf752349f68c3b41`. Transactional no-reflash updates and rollback are included. Android production signing remains blocked only by unavailable exact locked v0.4 signing material.
+
+## Active v0.5.1 maintenance target
+
+The owner requested a maintenance release that eliminates full-system reflashing for ordinary feature/revision upgrades and adds safe rollback for BlazePwifi and BlazeRental.
+
+Implemented on `blazepwifi-v0.5.1-implementation`:
+
+- Transactional BlazePwifi overlay updater with exact SHA-256 verification.
+- Configurable HTTPS update source, size bound, stability grace and rollback retention.
+- Last-known-good snapshots before file replacement.
+- Immediate health-check rollback and boot-health rollback guard.
+- Manual rollback from Management Console → Updates & Recovery.
+- Idempotent configuration migration; normal feature bundles do not overwrite persistent operator/session state.
+- One-time v0.5.0 → v0.5.1 no-reflash bootstrap updater.
+- Build-time `BlazePwifi-v0.5.1-update.tar.gz` generation.
+- BlazeRental v0.5.1 version code `50100`.
+- BlazeRental managed updater verifies SHA-256, package name and installed signing identity.
+- Previous APK/version metadata retained; new build becomes stable only after a 30-second launcher health window.
+- Known-good v0.5.0 rollback rescue is rebuilt from exact RC9 source `66e159b65b6d8fb5f74dd981dc73d46db7229adc` using recovery-only version code `50101`.
+- Repeated failed boots while a Rental update remains pending can stage the configured rescue APK.
+- Native Rental Admin update/check/rollback controls.
+- Central Rental Update Manager in the BlazePwifi console.
+- Locked v0.5.1 production signer workflow signs both current and rescue APKs with the exact existing certificate and refuses rotation.
+- v0.5.1 release workflow supports validated prerelease publication if the locked signer remains unavailable.
+
+Full firmware/sysupgrade remains reserved for base-system changes such as kernel, bootloader, partition/ABI or filesystem changes that cannot safely be delivered as an overlay.
+
+## Current v0.5.1 release status
+
+- GitHub Release: `v0.5.1` — **published prerelease**
+- Release ID: `404404262`
+- Release page: `https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.1`
+- Exact validated candidate: `65f87d775793a1fdc09a9522cf752349f68c3b41`
+- Validated build run: `37425063793` — **PASS**
+- Validate/static/security/integration/stress: PASS.
+- Transactional update/rollback regression: PASS.
+- BlazeRental v0.5.1 update contract: PASS.
+- Android APK build: PASS.
+- Android Device Owner emulator: PASS.
+- Browser, ESP8266, ESP32, Ruijie, x86 and required Orange Pi simulations: PASS.
+- Final candidate gate: PASS.
+- Release workflow run: `37426030884` — **PASS**
+- Release target remains exact candidate SHA `65f87d775793a1fdc09a9522cf752349f68c3b41`.
+- Update assets include:
+  - `BlazePwifi-v0.5.1-update.tar.gz`
+  - `BlazePwifi-v0.5.1-update-bootstrap.sh`
+  - `BlazePwifi-v0.5.1-update-bootstrap.sh.sha256`
+- Android validation/recovery assets include:
+  - `BlazeRental-v0.5.1-TEST.apk`
+  - `BlazeRental-v0.5.1-release-unsigned.apk`
+  - `BlazeRental-v0.5.0-rescue-for-v0.5.1-TEST.apk`
+  - `BlazeRental-v0.5.0-rescue-for-v0.5.1-release-unsigned.apk`
+- Locked signing run `37425929657` failed safely at `Restore exact locked v0.4 production identity` because the exact keystore / `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` remains unavailable.
+- The signing workflow refused certificate rotation. Therefore production `BlazeRental.apk` and signed rescue APK are intentionally absent.
+- Locked production fingerprint remains:
+  `C7:7E:4D:A2:2E:92:D2:BE:7D:93:B9:D3:DC:7C:3F:77:56:C0:6A:5A:13:0E:C6:90:5A:DC:C2:AD:4E:A3:56:24`
+- Canonical release log:
+  `docs/handover/2026-10-06-v051-release-published.md`
 
 ## Main branch integration status
 
