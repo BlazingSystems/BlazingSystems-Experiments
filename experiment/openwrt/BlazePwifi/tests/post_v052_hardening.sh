@@ -85,8 +85,15 @@ grep -Fq 'enrollment already claimed' "$RENTAL_API"
 grep -Fq '"reused":%s' "$RENTAL_API"
 grep -Fq 'enrollment redemption/device mismatch' "$RENTAL_API"
 grep -Fq 'same request nonce' "$RENTAL_API"
+grep -Fq 'enroll_response|' "$RENTAL_API"
+grep -Fq '"enroll_sig":"%s"' "$RENTAL_API"
 grep -Fq 'enrollment_request_nonce' "$STORE"
 grep -Fq 'enrollmentRequestNonce(context)' "$LEASE"
+grep -Fq 'response.optString("enroll_sig", "")' "$LEASE"
+grep -Fq 'enroll_response|' "$LEASE"
+SIG_VERIFY_LINE="$(grep -n 'Hmac.sha256Hex(authSecret, enrollCanonical)' "$LEASE" | head -n1 | cut -d: -f1)"
+IDENTITY_LINE="$(grep -n 'RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret)' "$LEASE" | head -n1 | cut -d: -f1)"
+[ -n "$SIG_VERIFY_LINE" ] && [ -n "$IDENTITY_LINE" ] && [ "$SIG_VERIFY_LINE" -lt "$IDENTITY_LINE" ]
 
 echo "hardening: portal and Rental coin-window contracts"
 # Portal and Rental app must expose the authoritative insert-coin window.
