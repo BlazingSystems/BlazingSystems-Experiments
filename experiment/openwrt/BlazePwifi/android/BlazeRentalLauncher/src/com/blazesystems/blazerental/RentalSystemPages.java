@@ -144,6 +144,7 @@ public final class RentalSystemPages {
         coinProgress.setVisibility(View.GONE);
         final Button coin = actionButton(launcher, "INSERT COIN");
         final Button coinDone = smallButton(launcher, "DONE INSERTING");
+        final boolean[] coinOpening = new boolean[]{false};
         coinDone.setVisibility(View.GONE);
 
         root.addView(state);
@@ -156,6 +157,8 @@ public final class RentalSystemPages {
 
         coin.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
+                if (coinOpening[0]) return;
+                coinOpening[0] = true;
                 coin.setEnabled(false);
                 detail.setText("Waiting for coin controller...");
                 new Thread(new Runnable() {
@@ -163,8 +166,9 @@ public final class RentalSystemPages {
                         final String result = LeaseClient.coinStart(launcher, "");
                         launcher.runOnUiThread(new Runnable() {
                             @Override public void run() {
+                                coinOpening[0] = false;
                                 detail.setText(result);
-                                coin.setEnabled(true);
+                                coin.setEnabled(LeaseClient.coinWindowRemainingMs() <= 0L);
                             }
                         });
                     }
@@ -200,9 +204,10 @@ public final class RentalSystemPages {
                 setTextIfChanged(timer, formatDuration(remaining));
                 setTextIfChanged(detail, coinActive ? "INSERT COIN NOW" :
                         (paid ? "RENTAL ACTIVE" : "TIME FINISHED"));
-                setTextIfChanged(coin, coinActive ? "COIN WINDOW OPEN" :
-                        (paid ? "ADD MORE TIME" : "INSERT COIN"));
-                coin.setEnabled(!coinActive);
+                setTextIfChanged(coin, coinOpening[0] ? "OPENING COIN WINDOW…" :
+                        (coinActive ? "COIN WINDOW OPEN" :
+                        (paid ? "ADD MORE TIME" : "INSERT COIN")));
+                coin.setEnabled(!coinActive && !coinOpening[0]);
                 if (coinActive) {
                     String vendo = LeaseClient.coinWindowVendo();
                     int pulses = LeaseClient.coinWindowReceivedPulses();
