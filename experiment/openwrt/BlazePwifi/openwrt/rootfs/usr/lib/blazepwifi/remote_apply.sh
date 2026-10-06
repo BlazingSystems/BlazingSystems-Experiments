@@ -103,9 +103,24 @@ bp_remote_wg_private_key_ensure() {
   bp_durable_sync
 }
 
+bp_remote_wg_public_key_existing() {
+  [ -r "$BP_REMOTE_WG_KEY" ] || return 1
+  command -v wg >/dev/null 2>&1 || return 127
+  wg pubkey < "$BP_REMOTE_WG_KEY" 2>/dev/null
+}
+
 bp_remote_wg_public_key() {
   bp_remote_wg_private_key_ensure || return $?
-  wg pubkey < "$BP_REMOTE_WG_KEY" 2>/dev/null
+  bp_remote_wg_public_key_existing
+}
+
+bp_remote_runtime_set_public_key() {
+  public="$1"
+  bp_remote_runtime_write \
+    "$(bp_remote_runtime_get state staged)" "$(bp_remote_runtime_get apply_id)" \
+    "$(bp_remote_runtime_get profile_sha)" "$(bp_remote_runtime_get applied_at 0)" \
+    "$(bp_remote_runtime_get last_error)" "$(bp_remote_runtime_get wg_listener)" \
+    "$public" "$(bp_remote_runtime_get last_handshake 0)"
 }
 
 bp_remote_ipv4_bounds() {
@@ -560,7 +575,7 @@ bp_remote_activation_state() {
 bp_remote_runtime_status_json() {
   state="$(bp_remote_activation_state)"
   public="$(bp_remote_runtime_get public_key)"
-  [ -n "$public" ] || public="$(bp_remote_wg_public_key 2>/dev/null || true)"
+  [ -n "$public" ] || public="$(bp_remote_wg_public_key_existing 2>/dev/null || true)"
   handshake="$(bp_remote_runtime_get last_handshake 0)"
   applied_at="$(bp_remote_runtime_get applied_at 0)"
   last_error="$(bp_remote_runtime_get last_error)"
