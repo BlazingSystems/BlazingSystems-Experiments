@@ -206,6 +206,26 @@ bp_remote_wireguard_disable 192.168.1.10
 [ ! -e "$ADMIN_STATE" ]
 [ -r "$BP_REMOTE_WG_KEY" ]
 
+# Watchdog timeout restores the exact pre-change snapshot and clears ownership.
+PRE_WATCH_NET="$(cat "$BP_REMOTE_NETWORK_CONFIG")"
+PRE_WATCH_FW="$(cat "$BP_REMOTE_FIREWALL_CONFIG")"
+PRE_WATCH_STATE="$(bp_remote_runtime_get state)"
+WATCH_ID=watchdog-recovery-test
+bp_remote_snapshot_create "$WATCH_ID"
+bp_remote_pending_write "$WATCH_ID" "$(bp_remote_profile_hash)" 192.168.1.10 "$ROUTE_SIG" "$DEFAULT_SIG"
+printf 'BROKEN-WATCHDOG-NETWORK\n' > "$BP_REMOTE_NETWORK_CONFIG"
+printf 'BROKEN-WATCHDOG-FIREWALL\n' > "$BP_REMOTE_FIREWALL_CONFIG"
+bp_remote_runtime_write applying "$WATCH_ID" bad 0 "" '10.20.0.2:8443' "$PUB" 0
+touch "$ADMIN_STATE"
+bp_remote_guard "$WATCH_ID"
+[ "$(cat "$BP_REMOTE_NETWORK_CONFIG")" = "$PRE_WATCH_NET" ]
+[ "$(cat "$BP_REMOTE_FIREWALL_CONFIG")" = "$PRE_WATCH_FW" ]
+[ "$(bp_remote_runtime_get state)" = "$PRE_WATCH_STATE" ]
+[ "$(bp_remote_runtime_get last_error)" = watchdog-timeout ]
+[ ! -e "$BP_REMOTE_PENDING" ]
+[ ! -e "$ADMIN_STATE" ]
+! bp_remote_pending_owned "$WATCH_ID"
+
 # Reboot during a pending change restores the exact pre-change snapshot.
 PRE_BOOT_NET="$(cat "$BP_REMOTE_NETWORK_CONFIG")"
 PRE_BOOT_FW="$(cat "$BP_REMOTE_FIREWALL_CONFIG")"
