@@ -18,7 +18,9 @@ public final class BlazeAlarmPlayer {
     private static MediaPlayer media;
     private static ToneGenerator tone;
     private static Runnable stopRunnable;
+    private static Runnable volumeGuardRunnable;
     private static PowerManager.WakeLock wakeLock;
+    private static int activeKind;
     private static Context appContext;
     private static AudioManager audio;
     private static NotificationManager notificationManager;
@@ -32,12 +34,14 @@ public final class BlazeAlarmPlayer {
         stopInternal(true);
         appContext = context.getApplicationContext();
         long duration = RentalAlarmConfig.durationMs(appContext, kind);
+        activeKind = kind;
 
         audio = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         notificationManager = (NotificationManager)
                 appContext.getSystemService(Context.NOTIFICATION_SERVICE);
 
         forceAudible(kind);
+        startVolumeGuard(kind, duration);
         acquireWakeLock(duration + 5000L);
 
         boolean started = false;
@@ -114,6 +118,33 @@ public final class BlazeAlarmPlayer {
         }
     }
 
+    private static void startVolumeGuard(final int kind, long duration) {
+        if (volumeGuardRunnable != null) HANDLER.removeCallbacks(volumeGuardRunnable);
+        final long until = android.os.SystemClock.elapsedRealtime() + duration;
+        volumeGuardRunnable = new Runnable() {
+            @Override public void run() {
+                synchronized (BlazeAlarmPlayer.class) {
+                    if (activeKind != kind || (!isPlaying())) return;
+                    if (audio != null) {
+                        try {
+                            int max = Math.max(1,
+                                    audio.getStreamMaxVolume(AudioManager.STREAM_ALARM));
+                            int percent = RentalAlarmConfig.volumePercent(appContext, kind);
+                            int minimum = Math.max(1, Math.round(max * percent / 100f));
+                            if (audio.getStreamVolume(AudioManager.STREAM_ALARM) < minimum) {
+                                audio.setStreamVolume(AudioManager.STREAM_ALARM, minimum, 0);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    if (android.os.SystemClock.elapsedRealtime() < until) {
+                        HANDLER.postDelayed(this, 350L);
+                    }
+                }
+            }
+        };
+        HANDLER.postDelayed(volumeGuardRunnable, 350L);
+    }
+
     private static void forceAudible(int kind) {
         if (audio != null) {
             try {
@@ -184,6 +215,11 @@ public final class BlazeAlarmPlayer {
             HANDLER.removeCallbacks(stopRunnable);
             stopRunnable = null;
         }
+        if (volumeGuardRunnable != null) {
+            HANDLER.removeCallbacks(volumeGuardRunnable);
+            volumeGuardRunnable = null;
+        }
+        activeKind = 0;
         if (media != null) {
             try { if (media.isPlaying()) media.stop(); } catch (Exception ignored) {}
             try { media.release(); } catch (Exception ignored) {}
