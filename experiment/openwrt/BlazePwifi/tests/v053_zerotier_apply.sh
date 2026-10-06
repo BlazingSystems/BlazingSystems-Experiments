@@ -243,18 +243,35 @@ STAGE=access-denied-rollback
 # ACCESS_DENIED must restore the previously active ZeroTier config/runtime/listener.
 ZT_STATUS=ACCESS_DENIED
 set +e; bp_remote_zerotier_apply 192.168.1.10; APPLY_RC=$?; set -e
-[ "$APPLY_RC" -eq 46 ]
-[ "$(cat "$BP_REMOTE_ZT_CONFIG")" = "$ACTIVE_ZT" ]
-[ "$(cat "$BP_REMOTE_FIREWALL_CONFIG")" = "$ACTIVE_FW" ]
-[ "$(bp_remote_runtime_get state)" = active ]
-[ "$(bp_remote_runtime_get profile_sha)" = "$ACTIVE_PROFILE" ]
-[ "$(bp_remote_runtime_get wg_listener)" = "$ACTIVE_LISTENER" ]
-[ "$(bp_remote_runtime_get last_error)" = zerotier-ACCESS_DENIED ]
-[ "$(bp_remote_zt_runtime_get active)" = 1 ]
-[ "$(bp_remote_activation_state)" = active_staged_changes ]
-[ -e "$ADMIN_STATE" ]
-[ ! -e "$BP_REMOTE_PENDING" ]
-[ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
+check_eq() {
+  name="$1"; got="$2"; want="$3"
+  if [ "$got" != "$want" ]; then
+    printf 'ASSERT %s FAILED\n  got:  <%s>\n  want: <%s>\n' "$name" "$got" "$want" >&2
+    return 1
+  fi
+  printf 'ASSERT %s OK\n' "$name" >&2
+}
+check_true() {
+  name="$1"; shift
+  if ! "$@"; then
+    printf 'ASSERT %s FAILED\n' "$name" >&2
+    return 1
+  fi
+  printf 'ASSERT %s OK\n' "$name" >&2
+}
+
+check_eq access_denied_rc "$APPLY_RC" 46
+check_eq restored_zerotier_config "$(cat "$BP_REMOTE_ZT_CONFIG")" "$ACTIVE_ZT"
+check_eq restored_firewall_config "$(cat "$BP_REMOTE_FIREWALL_CONFIG")" "$ACTIVE_FW"
+check_eq restored_runtime_state "$(bp_remote_runtime_get state)" active
+check_eq restored_profile_sha "$(bp_remote_runtime_get profile_sha)" "$ACTIVE_PROFILE"
+check_eq restored_listener "$(bp_remote_runtime_get wg_listener)" "$ACTIVE_LISTENER"
+check_eq rollback_reason "$(bp_remote_runtime_get last_error)" zerotier-ACCESS_DENIED
+check_eq restored_zerotier_active "$(bp_remote_zt_runtime_get active)" 1
+check_eq staged_change_state "$(bp_remote_activation_state)" active_staged_changes
+check_true restored_admin_listener test -e "$ADMIN_STATE"
+check_true pending_cleared test ! -e "$BP_REMOTE_PENDING"
+check_eq snapshots_cleared "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ""
 ZT_STATUS=OK
 
 STAGE=unsafe-route-rollback
