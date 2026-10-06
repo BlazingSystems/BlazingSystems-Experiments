@@ -149,11 +149,11 @@ jobs:
           printf 'SHA256: %s\n' "$FP" > "$OUT/BlazeRental-signing-fingerprint.txt"
 
           cat > "$SECRET/README.txt" <<'EOF'
-BlazeRental v0.5.2 Production Lineage 2 signing identity.
-Future production BlazeRental APKs must use this exact PKCS12 identity.
-The encrypted GitHub backup can be recovered with either owner Recovery A or Recovery B private key.
-Never commit the plaintext PKCS12 or its password.
-EOF
+          BlazeRental v0.5.2 Production Lineage 2 signing identity.
+          Future production BlazeRental APKs must use this exact PKCS12 identity.
+          The encrypted GitHub backup can be recovered with either owner Recovery A or Recovery B private key.
+          Never commit the plaintext PKCS12 or its password.
+          EOF
           tar -czf "$RUNNER_TEMP/BlazeRental-v0.5.2-lineage2-signing-backup.tar.gz" -C "$SECRET"             BlazeRental-v0.5.2-production-lineage2.p12 keystore-password.txt README.txt
 
           python3 "$RUNNER_TEMP/seal.py"             --backup "$RUNNER_TEMP/BlazeRental-v0.5.2-lineage2-signing-backup.tar.gz"             --public-a "$RUNNER_TEMP/recovery-A-public.pem"             --public-b "$RUNNER_TEMP/recovery-B-public.pem"             --out "$OUT"
