@@ -1,5 +1,15 @@
 # BlazePwifi R281 Rental Profile
 
+> [!WARNING]
+> **LEGACY / DO NOT USE FOR CURRENT DEPLOYMENTS**
+>
+> This profile is frozen on BlazePwifi 0.3.0 / R281 profile 0.3.0-r281.1. It predates the current Standard Enrollment vs Device Owner Provisioning split, modern CSRF/BusyBox fixes, retry-safe enrollment, TLS pinning, and the current Windows OneClick installer.
+>
+> For current R281 deployments use:
+> `experiment/openwrt/BlazePwifi/profiles/standalone-rental/`
+>
+> In particular, do **not** use this legacy profile's QR/enrollment UI as a reference for current Android provisioning.
+
 This is the full **rental-service deployment profile** of BlazePwifi for the Notion R281 / EasyMode environment.
 
 It is not the earlier standalone test hub. The server core in this profile reuses the exact shared BlazePwifi 0.3.0 blobs from commit `28a2a5378e339e401ceaf2433caccccf0e47cd48`: `common.sh`, `auth.sh`, `config.sh`, `rental.sh`, `controller.sh`, the signed BlazeRental app API, and the ESP8266/ESP32 vendo API.
