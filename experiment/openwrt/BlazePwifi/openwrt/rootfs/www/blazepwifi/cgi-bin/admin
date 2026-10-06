@@ -39,7 +39,24 @@ bp_admin_binding_payload() {
 
 bp_admin_sha256_b64url() {
   hex="$(printf '%s' "$1" | tr A-F a-f)"
-  printf '%s' "$hex" | grep -Eq '^[0-9a-f]{64}
+  printf '%s' "$hex" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  command -v base64 >/dev/null 2>&1 || return 1
+  awk -v h="$hex" 'BEGIN {
+    digits="0123456789abcdef"
+    for(i=1;i<=length(h);i+=2){
+      hi=index(digits,substr(h,i,1))-1
+      lo=index(digits,substr(h,i+1,1))-1
+      printf "%c",hi*16+lo
+    }
+  }' | base64 | tr '+/' '-_' | tr -d '=\r\n'
+}
+
+bp_admin_provisioning_payload() {
+  server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"
+  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_SKIP_EDUCATION_SCREENS":true,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"server_url":"%s","enrollment_token":"%s","device_name":"%s"}}' \
+    "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$checksum")" "${version_code:-0}" \
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+}
 require_role() {
 	need="$1"
 	bp_auth_require_role "$need"
