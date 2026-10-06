@@ -12,7 +12,13 @@ The existing router UI keeps its own routes. BlazePwifi adds only:
 
 Examples such as `/` for EasyMode/basic admin and `/admin` or `/cgi-bin/luci` for advanced admin remain whatever the router already provides.
 
-Rental Standalone does **not** modify WAN, LAN, wireless, cellular, repeater, DNS or firewall UCI packages. Internet-interface ownership begins only after an explicit conversion to full BlazePwifi.
+Rental Standalone does **not** modify WAN, LAN, wireless, cellular, repeater, DNS or firewall UCI packages. Internet-interface ownership begins only after an explicit conversion to full BlazePwifi:
+
+```sh
+/usr/sbin/blazepwifi-rental-upgrade --full
+```
+
+That conversion backs up the existing router and rental state, then activates the dormant full-server defaults and BlazePwifi hotspot/firewall ownership.
 
 ## Credit model
 

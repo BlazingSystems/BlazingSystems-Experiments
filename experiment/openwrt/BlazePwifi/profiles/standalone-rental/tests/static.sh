@@ -18,6 +18,8 @@ grep -q 'Android server:.*http://' "$ROOT/openwrt/install.sh"
 ! grep -q ':8444' "$ROOT/openwrt/install.sh"
 
 grep -q 'blazepwifi-rental-upgrade --full' "$ROOT/README.md"
+grep -q 'full-uci-defaults.sh' "$ROOT/openwrt/install.sh"
+grep -q 'FULL_DEFAULTS=/usr/share/blazepwifi/full-uci-defaults.sh' "$ROOT/openwrt/upgrade-to-full.sh"
 grep -q 'policy_sig_v3' "$ROOT/esp8266/BlazeRentalStandalone8266/BlazeRentalStandaloneCore.h"
 grep -q 'mode=="rental_coin"' "$ROOT/esp8266/BlazeRentalStandalone8266/BlazeRentalStandaloneCore.h"
 grep -q 'mode=="coin_interface"' "$ROOT/esp8266/BlazeRentalStandalone8266/BlazeRentalStandaloneCore.h"
