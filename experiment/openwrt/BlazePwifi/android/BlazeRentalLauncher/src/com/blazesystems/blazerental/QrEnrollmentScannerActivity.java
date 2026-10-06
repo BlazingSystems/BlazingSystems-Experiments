@@ -199,7 +199,7 @@ public class QrEnrollmentScannerActivity extends Activity
                         Toast.LENGTH_LONG).show();
             } else if ("ALREADY_ENROLLED".equals(reason)) {
                 Toast.makeText(this,
-                        "This phone is already bound. Open BlazeRental Admin and use Transfer before scanning a new Standard Enrollment QR.",
+                        "This phone is already bound. Use Transfer before scanning a new Standard Enrollment QR.",
                         Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this,
