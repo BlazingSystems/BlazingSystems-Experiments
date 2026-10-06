@@ -49,7 +49,7 @@ bp_flock_wait() {
 	fd="$1"; timeout="${2:-5}"
 	case "$fd:$timeout" in *[!0-9:]*|:*) return 1;; esac
 
-	# BusyBox flock on OpenWrt does not provide GNU flock -w. Polling once per
+	# BusyBox flock on OpenWrt lacks the GNU timed-wait option. Polling once per
 	# second causes artificial lock starvation under bursts: 12 short writers
 	# can consume a 10-second timeout even when each critical section is fast.
 	# Prefer decisecond polling when the local sleep supports fractions.
