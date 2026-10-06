@@ -105,14 +105,20 @@ require_role() {
 	bp_fail "unauthorized"
 }
 
-bp_admin_is_wireguard_listener() {
+bp_admin_is_remote_listener() {
+  server_ip="${SERVER_ADDR:-}"
+  [ -n "$server_ip" ] || return 1
   wg_ip="$(bp_remote_get wg_address 2>/dev/null | cut -d/ -f1)"
-  [ -n "$wg_ip" ] || return 1
-  [ "${SERVER_ADDR:-}" = "$wg_ip" ]
+  [ -z "$wg_ip" ] || [ "$server_ip" != "$wg_ip" ] || return 0
+  if command -v bp_zt_get >/dev/null 2>&1; then
+    zt_ip="$(bp_zt_get ipv4)"
+    [ -z "$zt_ip" ] || [ "$server_ip" != "$zt_ip" ] || return 0
+  fi
+  return 1
 }
 
 require_remote_terminal_permission() {
-  if bp_admin_is_wireguard_listener; then
+  if bp_admin_is_remote_listener; then
     [ "$(bp_remote_get terminal 0)" = 1 ] || bp_fail "Remote Terminal permission is disabled"
   fi
 }
