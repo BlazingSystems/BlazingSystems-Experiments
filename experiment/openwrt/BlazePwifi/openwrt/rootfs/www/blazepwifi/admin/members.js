@@ -1,6 +1,7 @@
 (function(){
 'use strict';
 const q=s=>document.querySelector(s), C=()=>window.BlazeCore;
+let importPreviewToken='';
 function mins(sec){sec=Math.max(0,+sec||0);const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);return h?h+'h '+m+'m':m+'m'}
 function esc(v){return C().esc(v)}
 function card(x){
@@ -21,6 +22,81 @@ function card(x){
     '</div></div>';
 }
 function node(user){return document.querySelector('[data-member="'+CSS.escape(user)+'"]')}
+function decodeBase64Utf8(b64){
+  const bin=atob(b64||''),bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+}
+function encodeBytesBase64(bytes){
+  let out='',chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    const part=bytes.subarray(i,Math.min(bytes.length,i+chunk));
+    let s='';for(let j=0;j<part.length;j++)s+=String.fromCharCode(part[j]);
+    out+=btoa(s);
+  }
+  return out;
+}
+async function exportMetadata(){
+  const x=await C().api('member_export');
+  if(!x.ok){C().toast(x.error||'Member export failed',true);return}
+  try{
+    const text=decodeBase64Utf8(x.payload_b64||'');
+    const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=x.filename||'BlazePwifi-members.blazemembers';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    C().toast('Member metadata exported without password verifier material.');
+  }catch(e){C().toast('Export payload could not be decoded',true)}
+}
+function clearImportPreview(message){
+  importPreviewToken='';
+  const btn=q('#memberImportApply');if(btn)btn.disabled=true;
+  const out=q('#memberImportPreview');if(out)out.textContent=message||'No import preview loaded.';
+}
+async function previewImport(){
+  const input=q('#memberImportFile'),summary=q('#memberImportSummary');
+  const file=input&&input.files&&input.files[0];
+  clearImportPreview('Reading metadata file…');
+  if(!file){if(summary)summary.textContent='Choose a .blazemembers file first.';return}
+  if(file.size>262144){if(summary)summary.textContent='Import file is larger than the 256 KiB limit.';return}
+  let bytes;
+  try{bytes=new Uint8Array(await file.arrayBuffer())}catch(e){if(summary)summary.textContent='Unable to read the selected file.';return}
+  const x=await C().api('member_import_preview',{payload_b64:encodeBytesBase64(bytes)});
+  if(!x.ok){if(summary)summary.textContent=x.error||'Import preview failed';clearImportPreview(x.error||'Import preview failed');C().toast(x.error||'Import preview failed',true);return}
+  importPreviewToken=x.preview_token||'';
+  const items=x.items||[],lines=items.map(v=>{
+    const status=String(v.status||'').toUpperCase();
+    const enabled=(+v.requested_enabled)?'requested enabled':'disabled';
+    return status+'  '+(v.username||'')+'  '+(v.label||'')+'  '+Math.floor((+v.banked_seconds||0)/60)+'m  '+enabled;
+  });
+  if(summary)summary.textContent='Preview: '+(x.count||0)+' records · '+(x.creates||0)+' new · '+(x.collisions||0)+' collisions · '+(x.requested_enabled||0)+' requested enabled. New members will still be created disabled until password reset.';
+  const out=q('#memberImportPreview');if(out)out.textContent=lines.length?lines.join('\n'):'File contains no member records.';
+  const btn=q('#memberImportApply');if(btn)btn.disabled=!importPreviewToken;
+}
+async function applyImport(){
+  if(!importPreviewToken){C().toast('Preview the import file first.',true);return}
+  const pass=q('#memberImportPassword'),password=(pass&&pass.value)||'',policy=(q('#memberImportPolicy')&&q('#memberImportPolicy').value)||'abort';
+  if(!password){C().toast('Admin password is required to apply an import.',true);return}
+  if(policy==='update'&&!confirm('Metadata-only update existing members? Existing password verifier material will be preserved, but label, enabled state and banked balance may change.'))return;
+  if(policy!=='update'&&!confirm('Apply the reviewed member import with collision policy "'+policy+'"? New members will be created disabled and require password reset.'))return;
+  const token=importPreviewToken;
+  importPreviewToken='';
+  const btn=q('#memberImportApply');if(btn)btn.disabled=true;
+  const x=await C().api('member_import_apply',{preview_token:token,collision_policy:policy,password});
+  if(pass)pass.value='';
+  if(!x.ok){
+    clearImportPreview(x.error||'Import apply failed. Preview the file again before retrying.');
+    C().toast(x.error||'Import apply failed',true);
+    return;
+  }
+  const summary=q('#memberImportSummary');
+  if(summary)summary.textContent='Import applied: '+(x.created||0)+' created · '+(x.updated||0)+' updated · '+(x.skipped||0)+' skipped · central revision '+(x.revision||0)+'. New imported accounts require password reset before enabling.';
+  clearImportPreview('Import applied successfully. Preview is single-use and has been cleared.');
+  if(q('#memberImportFile'))q('#memberImportFile').value='';
+  await load();await loadEvents('');
+}
 async function load(render=true){
   const x=await C().api('member_list');
   if(!x.ok){if(render)C().toast(x.error||'Member load failed',true);return}
@@ -72,5 +148,5 @@ async function loadEvents(user){
     const delta=(+v.delta_seconds||0);return dt+'  '+(v.username||'')+'  '+(v.kind||'')+'  '+(delta>=0?'+':'')+delta+'s  '+(v.source||'');
   }).join('\n'):'No member events yet.';
 }
-window.BlazeMembers={load,create,save,balance,password,remove,transfer,loadEvents};
+window.BlazeMembers={load,create,save,balance,password,remove,transfer,loadEvents,exportMetadata,previewImport,applyImport};
 })();
