@@ -16,7 +16,11 @@ public class BlazeProvisioningModeActivity extends Activity {
             finish();
             return;
         }
-        RentalLeaseStore.acceptProvisioningExtras(this, extras);
+        if (!RentalLeaseStore.acceptProvisioningExtras(this, extras)) {
+            setResult(RESULT_CANCELED);
+            finish();
+            return;
+        }
         setResult(RESULT_OK, BlazeProvisioningContract.modeResult(extras));
         finish();
     }

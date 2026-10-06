@@ -19,9 +19,9 @@ public final class RentalLeaseStore {
         return storage(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public static void acceptProvisioningExtras(Context context, PersistableBundle extras) {
-        if (extras == null) return;
-        saveEnrollment(context,
+    public static boolean acceptProvisioningExtras(Context context, PersistableBundle extras) {
+        if (extras == null) return false;
+        return saveEnrollment(context,
                 extras.getString("server_url"),
                 extras.getString("enrollment_token"),
                 extras.getString("device_name"),
@@ -29,18 +29,18 @@ public final class RentalLeaseStore {
                 "device_owner_provisioning");
     }
 
-    public static void saveManualEnrollment(Context context, String server, String token, String name) {
-        saveManualEnrollment(context, server, token, name, "");
+    public static boolean saveManualEnrollment(Context context, String server, String token, String name) {
+        return saveManualEnrollment(context, server, token, name, "");
     }
 
-    public static void saveManualEnrollment(Context context, String server, String token,
-                                            String name, String certPin) {
-        saveEnrollment(context, server, token, name, certPin, "standard_manual");
+    public static boolean saveManualEnrollment(Context context, String server, String token,
+                                               String name, String certPin) {
+        return saveEnrollment(context, server, token, name, certPin, "standard_manual");
     }
 
-    private static void saveEnrollment(Context context, String server, String token,
-                                       String name, String certPin, String source) {
-        prefs(context).edit()
+    private static boolean saveEnrollment(Context context, String server, String token,
+                                          String name, String certPin, String source) {
+        boolean saved = prefs(context).edit()
                 .putString("server", safe(server))
                 .putString("enrollment", safe(token))
                 .putString("device_name", safe(name))
@@ -48,7 +48,6 @@ public final class RentalLeaseStore {
                 .putString("enrollment_source", safe(source))
                 .putBoolean("setup_complete", false)
                 .remove("enrollment_request_nonce")
-                .remove("server_cert_sha256")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
@@ -56,7 +55,8 @@ public final class RentalLeaseStore {
                 .remove("server_time_ms")
                 .remove("lease_until_ms")
                 .commit();
-        AndroidRentalPolicyRepository.clear(context);
+        if (saved) AndroidRentalPolicyRepository.clear(context);
+        return saved;
     }
 
     public static boolean setDeviceIdentity(Context context, String id, String secret) {
@@ -180,6 +180,7 @@ public final class RentalLeaseStore {
                 .remove("server")
                 .remove("enrollment")
                 .remove("enrollment_request_nonce")
+                .remove("server_cert_sha256")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")

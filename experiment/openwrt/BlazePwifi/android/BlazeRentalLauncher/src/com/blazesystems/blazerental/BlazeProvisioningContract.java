@@ -52,8 +52,7 @@ public final class BlazeProvisioningContract {
     public static boolean capture(Context context, Intent intent) {
         PersistableBundle extras = extras(intent);
         if (!isValid(extras)) return false;
-        RentalLeaseStore.acceptProvisioningExtras(context, extras);
-        return true;
+        return RentalLeaseStore.acceptProvisioningExtras(context, extras);
     }
 
     public static boolean allowsFullyManaged(Intent intent) {

@@ -163,7 +163,9 @@ public class QrEnrollmentScannerActivity extends Activity
             if (server.startsWith("https://") && normalizedPin.length() != 64) {
                 throw new IllegalArgumentException("HTTPS enrollment requires certificate pin");
             }
-            RentalLeaseStore.saveManualEnrollment(this, server, token, name, normalizedPin);
+            if (!RentalLeaseStore.saveManualEnrollment(this, server, token, name, normalizedPin)) {
+                throw new IllegalStateException("ENROLLMENT_STORAGE");
+            }
             final Activity self = this;
             new Thread(new Runnable() {
                 @Override public void run() {
