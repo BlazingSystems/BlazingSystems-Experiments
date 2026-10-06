@@ -439,8 +439,10 @@ jobs:
           if-no-files-found: error
 
   publish:
-    # AUDIT HOLD: re-enable only after retry-safe v2 enrollment and all gates pass.
-    if: false
+    # RC6 remains a prerelease. Publication is allowed only after every audited
+    # build/protocol gate passes; physical Setup Wizard validation is still
+    # explicitly pending and blocks stable promotion.
+    if: github.ref == 'refs/heads/blazepwifi-rental-v0.5.2-hotfix2'
     needs: [validate, android_test, openwrt_bundle, windows_installer, esp8266, esp32, firmware]
     runs-on: ubuntu-22.04
     env:
@@ -549,7 +551,7 @@ jobs:
               test_signing_identity_ephemeral_per_release_build:true,
               in_place_upgrade_between_test_rcs_not_guaranteed:true,
               factory_reset_may_be_required_between_provisioning_rcs:true,
-              server_scope:"openwrt_only_in_rc5",
+              server_scope:"openwrt_only_in_rc6",
               esp_server_device_provisioning:false
             },
             esp:{
