@@ -33,8 +33,13 @@ OUT="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" | 
 echo "$OUT" | grep -q '"ok":true'
 DID="$(printf '%s' "$OUT" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
 DSEC="$(printf '%s' "$OUT" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
+ES="$(printf '%s' "$OUT" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+EL="$(printf '%s' "$OUT" | sed -n 's/.*"lease_until_ms":\([0-9]*\).*/\1/p')"
+EG="$(printf '%s' "$OUT" | sed -n 's/.*"enroll_sig":"\([^"]*\)".*/\1/p')"
 [ "${#DID}" -eq 24 ]
 [ "${#DSEC}" -eq 48 ]
+[ -n "$ES" ] && [ "$EL" = "$ES" ]
+[ "$EG" = "$(bp_rental_hmac "$TOKEN" "enroll_response|$N|$DID|$DSEC|$ES|$EL|false")" ]
 
 # Simulate a crash after the durable enrollment claim but before the device
 # row survives. Retrying with the same nonce must recreate the exact identity.
@@ -47,7 +52,12 @@ echo "$OUT2" | grep -q '"ok":true'
 echo "$OUT2" | grep -q '"reused":true'
 DID2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
 DSEC2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
+ES2="$(printf '%s' "$OUT2" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+EL2="$(printf '%s' "$OUT2" | sed -n 's/.*"lease_until_ms":\([0-9]*\).*/\1/p')"
+EG2="$(printf '%s' "$OUT2" | sed -n 's/.*"enroll_sig":"\([^"]*\)".*/\1/p')"
 [ "$DID2" = "$DID" ] && [ "$DSEC2" = "$DSEC" ]
+[ -n "$ES2" ] && [ "$EL2" = "$ES2" ]
+[ "$EG2" = "$(bp_rental_hmac "$TOKEN" "enroll_response|$N|$DID2|$DSEC2|$ES2|$EL2|true")" ]
 [ "$(printf '%s' "$(bp_rental_device_line "$DID")" | cut -f2)" = "$DSEC" ]
 
 # A different request nonce cannot recover or mint credentials from the
