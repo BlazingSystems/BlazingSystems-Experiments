@@ -67,7 +67,7 @@ command -v curl >/dev/null || { echo "curl required" >&2; exit 1; }
 command -v zstd >/dev/null || { echo "zstd required" >&2; exit 1; }
 
 FILES_DIR="$ROOT/openwrt/rootfs"
-PACKAGES="uhttpd nftables px5g-mbedtls flock ip-full kmod-wireguard wireguard-tools"
+PACKAGES="uhttpd nftables px5g-mbedtls flock ip-full kmod-wireguard wireguard-tools zerotier"
 if [ "$KIND" = x86 ] || [ "$KIND" = sbc ]; then
   FILES_DIR="$WORK/rootfs-$TARGET"
   rm -rf "$FILES_DIR"
