@@ -504,6 +504,8 @@ EOF
       14) bp_fail "WireGuard Allowed IPs overlap an existing directly connected network" ;;
       15) bp_fail "WireGuard Allowed IPs would capture the current admin source path" ;;
       16) bp_fail "apply must be started from a non-WireGuard management path" ;;
+      17) bp_fail "remote management requires valid source CIDRs contained inside WireGuard Allowed IPs" ;;
+      18) bp_fail "WireGuard Allowed IPs would route the tunnel endpoint into the tunnel itself" ;;
       20) bp_fail "another remote-access transaction is already pending" ;;
       21) bp_fail "WireGuard key setup failed" ;;
       22) bp_fail "default route unavailable; refusing remote apply" ;;
