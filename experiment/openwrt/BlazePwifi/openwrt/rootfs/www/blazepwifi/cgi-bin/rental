@@ -19,19 +19,58 @@ case "$action" in
     printf '%s' "$eid" | grep -Eq '^[0-9a-f]{12}$' || bp_fail "invalid enrollment id"
     line="$(bp_rental_enroll_lookup "$eid")"
     [ -n "$line" ] || bp_fail "enrollment invalid or used"
-    secret="$(printf '%s' "$line" | cut -f2)"
-    expiry="$(printf '%s' "$line" | cut -f3)"
-    label="$(printf '%s' "$line" | cut -f4-)"
+    IFS="$(printf '\t')" read -r stored_eid secret expiry label redeemed_nonce redeemed_did redeemed_secret <<EOF
+$line
+EOF
     [ "$expiry" -ge "$now" ] 2>/dev/null || { bp_rental_enroll_consume "$eid"; bp_fail "enrollment expired"; }
     token="$eid.$secret"
     expected="$(bp_rental_hmac "$token" "enroll|$nonce|$token")" || bp_fail "rental crypto unavailable"
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
-    did="$(bp_rental_hex 12)"
-    dsecret="$(bp_rental_hex 24)"
-    bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
-    bp_rental_policy_ensure "$did"
-    bp_rental_enroll_consume "$eid"
-    bp_json "$(printf '{"ok":true,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
+
+    # Claim the token exactly once. A dropped response can be retried only with
+    # the same client request nonce; a different nonce cannot mint another
+    # device or recover the already-issued device secret.
+    bp_lock || bp_fail "enrollment busy"
+    line="$(bp_rental_enroll_lookup "$eid")"
+    [ -n "$line" ] || { bp_unlock; bp_fail "enrollment invalid or used"; }
+    IFS="$(printf '\t')" read -r stored_eid secret expiry label redeemed_nonce redeemed_did redeemed_secret <<EOF
+$line
+EOF
+    [ "$expiry" -ge "$now" ] 2>/dev/null || {
+      bp_rental_enroll_consume "$eid"
+      bp_unlock
+      bp_fail "enrollment expired"
+    }
+    if [ -n "$redeemed_nonce" ]; then
+      [ "$redeemed_nonce" = "$nonce" ] || {
+        bp_unlock
+        bp_fail "enrollment already claimed"
+      }
+      printf '%s' "$redeemed_did" | grep -Eq '^[0-9a-f]{24}$' || {
+        bp_unlock
+        bp_fail "enrollment redemption corrupted"
+      }
+      printf '%s' "$redeemed_secret" | grep -Eq '^[0-9a-f]{48}$' || {
+        bp_unlock
+        bp_fail "enrollment redemption corrupted"
+      }
+      did="$redeemed_did"
+      dsecret="$redeemed_secret"
+      reused=true
+    else
+      did="$(bp_rental_hex 12)"
+      dsecret="$(bp_rental_hex 24)"
+      bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
+      bp_rental_policy_ensure "$did"
+      bp_rental_enroll_mark_redeemed "$eid" "$nonce" "$did" "$dsecret" || {
+        bp_unlock
+        bp_fail "enrollment redemption write failed"
+      }
+      bp_durable_sync
+      reused=false
+    fi
+    bp_unlock
+    bp_json "$(printf '{"ok":true,"reused":%s,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$reused" "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
     ;;
   status|policy_get)
     did="$(bp_param device_id)"
@@ -43,6 +82,16 @@ case "$action" in
     label="$(printf '%s' "$line" | cut -f4)"
     expected="$(bp_rental_hmac "$secret" "$action|$nonce|$secret")" || bp_fail "rental crypto unavailable"
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+
+    # Once the device proves possession of its permanent secret, the temporary
+    # QR enrollment redemption no longer needs to remain retryable.
+    bp_lock || bp_fail "enrollment cleanup busy"
+    bp_rental_enroll_consume_device "$did" || {
+      bp_unlock
+      bp_fail "enrollment cleanup failed"
+    }
+    bp_durable_sync
+    bp_unlock
 
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
