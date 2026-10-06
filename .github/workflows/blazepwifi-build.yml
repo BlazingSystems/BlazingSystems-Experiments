@@ -55,8 +55,10 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v04_admin_ui.sh
       - name: BlazePwifi v0.5 console and portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/v05_console.sh
-      - name: BlazePwifi v0.5.1 transactional update validation
+      - name: BlazePwifi v0.5.1 transactional update compatibility validation
         run: sh experiment/openwrt/BlazePwifi/tests/v051_update.sh
+      - name: BlazePwifi v0.5.2 transactional update validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v052_update.sh
       - name: BlazeRental v0.5.1 update compatibility validation
         run: sh experiment/openwrt/BlazePwifi/tests/v051_android_source.sh
       - name: BlazeRental v0.5.2 branding and alarm validation
@@ -232,10 +234,10 @@ jobs:
           cp "$RELEASE_APK" "$DIST/BlazeRental-v0.5.2-release-unsigned.apk"
           cp "$CUR/BLAZE_UPSTREAM.md" "$DIST/Launcher3-UPSTREAM.txt"
 
-          # Rollback rescue is the exact fully validated v0.5.0 RC9 source.
+          # Rollback rescue is the exact fully validated v0.5.1 production candidate source.
           # Only Android version metadata is raised so Android accepts it as a
           # forward install while behavior returns to the previous stable code.
-          RESCUE_ROOT=/tmp/blazerental-v050-rescue
+          RESCUE_ROOT=/tmp/blazerental-v051-rescue
           rm -rf "$RESCUE_ROOT"
           git worktree add --detach "$RESCUE_ROOT" 65f87d775793a1fdc09a9522cf752349f68c3b41
           RESCUE="$RESCUE_ROOT/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
