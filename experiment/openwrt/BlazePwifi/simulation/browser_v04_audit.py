@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import http.server, json, os, socketserver, threading, time, urllib.parse, sys
+import base64, http.server, json, os, socketserver, threading, time, urllib.parse, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -16,6 +16,38 @@ server = socketserver.TCPServer(("127.0.0.1", 0), Quiet)
 port = server.server_address[1]
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
+
+mock_member_state={
+    "revision":7,
+    "members":[
+        {"username":"alice","label":"Alice Existing","enabled":1,"banked_seconds":600,
+         "revision":6,"updated":int(time.time()),"source":"admin:seed"}
+    ],
+    "preview_token":"browser-member-import-token"
+}
+
+def member_text_b64(value):
+    return base64.b64encode(("v1:"+value).encode("utf-8")).decode("ascii")
+
+def member_export_text():
+    lines=["BLAZE_MEMBER_METADATA_V1",
+           "exported_at\t"+str(int(time.time())),
+           "global_revision\t"+str(mock_member_state["revision"])]
+    for m in mock_member_state["members"]:
+        lines.append("\t".join([
+            "member",m["username"],str(int(bool(m["enabled"]))),str(m["banked_seconds"]),
+            str(m["updated"]),member_text_b64(m.get("label","")),member_text_b64(m.get("source",""))
+        ]))
+    return "\n".join(lines)+"\n"
+
+member_import_file=OUT/"browser-member-import.blazemembers"
+member_import_file.write_text("\n".join([
+    "BLAZE_MEMBER_METADATA_V1",
+    "exported_at\t"+str(int(time.time())),
+    "global_revision\t7",
+    "\t".join(["member","alice","0","120",str(int(time.time())),member_text_b64("Imported Alice"),member_text_b64("legacy-local")]),
+    "\t".join(["member","carol","1","900",str(int(time.time())),member_text_b64("Carol Imported"),member_text_b64("legacy-local")]),
+])+"\n")
 
 mock_console_state={
     "terminal_enabled":False,
@@ -56,6 +88,45 @@ def mock_admin(action, params=None):
             "admin_password_set": True,
             "inventory": "com.android.camera,com.android.calculator2,com.android.settings"
         }]}
+    if action == "member_list":
+        return {"ok":True,"revision":mock_member_state["revision"],"members":[dict(x) for x in mock_member_state["members"]]}
+    if action == "member_events":
+        return {"ok":True,"events":[]}
+    if action == "member_export":
+        payload=base64.b64encode(member_export_text().encode("utf-8")).decode("ascii")
+        return {"ok":True,"format":"BLAZE_MEMBER_METADATA_V1",
+                "filename":"BlazePwifi-members-browser-audit.blazemembers",
+                "revision":mock_member_state["revision"],"payload_b64":payload}
+    if action == "member_import_preview":
+        return {"ok":True,"preview_token":mock_member_state["preview_token"],"count":2,
+                "creates":1,"collisions":1,"requested_enabled":1,"export_revision":7,
+                "expires":int(time.time())+600,"items":[
+                    {"username":"alice","label":"Imported Alice","requested_enabled":0,
+                     "banked_seconds":120,"updated":int(time.time()),"source":"legacy-local","status":"collision"},
+                    {"username":"carol","label":"Carol Imported","requested_enabled":1,
+                     "banked_seconds":900,"updated":int(time.time()),"source":"legacy-local","status":"create"}
+                ]}
+    if action == "member_import_apply":
+        if params.get("preview_token",[""])[0] != mock_member_state["preview_token"]:
+            return {"ok":False,"error":"invalid preview token"}
+        policy=params.get("collision_policy",["abort"])[0]
+        if policy=="abort":
+            return {"ok":False,"error":"member import has username collisions; choose skip or metadata-only update"}
+        if policy=="update":
+            mock_member_state["members"][0].update({"label":"Imported Alice","enabled":0,"banked_seconds":120,
+                                                    "revision":8,"updated":int(time.time()),"source":"import:admin"})
+            updated=1
+        else:
+            updated=0
+        if not any(x["username"]=="carol" for x in mock_member_state["members"]):
+            mock_member_state["members"].append(
+                {"username":"carol","label":"Carol Imported","enabled":0,"banked_seconds":900,
+                 "revision":9,"updated":int(time.time()),"source":"import:admin"})
+        mock_member_state["revision"]=9
+        return {"ok":True,"created":1,"updated":updated,"skipped":1 if policy=="skip" else 0,
+                "revision":mock_member_state["revision"],"new_members_require_password_reset":True}
+    if action in ("member_create","member_update","member_balance","member_transfer","member_password","member_delete"):
+        return {"ok":True,"revision":mock_member_state["revision"]}
     if action == "controller_list":
         return {"ok": True, "controllers": [{
             "id": "vendo-01", "last_seen": int(time.time()), "ip": "192.168.1.50",
@@ -368,6 +439,42 @@ with sync_playwright() as p:
     assert sensitive_actions.issubset({x["action"] for x in sensitive})
     assert all(x["csrf_body"]=="browser-audit-csrf" and x["csrf_header"]=="browser-audit-csrf" for x in sensitive)
 
+    # dev.4 centralized-member metadata migration: verifier-free export -> reviewed preview -> re-authenticated apply.
+    page.click('[data-page="members"]')
+    page.wait_for_selector("#page-members.active")
+    page.wait_for_selector('[data-member="alice"]')
+    with page.expect_download() as download_info:
+        page.click('button:has-text("Export metadata")')
+    export_download=download_info.value
+    export_path=OUT/"browser-member-export.blazemembers"
+    export_download.save_as(str(export_path))
+    export_text=export_path.read_text()
+    assert export_text.startswith("BLAZE_MEMBER_METADATA_V1\n")
+    assert "sha256i" not in export_text
+    assert "password" not in export_text.lower()
+    assert "hash" not in export_text.lower()
+
+    page.set_input_files("#memberImportFile",str(member_import_file))
+    page.click('button:has-text("Preview import")')
+    page.wait_for_function("document.getElementById('memberImportSummary').textContent.includes('1 new')")
+    assert "1 collisions" in page.locator("#memberImportSummary").inner_text()
+    preview_text=page.locator("#memberImportPreview").inner_text()
+    assert "COLLISION  alice" in preview_text
+    assert "CREATE  carol" in preview_text
+    page.select_option("#memberImportPolicy","skip")
+    page.fill("#memberImportPassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Apply reviewed import")')
+    page.wait_for_function("document.getElementById('memberImportSummary').textContent.includes('Import applied')")
+    page.wait_for_selector('[data-member="carol"]')
+    assert "Carol Imported" in page.locator('[data-member="carol"]').inner_text()
+    assert "DISABLED" in page.locator('[data-member="carol"]').inner_text()
+
+    member_sensitive={"member_import_preview","member_import_apply"}
+    member_calls=[x for x in admin_mutations if x["action"] in member_sensitive]
+    assert member_sensitive.issubset({x["action"] for x in member_calls})
+    assert all(x["csrf_body"]=="browser-audit-csrf" and x["csrf_header"]=="browser-audit-csrf" for x in member_calls)
+
     # v0.5 moved voucher creation into its dedicated console module.
     page.click('[data-page="vouchers"]')
     page.wait_for_selector("#page-vouchers.active")
@@ -431,6 +538,9 @@ result={
         "wireguard_staged_edit":True,
         "wireguard_safe_disable":True,
         "advanced_terminal_session":True,
+        "member_metadata_export":True,
+        "member_import_preview":True,
+        "member_import_apply":True,
         "console_errors":False
     }
 }
