@@ -100,7 +100,7 @@ jobs:
           SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-27" "build-tools;27.0.3"
+          "$SDKMANAGER" "platforms;android-27" "build-tools;27.0.3" "build-tools;36.0.0"
           rm -rf /tmp/android-sdk-27
           mkdir -p /tmp/android-sdk-27/platforms /tmp/android-sdk-27/build-tools
           cp -a "${ANDROID_SDK_ROOT}/platforms/android-27" /tmp/android-sdk-27/platforms/
@@ -123,18 +123,49 @@ jobs:
           set -euo pipefail
           CUR="$GITHUB_WORKSPACE/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
           OUT="$GITHUB_WORKSPACE/dist-rental/android"
+          UNSIGNED="$CUR/build/outputs/apk/aosp/release"
+          ZIPALIGN="${ANDROID_SDK_ROOT}/build-tools/36.0.0/zipalign"
+          APKSIGNER="${ANDROID_SDK_ROOT}/build-tools/36.0.0/apksigner"
+          AAPT=/tmp/android-sdk-27/build-tools/27.0.3/aapt
           mkdir -p "$OUT"
+
           (
             cd "$CUR"
             ANDROID_HOME=/tmp/android-sdk-27 ANDROID_SDK_ROOT=/tmp/android-sdk-27 \
-              gradle --no-daemon --stacktrace testAospDebugUnitTest assembleAospDebug
+              gradle --no-daemon --stacktrace testAospDebugUnitTest assembleAospRelease
           )
-          APK="$(find "$CUR/build/outputs/apk/aosp/debug" -type f -name '*.apk' -print -quit)"
-          test -n "$APK" -a -s "$APK"
-          /tmp/android-sdk-27/build-tools/27.0.3/aapt dump badging "$APK" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50202' versionName='0.5.2-rental.2-rc.1'"
-          /tmp/android-sdk-27/build-tools/27.0.3/apksigner verify "$APK"
-          cp "$APK" "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk"
-          sha256sum "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk" > "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk.sha256"
+
+          RELEASE_APK="$(find "$UNSIGNED" -type f -name '*.apk' -print -quit)"
+          test -n "$RELEASE_APK" -a -s "$RELEASE_APK"
+
+          # Device Owner provisioning must use the production package ID.
+          # The release variant has com.blazesystems.blazerental; debug does not.
+          "$AAPT" dump badging "$RELEASE_APK" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50202' versionName='0.5.2-rental.2-rc.1'"
+
+          TEST_KEY="$RUNNER_TEMP/BlazeRental-provisioning-test.p12"
+          TEST_PASS="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt \
+            -keystore "$TEST_KEY" -storetype PKCS12 \
+            -storepass "$TEST_PASS" -keypass "$TEST_PASS" \
+            -alias blazerental-test -keyalg RSA -keysize 3072 -validity 3650 \
+            -dname "CN=BlazeRental RC Provisioning TEST,O=BlazingSystems,C=PH"
+
+          ALIGNED="$RUNNER_TEMP/BlazeRental-provisioning-aligned.apk"
+          SIGNED="$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk"
+          "$ZIPALIGN" -p -f 4 "$RELEASE_APK" "$ALIGNED"
+          "$APKSIGNER" sign \
+            --ks "$TEST_KEY" --ks-type PKCS12 --ks-key-alias blazerental-test \
+            --ks-pass "pass:$TEST_PASS" --key-pass "pass:$TEST_PASS" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out "$SIGNED" "$ALIGNED"
+
+          "$APKSIGNER" verify --verbose --print-certs "$SIGNED" > "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST-apksigner-verify.txt"
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST-apksigner-verify.txt"
+          "$AAPT" dump badging "$SIGNED" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50202' versionName='0.5.2-rental.2-rc.1'"
+
+          sha256sum "$SIGNED" > "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk.sha256"
+          rm -f "$ALIGNED" "$TEST_KEY"
+          TEST_PASS=
       - uses: actions/upload-artifact@v4
         with:
           name: BlazePwifi-Rental-Android-052rental2rc1

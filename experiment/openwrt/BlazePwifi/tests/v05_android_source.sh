@@ -23,6 +23,16 @@ case "$(cat "$ROOT/VERSION")" in
     grep -Fq 'versionCode 50100' "$GRADLE"
     grep -Fq 'versionName "0.5.1"' "$GRADLE"
     ;;
+  0.5.2)
+    grep -Fq 'versionCode 50202' "$GRADLE"
+    grep -Fq 'versionName "0.5.2-rental.2-rc.1"' "$GRADLE"
+    grep -Fq 'android.app.action.GET_PROVISIONING_MODE' "$MANIFEST"
+    grep -Fq 'android.app.action.ADMIN_POLICY_COMPLIANCE' "$MANIFEST"
+    grep -Fq 'android.app.action.PROVISIONING_SUCCESSFUL' "$MANIFEST"
+    test -s "$L/src/com/blazesystems/blazerental/BlazeProvisioningContract.java"
+    test -s "$L/src/com/blazesystems/blazerental/BlazeProvisioningModeActivity.java"
+    test -s "$L/src/com/blazesystems/blazerental/BlazeProvisioningComplianceActivity.java"
+    ;;
   *) exit 1 ;;
 esac
 grep -Fq 'android:label="BlazeRental"' "$MANIFEST"
