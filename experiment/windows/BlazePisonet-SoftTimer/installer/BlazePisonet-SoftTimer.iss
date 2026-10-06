@@ -4,10 +4,10 @@
   #define AppVersion "0.2.0"
 #endif
 #ifndef AppSource
-  #define AppSource "."
+  #define AppSource "..\\..\\..\\..\\out\\bundle"
 #endif
 #ifndef OutputDir
-  #define OutputDir "."
+  #define OutputDir "..\\..\\..\\..\\release"
 #endif
 
 [Setup]
@@ -19,8 +19,8 @@ AppPublisherURL=https://github.com/BlazingSystems/BlazingSystems-Experiments
 DefaultDirName={autopf}\BlazeSystems\BlazePisonet SoftTimer
 DefaultGroupName=BlazePisonet SoftTimer
 DisableProgramGroupPage=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 OutputDir={#OutputDir}
 OutputBaseFilename=BlazePisonet-SoftTimer-Setup-v{#AppVersion}
