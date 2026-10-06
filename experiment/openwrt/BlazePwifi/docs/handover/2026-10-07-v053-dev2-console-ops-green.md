@@ -115,15 +115,23 @@ This is intentional. The browser cannot currently disconnect the appliance by sa
 
 ## Exact green candidate
 
-Candidate SHA:
+Final repaired branch SHA:
 
-`41b0ae05c76062759e825f2f40872642f9222fec`
+`e917171d2a3875fd54183d552c02f8afcdb7862f`
 
-Workflow run:
+Branch workflow:
 
-`37494928043` — **PASS**
+`37500821733` — **PASS**
 
-The exact run passed:
+Reconciled PR #18 synthetic merge tree:
+
+`dee385974b7142afa4e8a56fc47d611f62a10ccf`
+
+PR merge-tree workflow:
+
+`37500829258` — **PASS**
+
+The final branch run and reconciled PR merge-tree run passed:
 
 - static/security/config/integration validation;
 - the new dev.2 console-operations shell security test;
@@ -170,6 +178,20 @@ Device Owner emulator passed `0.5.3-dev.2` using:
 `candidate/android/BlazeRental-0.5.3-dev.2-ci.apk`
 
 This confirms the Management Console changes did not regress the previously green BlazeRental Device Owner gate/timer behavior.
+
+## Remote profile race found during reconciliation
+
+The first PR browser merge-tree audit exposed a real operator-edit race: a delayed unconditional startup `loadRemote()` could overwrite the Remote Access mode selector after the operator had already chosen WireGuard.
+
+The final repair:
+- removed background startup loading of editable Remote Access configuration;
+- keeps page-entry / explicit-refresh loading;
+- suppresses stale asynchronous remote-load responses by generation;
+- renders the authoritative `remote_config_set` response immediately before follow-up reconciliation;
+- adds source regression gates forbidding the old startup preload;
+- instruments the browser audit to prove the save request reached the server and the stored mode became `wireguard`.
+
+Both the final branch browser audit and PR #18 merge-tree browser audit passed after this repair.
 
 ## Integration note
 
