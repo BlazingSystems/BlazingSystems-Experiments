@@ -90,6 +90,7 @@ bp_terminal_open() {
   password="$1"
   bp_terminal_enabled || return 10
   [ "${BP_AUTH_ROLE:-}" = admin ] || return 11
+  [ -n "${BP_AUTH_TOKEN:-}" ] || return 11
   [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || return 12
   bp_console_reauth "$password" || return $?
 
@@ -134,6 +135,7 @@ bp_terminal_validate() {
 
 bp_terminal_close() {
   provided="$1"
+  bp_terminal_validate "$provided" || return 1
   bp_terminal_init
   bp_terminal_lock || return 1
   tmp="$BP_RUN/.terminal-sessions.$(bp_tmp_suffix)"
@@ -145,8 +147,10 @@ bp_terminal_close() {
 
 bp_terminal_close_all() {
   bp_terminal_init
+  bp_terminal_lock || return 1
   : > "$BP_TERMINAL_SESSIONS"
   chmod 600 "$BP_TERMINAL_SESSIONS"
+  bp_terminal_unlock
 }
 
 bp_terminal_active_count() {
@@ -186,10 +190,22 @@ bp_terminal_exec() {
   BP_TERMINAL_RC=$?
   BP_TERMINAL_OUTPUT="$(head -c "$max_bytes" "$outfile" 2>/dev/null || true)"
   rm -f "$outfile"
-  audit_cmd="$(printf '%s' "$cmd" | tr '\t\r\n' '   ' | cut -c1-240)"
-  bp_auth_audit terminal_exec "${BP_AUTH_USER:-unknown}" "${REMOTE_ADDR:-unknown}" "$audit_cmd"
+  audit_verb="$(printf '%s' "$cmd" | awk '{print $1}' | cut -c1-48)"
+  audit_hash="$(printf '%s' "$cmd" | bp_sha256)"
+  bp_auth_audit terminal_exec "${BP_AUTH_USER:-unknown}" "${REMOTE_ADDR:-unknown}" "verb=$audit_verb sha256=$audit_hash"
   export BP_TERMINAL_OUTPUT BP_TERMINAL_RC
   return 0
+}
+
+bp_remote_lock() {
+  mkdir -p "$BP_RUN"
+  exec 6>"$BP_RUN/remote.lock"
+  flock -w 5 6 || { exec 6>&-; return 1; }
+}
+
+bp_remote_unlock() {
+  flock -u 6 2>/dev/null || true
+  exec 6>&-
 }
 
 bp_remote_init() {
@@ -278,6 +294,7 @@ bp_remote_save() {
   fi
 
   bp_remote_init
+  bp_remote_lock || return 4
   tmp="$BP_STATE/.remote-access.$(bp_tmp_suffix)"
   {
     printf 'mode\t%s\n' "$mode"
@@ -300,8 +317,13 @@ bp_remote_save() {
     printf 'zt_network_id\t%s\n' "$(printf '%s' "$zt_network" | tr A-F a-f)"
   } > "$tmp"
   chmod 600 "$tmp"
-  mv "$tmp" "$BP_REMOTE_STATE"
+  if ! mv "$tmp" "$BP_REMOTE_STATE"; then
+    rm -f "$tmp"
+    bp_remote_unlock
+    return 4
+  fi
   bp_durable_sync
+  bp_remote_unlock
   return 0
 }
 
