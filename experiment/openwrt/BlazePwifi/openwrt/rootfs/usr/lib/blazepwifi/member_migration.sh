@@ -22,7 +22,8 @@ bp_member_migration_init() {
 }
 
 bp_member_migration_b64_encode() {
-  printf '%s' "$1" | base64 | tr -d '\r\n'
+  # Prefix every text value so even an empty string has a non-empty encoded field.
+  printf 'v1:%s' "$1" | base64 | tr -d '\r\n'
 }
 
 bp_member_migration_decode_text() {
@@ -33,12 +34,15 @@ bp_member_migration_decode_text() {
   if ! printf '%s' "$encoded" | base64 -d > "$tmp" 2>/dev/null; then
     rm -f "$tmp"; return 1
   fi
-  [ "$(wc -c < "$tmp" 2>/dev/null)" -le "$max" ] || { rm -f "$tmp"; return 1; }
-  if LC_ALL=C grep -q '[[:cntrl:]]' "$tmp" 2>/dev/null; then
-    rm -f "$tmp"; return 1
+  [ "$(wc -c < "$tmp" 2>/dev/null)" -le $((max+3)) ] || { rm -f "$tmp"; return 1; }
+  prefix="$(head -c 3 "$tmp" 2>/dev/null)"
+  [ "$prefix" = "v1:" ] || { rm -f "$tmp"; return 1; }
+  tail -c +4 "$tmp" > "$tmp.value" 2>/dev/null || { rm -f "$tmp" "$tmp.value"; return 1; }
+  if LC_ALL=C grep -q '[[:cntrl:]]' "$tmp.value" 2>/dev/null; then
+    rm -f "$tmp" "$tmp.value"; return 1
   fi
-  cat "$tmp"
-  rm -f "$tmp"
+  cat "$tmp.value"
+  rm -f "$tmp" "$tmp.value"
 }
 
 bp_member_migration_export() {
@@ -122,11 +126,15 @@ bp_member_migration_parse_file() {
         ;;
       *)
         [ -n "$line" ] || continue
-        oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
-        [ "$#" -eq 7 ] || return 10
-        [ "$1" = member ] || return 10
-        user="$(bp_member_norm "$2")" || return 11
-        enabled="$3"; banked="$4"; updated="$5"; label64="$6"; source64="$7"
+        [ "$(printf '%s\n' "$line" | awk -F '\t' '{print NF}')" -eq 7 ] || return 10
+        kind="$(printf '%s' "$line" | cut -f1)"
+        [ "$kind" = member ] || return 10
+        user="$(bp_member_norm "$(printf '%s' "$line" | cut -f2)")" || return 11
+        enabled="$(printf '%s' "$line" | cut -f3)"
+        banked="$(printf '%s' "$line" | cut -f4)"
+        updated="$(printf '%s' "$line" | cut -f5)"
+        label64="$(printf '%s' "$line" | cut -f6)"
+        source64="$(printf '%s' "$line" | cut -f7)"
         case "$enabled" in 0|1) ;; *) return 11;; esac
         case "$banked" in ''|*[!0-9]*) return 11;; esac
         [ "$banked" -le 31536000 ] 2>/dev/null || return 11
