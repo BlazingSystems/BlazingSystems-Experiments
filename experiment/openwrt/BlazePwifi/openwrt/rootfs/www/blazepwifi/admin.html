@@ -98,7 +98,7 @@
         <label><span class="field-label">Mode</span><select id="remoteMode" class="field"><option value="disabled">Disabled</option><option value="wireguard">WireGuard · Recommended</option><option value="zerotier">ZeroTier · Easy mesh</option></select></label>
         <label><span class="field-label">Node name</span><input id="remoteNodeName" class="field" value="BlazePwifi" maxlength="64"></label>
         <label><span class="field-label">Site label</span><input id="remoteSiteLabel" class="field" maxlength="96" placeholder="Shop / branch / location label"></label>
-        <label class="span2"><span class="field-label">Allowed remote source CIDRs</span><input id="remoteAllowlist" class="field mono" placeholder="10.20.0.0/24, fd00:1234::/64"></label>
+        <label class="span2"><span class="field-label">Allowed remote source CIDRs</span><input id="remoteAllowlist" class="field mono" placeholder="10.20.0.0/24"></label>
         <label><span class="field-label">Heartbeat seconds</span><input id="remoteHeartbeat" class="field" type="number" min="10" max="3600" value="30"></label>
         <label><span class="field-label">Offline threshold seconds</span><input id="remoteOffline" class="field" type="number" min="30" max="86400" value="120"></label>
       </div>
@@ -125,7 +125,12 @@
       </div></div>
       <div class="card"><div class="card-body"><div class="card-title">ZeroTier profile</div>
         <label><span class="field-label">Network ID</span><input id="ztNetworkId" class="field mono" maxlength="16" placeholder="16 hexadecimal characters"></label>
-        <p class="muted" style="margin-top:10px">The node still requires authorization in your ZeroTier network. In dev.3, ZeroTier remains profile/staging only; live activation is not enabled yet.</p>
+        <div class="switch-row" style="margin-top:10px"><span>Activation</span><span id="ztActivationState" class="badge">staged</span></div>
+        <div class="switch-row"><span>Node ID</span><span id="ztNodeId" class="mono small">—</span></div>
+        <div class="switch-row"><span>Assigned IPv4</span><span id="ztIp4" class="mono small">—</span></div>
+        <div id="ztActivationDetail" class="small muted" style="margin-top:8px">Save the profile first. Prepare/Join may pause for Central authorization or a reboot before final verification.</div>
+        <div class="toolbar" style="margin-top:12px"><button id="ztPrepareButton" class="btn primary" onclick="BlazeConsole.prepareZeroTier()">Prepare / Join</button><button id="ztVerifyButton" class="btn" onclick="BlazeConsole.verifyZeroTier()">Verify / Finalize</button><button id="ztCancelButton" class="btn" onclick="BlazeConsole.cancelZeroTier()">Cancel pending</button><button id="ztDisableButton" class="btn danger" onclick="BlazeConsole.disableZeroTier()">Disable live ZeroTier</button></div>
+        <p class="muted" style="margin-top:10px">Authorize the displayed node in your private ZeroTier network. If the virtual device is not created until reboot, BlazePwifi keeps the transaction pending and the boot finalizer retries after ZeroTier starts.</p>
       </div></div>
     </div>
 
@@ -133,7 +138,7 @@
       <div class="form-grid"><label><span class="field-label">Admin password</span><input id="remotePassword" class="field" type="password" autocomplete="current-password" placeholder="Required for save, key, apply and disable"></label><div style="align-self:end" class="toolbar"><button class="btn" onclick="BlazeConsole.saveRemote()">Validate & save profile</button><button id="wgApplyButton" class="btn primary" onclick="BlazeConsole.applyWireGuard()">Test & Apply WireGuard</button><button id="wgDisableButton" class="btn danger" onclick="BlazeConsole.disableWireGuard()">Disable live WireGuard</button></div></div>
       <div id="remoteConfigState" class="small muted" style="margin-top:10px">Admin role is required to edit the profile.</div>
     </div></div>
-    <div class="notice warn"><b>WireGuard dev.3 safety model:</b> apply is transactional and requires an actual handshake before it is accepted. A watchdog restores the previous network/firewall/runtime state on failure or reboot. Apply/disable must be started from a local/non-WireGuard management path. IPv4 management routes only; default/full-tunnel and directly connected route overlaps are blocked. <b>ZeroTier live activation remains disabled.</b></div>
+    <div class="notice warn"><b>Remote-access safety model:</b> WireGuard remains a same-request transaction requiring a verified handshake. ZeroTier dev.4 is reboot-aware: Prepare/Join may stop at authorization, address assignment, or reboot-required state; Verify/Finalize exposes management only after the ZeroTier device/IP and route-survival checks pass. ZeroTier is configured with managed routes allowed but global/default/DNS takeover disabled. Apply/disable operations must be started from a local/non-remote management path.</div>
   </section>
 
   <section id="page-vouchers" class="section"><div class="page-head"><div><h2>Vouchers & Rates</h2><p>Create vouchers and manage rate packages.</p></div></div>
