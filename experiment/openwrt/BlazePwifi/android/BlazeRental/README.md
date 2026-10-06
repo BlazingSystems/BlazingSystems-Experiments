@@ -1,12 +1,14 @@
-# BlazeRental Android client
+# BlazeRental Android client — legacy/reference implementation
 
-Package: `com.blazesystems.blazerental`
+> **Not the current production APK source.**
+>
+> The active BlazeRental APK is built from `android/BlazeRentalLauncher/`. This older compact DPC project remains only as a historical/reference implementation and must not be used to generate current Device Owner provisioning metadata or release APKs.
 
-Two installation modes are intentionally supported:
+Current supported concepts remain:
 
-1. **Managed QR / Device Owner** — for freshly reset, owned/authorized rental phones. Android provisioning installs BlazeRental as the DPC. BlazeRental can then apply dedicated-device policies, persistent Home selection, lock-task allowlisting and supported user restrictions.
-2. **Manual APK** — works without factory reset but does not become Device Owner. It is deliberately labeled lower-security because a normal user can potentially uninstall/disable/bypass it.
+1. **Device Provisioning / Device Owner** — generated for the exact current Launcher3-based BlazeRental APK and scanned from Android Setup Wizard on a new/factory-reset, owned or explicitly authorized rental phone.
+2. **Standard Enrollment** — scanned inside an already-installed BlazeRental app and used only to bind that app to a BlazePwifi/Rental server. It does not grant Device Owner.
 
-Rental time is server-authoritative. The client caches the last server time + lease expiry against Android's monotonic elapsed-realtime clock; after reboot the cached lease fails closed until the server is reached again.
+Do not mix the two QR payload formats.
 
-The project does not claim to defeat bootloader unlock, recovery flashing, OEM service tools, or privileged exploits.
+Rental time remains server-authoritative. The project does not claim to defeat bootloader unlock, recovery flashing, OEM service tools, or privileged exploits.

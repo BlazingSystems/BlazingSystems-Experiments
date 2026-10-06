@@ -19,11 +19,7 @@ public class BlazeProvisioningComplianceActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         buildUi();
-        boolean captured = BlazeProvisioningContract.capture(this, getIntent());
-        if (!captured && !RentalLeaseStore.hasEnrollmentConfig(this)) {
-            showFailure("Provisioning data is missing or invalid. Factory reset and scan a fresh BlazeRental Device Provisioning QR.");
-            return;
-        }
+        BlazeProvisioningContract.capture(this, getIntent());
         attempt();
     }
 
@@ -69,18 +65,20 @@ public class BlazeProvisioningComplianceActivity extends Activity {
             @Override public void run() {
                 boolean success = false;
                 String reason = "Unable to bind to the Rental Server.";
-                for (int attempt = 1; attempt <= 6 && !success; attempt++) {
+                for (int attempt = 1; attempt <= 8 && !success; attempt++) {
                     if (!ManagedPolicyController.isDeviceOwner(self)) {
                         reason = "Android has not granted Device Owner yet.";
                     } else if (!RentalLeaseStore.hasEnrollmentConfig(self)) {
-                        reason = "Provisioning server/token data is missing.";
-                        break;
+                        // ACTION_PROVISIONING_SUCCESSFUL can arrive before the
+                        // provisioning-complete receiver on older Android. Wait
+                        // briefly for the receiver to persist admin extras.
+                        reason = "Waiting for Android provisioning data.";
                     } else {
                         ManagedPolicyController.apply(self);
                         boolean synced = LeaseClient.sync(self);
                         if (synced && RentalLeaseStore.isEnrolled(self)) {
-                            // First sync consumes the one-time token. A second sync
-                            // retrieves the server-signed policy for the new identity.
+                            // First sync consumes the one-time token. Second sync
+                            // retrieves the server-signed policy for the identity.
                             LeaseClient.sync(self);
                             ManagedPolicyController.apply(self);
                             success = true;
@@ -88,7 +86,7 @@ public class BlazeProvisioningComplianceActivity extends Activity {
                         }
                         reason = "The Rental Server rejected enrollment or is unreachable.";
                     }
-                    try { Thread.sleep(Math.min(5000L, 1000L * attempt)); }
+                    try { Thread.sleep(Math.min(5000L, 750L * attempt)); }
                     catch (InterruptedException ignored) {}
                 }
                 final boolean ok = success;

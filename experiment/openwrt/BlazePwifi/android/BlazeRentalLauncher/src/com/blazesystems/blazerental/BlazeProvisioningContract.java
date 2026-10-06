@@ -19,8 +19,6 @@ public final class BlazeProvisioningContract {
             "android.app.extra.PROVISIONING_ALLOWED_PROVISIONING_MODES";
     public static final String EXTRA_MODE =
             "android.app.extra.PROVISIONING_MODE";
-    public static final String EXTRA_SKIP_EDUCATION =
-            "android.app.extra.PROVISIONING_SKIP_EDUCATION_SCREENS";
 
     public static final int MODE_FULLY_MANAGED_DEVICE = 1;
     public static final String SCHEMA = "blazerental.provisioning.v1";
@@ -41,7 +39,7 @@ public final class BlazeProvisioningContract {
         String schema = clean(extras.getString("blaze_schema"));
         String server = clean(extras.getString("server_url"));
         String token = clean(extras.getString("enrollment_token"));
-        if (schema.length() > 0 && !SCHEMA.equals(schema)) return false;
+        if (!SCHEMA.equals(schema)) return false;
         if (!(server.startsWith("http://") || server.startsWith("https://"))) return false;
         int dot = token.indexOf('.');
         if (dot < 8 || dot >= token.length() - 16) return false;
@@ -69,7 +67,6 @@ public final class BlazeProvisioningContract {
     public static Intent modeResult(PersistableBundle extras) {
         Intent result = new Intent();
         result.putExtra(EXTRA_MODE, MODE_FULLY_MANAGED_DEVICE);
-        result.putExtra(EXTRA_SKIP_EDUCATION, true);
         if (extras != null) result.putExtra(EXTRA_ADMIN_EXTRAS, extras);
         return result;
     }

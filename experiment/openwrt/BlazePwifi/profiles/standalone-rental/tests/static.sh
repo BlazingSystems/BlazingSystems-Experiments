@@ -9,7 +9,7 @@ done
 ! grep -Eq 'uci (set|add_list|delete) (network|wireless|firewall)\.' "$ROOT/openwrt/install.sh"
 ! grep -Eq 'uci commit (network|wireless|firewall)' "$ROOT/openwrt/install.sh"
 
-grep -q "PROFILE_VERSION=\"0.5.2-rental.1\"" "$ROOT/openwrt/install.sh"
+grep -q "PROFILE_VERSION=\"0.5.2-rental.2-rc.1\"" "$ROOT/openwrt/install.sh"
 grep -q "edition='rental-standalone'" "$ROOT/openwrt/install.sh"
 grep -q "enabled='0'" "$ROOT/openwrt/install.sh"
 grep -q "admin_port='443'" "$ROOT/openwrt/install.sh"
@@ -74,4 +74,5 @@ grep -q "cache:'no-store'" "$HTML"
 grep -q "csrf validation failed" "$HTML"
 grep -q "QR renderer error" "$HTML"
 
-echo "Standalone Rental v0.5.2-rental.1 static checks passed"
+sh "$ROOT/../../tests/provisioning_split.sh"
+echo "Standalone Rental v0.5.2-rental.2-rc.1 static checks passed"

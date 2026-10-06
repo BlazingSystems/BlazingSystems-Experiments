@@ -1,33 +1,15 @@
-# BlazePwifi Standalone Rental Server v0.5.2-rental.1
+# BlazePwifi Standalone Rental Server
 
-**Stable hotfix**
+Latest stable server line: **v0.5.2-rental.1**  
+Provisioning architecture candidate: **v0.5.2-rental.2-rc.1**
 
-Default fresh-install credentials remain:
+The provisioning candidate separates the two Android onboarding modes:
 
-```text
-Username: admin
-Password: admin
-```
+- **Standard Enrollment QR** — BlazeRental already installed; in-app scan; server binding only.
+- **Device Provisioning QR** — Android Setup Wizard on a factory-reset phone; exact DPC APK/checksum; Device Owner where supported; then server binding.
 
-## CSRF / QR hotfix
+See [PROVISIONING-AUDIT.md](./PROVISIONING-AUDIT.md) for the audit findings and promotion gate.
 
-This release fixes R281/uHTTPd admin mutations that could return:
+Fresh Standalone Rental console credentials remain `admin / admin`. The Windows package also includes the one-click administrator reset tool.
 
-```text
-csrf validation failed
-```
-
-The Rental UI now sends CSRF in both the custom header and the form body. If the token becomes stale after login/reset/reinstall, the UI refreshes the authenticated session and retries the mutation once automatically.
-
-QR enrollment creation uses that corrected path. QR rendering errors are now shown visibly while preserving the generated server URL and one-time token.
-
-## Windows tools
-
-The Windows OneClick package includes:
-
-- `Install-BlazePwifi-Rental.bat`
-- `Reset-BlazePwifi-Admin-Password.bat`
-
-The password reset works with Standalone Rental and full BlazePwifi and restores only `admin / admin`.
-
-All v0.5.2 R281 BusyBox and network-preservation fixes remain included.
+Standalone OpenWrt installation remains network-neutral: it does not take ownership of `network`, `wireless`, or `firewall` UCI configuration.
