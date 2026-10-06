@@ -128,6 +128,24 @@ Full firmware/sysupgrade remains reserved for base-system changes such as kernel
 - Release must be published from this exact candidate before production signing.
 - Initial signing run ID must be `0`; Android assets remain TEST/unsigned until the later new-lineage signing step.
 
+## Current v0.5.2 release status — 2026-10-06
+
+- GitHub Release: `v0.5.2` — **published prerelease**
+- Release ID: `404545281`
+- Exact release candidate: `bf2992977fe8504d21b107df02826032c31d3a62`
+- Exact build run: `37443570618` — **PASS**
+- Release workflow run: `37445141476` — **PASS**
+- Release title: `BlazePwifi v0.5.2 — LCM Branding & Rental Time Alarms`
+- Release target remains exactly the green candidate; later workflow/docs commits did not retag it.
+- Initial publication intentionally used `signing_run_id=0` and remains prerelease before the new 0.5.2 production signing lineage is created.
+- Android assets currently include v0.5.2 TEST/unsigned APKs and v0.5.1 rescue TEST/unsigned APKs.
+- The LCM production PNG was verified both in source CI and inside the built APK.
+- Near End default: 10 minutes / 5-second ring.
+- Urgent Add Credit default: 3 minutes / 10-second ring.
+- Time's Up default: 00:00 / 15-second ring.
+- Audible alarms use STREAM_ALARM, enforced non-zero minimum volume, optional DND override, and restore prior audio state after playback.
+- No older BlazeRental APK is to be newly production-signed.
+
 ## Current target
 
 BlazePwifi is being developed as a complete PisoWiFi + Android rental-device platform with a full management console, customizable captive portal system, coin/Vendo controllers, vouchers, sales, networking/WAN/LAN/VLAN management, backups, multimedia, BlazeGames management, and BlazeRental Launcher3 integration.
