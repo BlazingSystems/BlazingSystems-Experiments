@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const q=s=>document.querySelector(s), C=()=>window.BlazeCore;
-let terminalToken='';
+let terminalToken='',remoteLoadGeneration=0;
 function fmtTemp(v){const n=+v||0;return n?((n>1000?n/1000:n).toFixed(1)+' °C'):'Not reported'}
 async function loadSystem(){
   const x=await C().api('system_info');
@@ -36,7 +36,9 @@ function setRemoteEditable(enabled){
     .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
 }
 async function loadRemote(){
+  const generation=++remoteLoadGeneration;
   const x=await C().api('remote_status');
+  if(generation!==remoteLoadGeneration)return;
   if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
   const r=x.remote||{},wg=q('#wgState'),zt=q('#ztState');
   if(wg){wg.textContent=r.wireguard||'Unavailable';wg.className='metric-value small '+(String(r.wireguard).indexOf('online:')===0?'good':'');}
@@ -47,6 +49,7 @@ async function loadRemote(){
   const site=q('#remoteSiteState');if(site)site.textContent=r.site_label||'No site label';
 
   const cfg=await C().api('remote_config_get');
+  if(generation!==remoteLoadGeneration)return;
   const state=q('#remoteConfigState');
   if(!cfg.ok){
     setRemoteEditable(false);
@@ -68,6 +71,8 @@ async function loadRemote(){
   if(state)state.textContent='Validated profile storage is active. Live transport apply remains safety-locked in this development build.';
 }
 async function saveRemote(){
+  // Invalidate any in-flight page-load refresh before committing a new profile.
+  ++remoteLoadGeneration;
   const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
   if(!password){C().toast('Admin password is required to save the remote profile.',true);return}
   const checked=id=>q(id)&&q(id).checked?'1':'0';
