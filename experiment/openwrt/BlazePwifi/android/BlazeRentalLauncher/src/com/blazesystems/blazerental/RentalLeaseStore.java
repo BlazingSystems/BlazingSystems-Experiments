@@ -26,7 +26,8 @@ public final class RentalLeaseStore {
                 .putString("enrollment", safe(extras.getString("enrollment_token")))
                 .putString("device_name", safe(extras.getString("device_name")))
                 .putString("enrollment_source", "device_owner_provisioning")
-                .apply();
+                .remove("enrollment_request_nonce")
+                .commit();
     }
 
     public static void saveManualEnrollment(Context context, String server, String token, String name) {
@@ -36,6 +37,7 @@ public final class RentalLeaseStore {
                 .putString("device_name", safe(name))
                 .putString("enrollment_source", "standard_manual")
                 .putBoolean("setup_complete", false)
+                .remove("enrollment_request_nonce")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
@@ -44,12 +46,22 @@ public final class RentalLeaseStore {
         AndroidRentalPolicyRepository.clear(context);
     }
 
-    public static void setDeviceIdentity(Context context, String id, String secret) {
-        prefs(context).edit()
+    public static boolean setDeviceIdentity(Context context, String id, String secret) {
+        return prefs(context).edit()
                 .putString("device_id", safe(id))
                 .putString("device_secret", safe(secret))
                 .remove("enrollment")
-                .apply();
+                .remove("enrollment_request_nonce")
+                .commit();
+    }
+
+    public static synchronized String enrollmentRequestNonce(Context context) {
+        SharedPreferences p = prefs(context);
+        String nonce = p.getString("enrollment_request_nonce", "");
+        if (nonce.length() > 0) return nonce;
+        nonce = Hmac.nonce();
+        if (!p.edit().putString("enrollment_request_nonce", nonce).commit()) return "";
+        return nonce;
     }
 
     public static void recordLease(Context context, long serverNowMs, long leaseUntilMs) {
@@ -154,6 +166,7 @@ public final class RentalLeaseStore {
                 .putBoolean("setup_complete", false)
                 .remove("server")
                 .remove("enrollment")
+                .remove("enrollment_request_nonce")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")

@@ -127,43 +127,58 @@ SIG_SERVER="$(printf '%s' "$RESP" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{
 SIG_CLIENT="$(printf '%s' "$RESP" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{print $NF}')"
 [ "$SIG_SERVER" = "$SIG_CLIENT" ]
 
-# Runtime regression: a one-time enrollment record must have exactly one
-# successful claimant even when two processes race it.
+# Runtime regressions: v2-generated tokens must be downgrade-resistant
+# and retry-safe if the first enrollment response is lost.
 STATE="$TMP/state"
 RUN="$TMP/run"
 mkdir -p "$STATE" "$RUN"
-EID=0123456789ab
-printf '%s\t%s\t%s\t%s\n' "$EID" \
-  0123456789abcdef0123456789abcdef0123 \
-  4102444800 "Race phone" > "$STATE/rental-enroll.tsv"
-: > "$TMP/claims"
-
-cat > "$TMP/claim.sh" <<'EOF'
-#!/bin/sh
-set -eu
-STATE="$1"; RUN="$2"; ROOT="$3"; EID="$4"; OUT="$5"
-BP_STATE="$STATE"; BP_RUN="$RUN"; export BP_STATE BP_RUN
-. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
-. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+export BP_STATE="$STATE" BP_RUN="$RUN"
+export BP_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
+export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
+export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+export BP_RENTAL_POLICY_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_policy.sh"
+. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"
 bp_rental_init
-bp_rental_enroll_lock || exit 3
-line="$(bp_rental_enroll_lookup "$EID")"
-if [ -n "$line" ]; then
-  sleep 1
-  bp_rental_enroll_consume "$EID"
-  printf 'claimed\n' >> "$OUT"
-fi
-bp_rental_enroll_unlock
-EOF
-chmod +x "$TMP/claim.sh"
 
-"$TMP/claim.sh" "$STATE" "$RUN" "$ROOT" "$EID" "$TMP/claims" &
-P1=$!
-"$TMP/claim.sh" "$STATE" "$RUN" "$ROOT" "$EID" "$TMP/claims" &
-P2=$!
-wait "$P1"
-wait "$P2"
-[ "$(wc -l < "$TMP/claims" | tr -d ' ')" = 1 ]
-! grep -q "^$EID$(printf '\t')" "$STATE/rental-enroll.tsv"
+TOKEN="$(bp_rental_enroll_create 'Race phone' 600 2)"
+EID="${TOKEN%%.*}"
+NONCE='00112233445566778899aabbccddeeff'
+CGI="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/rental"
+
+LEGACY_SIG="$(bp_rental_hmac "$TOKEN" "enroll|$NONCE|$TOKEN")"
+DOWNGRADE="$(printf 'action=enroll&enroll_id=%s&protocol=1&nonce=%s&sig=%s' "$EID" "$NONCE" "$LEGACY_SIG" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$DOWNGRADE" | grep -q 'enrollment requires protocol 2'
+
+V2_SIG="$(bp_rental_hmac "$TOKEN" "enroll_v2|$NONCE|$TOKEN")"
+FIRST="$(printf 'action=enroll&enroll_id=%s&protocol=2&nonce=%s&sig=%s' "$EID" "$NONCE" "$V2_SIG" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$FIRST" | grep -q '"ok":true'
+printf '%s' "$FIRST" | grep -q '"enrollment_protocol":2'
+! printf '%s' "$FIRST" | grep -q '"device_secret"'
+DID="$(printf '%s' "$FIRST" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
+[ "${#DID}" -eq 24 ]
+
+# Simulate loss of the first response. Retrying the exact request must return
+# the same identity and must not create another device.
+SECOND="$(printf 'action=enroll&enroll_id=%s&protocol=2&nonce=%s&sig=%s' "$EID" "$NONCE" "$V2_SIG" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$SECOND" | grep -q '"ok":true'
+printf '%s' "$SECOND" | grep -q '"reused":true'
+DID2="$(printf '%s' "$SECOND" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
+[ "$DID2" = "$DID" ]
+[ "$(awk -F '\t' -v d="$DID" '$1==d{n++} END{print n+0}' "$STATE/rental-devices.tsv")" -eq 1 ]
+
+# A new request nonce cannot claim the redeemed token.
+OTHER='ffeeddccbbaa99887766554433221100'
+OTHER_SIG="$(bp_rental_hmac "$TOKEN" "enroll_v2|$OTHER|$TOKEN")"
+CLAIMED="$(printf 'action=enroll&enroll_id=%s&protocol=2&nonce=%s&sig=%s' "$EID" "$OTHER" "$OTHER_SIG" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$CLAIMED" | grep -q 'enrollment already claimed'
+
+# The permanent secret is independently derived. A valid status request proves
+# possession and retires the temporary redemption/token record.
+DSECRET="$(bp_rental_hmac "$TOKEN" "device-secret-v2|$NONCE|$DID")"
+STATUS_NONCE='status0011223344'
+STATUS_SIG="$(bp_rental_hmac "$DSECRET" "status|$STATUS_NONCE|$DSECRET")"
+STATUS="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$STATUS_NONCE" "$STATUS_SIG" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$STATUS" | grep -q '"ok":true'
+[ -z "$(bp_rental_enroll_lookup "$EID")" ]
 
 echo "BlazeRental provisioning/enrollment split audit passed"

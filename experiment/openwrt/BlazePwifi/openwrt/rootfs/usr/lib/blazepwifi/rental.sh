@@ -38,9 +38,10 @@ bp_rental_hmac() {
 }
 
 bp_rental_enroll_create() {
-  label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; now="$(bp_now)"
+  label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; min_protocol="${3:-1}"; now="$(bp_now)"
   case "$ttl" in ''|*[!0-9]*) ttl=600;; esac
   [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
+  case "$min_protocol" in 1|2) ;; *) min_protocol=1;; esac
   bp_rental_enroll_lock || return 1
   tries=0; id=""
   while [ "$tries" -lt 8 ]; do
@@ -53,7 +54,8 @@ bp_rental_enroll_create() {
     return 1
   fi
   secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
-  if ! printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"; then
+  # id, token-secret, expiry, label, min-protocol, redeemed-nonce, redeemed-device
+  if ! printf '%s\t%s\t%s\t%s\t%s\t\t\n' "$id" "$secret" "$expiry" "$label" "$min_protocol" >> "$BP_RENTAL_ENROLL"; then
     bp_rental_enroll_unlock
     return 1
   fi
@@ -67,9 +69,27 @@ bp_rental_enroll_lookup() {
   awk -F '\t' -v i="$1" '$1==i {print; exit}' "$BP_RENTAL_ENROLL"
 }
 
+bp_rental_enroll_mark_redeemed() {
+  id="$1"; request_nonce="$2"; did="$3"
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v OFS='\t' -v i="$id" -v n="$request_nonce" -v d="$did" '
+    $1==i {$6=n;$7=d}
+    {print}
+  ' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
 bp_rental_enroll_consume() {
   id="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
   awk -F '\t' -v i="$id" '$1!=i {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
+bp_rental_enroll_consume_device() {
+  did="$1"
+  awk -F '\t' -v d="$did" '$7==d {found=1} END{exit found?0:1}' "$BP_RENTAL_ENROLL" || return 3
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v d="$did" '$7!=d {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
     chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
 }
 

@@ -22,14 +22,24 @@ case "$action" in
     bp_rental_enroll_lock || bp_fail "enrollment state busy"
     line="$(bp_rental_enroll_lookup "$eid")"
     [ -n "$line" ] || { bp_rental_enroll_unlock; bp_fail "enrollment invalid or used"; }
+
     secret="$(printf '%s' "$line" | cut -f2)"
     expiry="$(printf '%s' "$line" | cut -f3)"
-    label="$(printf '%s' "$line" | cut -f4-)"
+    label="$(printf '%s' "$line" | cut -f4)"
+    min_protocol="$(printf '%s' "$line" | cut -f5)"
+    redeemed_nonce="$(printf '%s' "$line" | cut -f6)"
+    redeemed_did="$(printf '%s' "$line" | cut -f7)"
+    case "$min_protocol" in
+      2) [ "$protocol" = 2 ] || { bp_rental_enroll_unlock; bp_fail "enrollment requires protocol 2"; } ;;
+      *) min_protocol=1 ;;
+    esac
+
     [ "$expiry" -ge "$now" ] 2>/dev/null || {
       bp_rental_enroll_consume "$eid" || true
       bp_rental_enroll_unlock
       bp_fail "enrollment expired"
     }
+
     token="$eid.$secret"
     if [ "$protocol" = 2 ]; then
       request_canonical="enroll_v2|$nonce|$token"
@@ -45,53 +55,91 @@ case "$action" in
       bp_fail "authentication failed"
     }
 
-    # Atomically claim the one-time token before creating the device.
-    bp_rental_enroll_consume "$eid" || {
-      bp_rental_enroll_unlock
-      bp_fail "unable to consume enrollment"
-    }
-
-    did="$(bp_rental_hex 12)"
-    if [ "$protocol" = 2 ]; then
-      # Secure bootstrap: both peers derive the same long-lived secret.
-      # The device secret itself never crosses the HTTP transport.
+    reused=false
+    if [ "$protocol" = 2 ] && [ -n "$redeemed_nonce" ]; then
+      [ "$redeemed_nonce" = "$nonce" ] || {
+        bp_rental_enroll_unlock
+        bp_fail "enrollment already claimed"
+      }
+      printf '%s' "$redeemed_did" | grep -Eq '^[0-9a-f]{24}$' || {
+        bp_rental_enroll_unlock
+        bp_fail "enrollment redemption corrupted"
+      }
+      did="$redeemed_did"
       dsecret="$(bp_rental_hmac "$token" "device-secret-v2|$nonce|$did")" || {
         bp_rental_enroll_unlock
         bp_fail "rental crypto unavailable"
       }
-      printf '%s' "$dsecret" | grep -Eq '^[a-f0-9]{64}$' || {
+      existing="$(bp_rental_device_line "$did")"
+      if [ -n "$existing" ]; then
+        [ "$(printf '%s' "$existing" | cut -f2)" = "$dsecret" ] || {
+          bp_rental_enroll_unlock
+          bp_fail "enrollment device identity conflict"
+        }
+      else
+        bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now" || {
+          bp_rental_enroll_unlock
+          bp_fail "enrollment device recovery failed"
+        }
+      fi
+      bp_rental_policy_ensure "$did" || {
         bp_rental_enroll_unlock
-        bp_fail "device secret derivation failed"
+        bp_fail "enrollment policy recovery failed"
       }
+      reused=true
     else
-      # Legacy compatibility only. New RC5 clients always request protocol 2.
-      dsecret="$(bp_rental_hex 24)"
+      did="$(bp_rental_hex 12)"
+      if [ "$protocol" = 2 ]; then
+        dsecret="$(bp_rental_hmac "$token" "device-secret-v2|$nonce|$did")" || {
+          bp_rental_enroll_unlock
+          bp_fail "rental crypto unavailable"
+        }
+        printf '%s' "$dsecret" | grep -Eq '^[a-f0-9]{64}$' || {
+          bp_rental_enroll_unlock
+          bp_fail "device secret derivation failed"
+        }
+        bp_rental_enroll_mark_redeemed "$eid" "$nonce" "$did" || {
+          bp_rental_enroll_unlock
+          bp_fail "enrollment redemption write failed"
+        }
+        bp_durable_sync || {
+          bp_rental_enroll_unlock
+          bp_fail "enrollment redemption sync failed"
+        }
+      else
+        dsecret="$(bp_rental_hex 24)"
+        bp_rental_enroll_consume "$eid" || {
+          bp_rental_enroll_unlock
+          bp_fail "unable to consume enrollment"
+        }
+      fi
+
+      bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now" || {
+        bp_rental_enroll_unlock
+        bp_fail "unable to create rental device"
+      }
+      bp_rental_policy_ensure "$did" || {
+        bp_rental_device_revoke "$did" >/dev/null 2>&1 || true
+        bp_rental_enroll_unlock
+        bp_fail "unable to initialize rental policy"
+      }
     fi
 
-    bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now" || {
+    verified="$(bp_rental_device_line "$did")"
+    [ -n "$verified" ] && [ "$(printf '%s' "$verified" | cut -f2)" = "$dsecret" ] || {
       bp_rental_enroll_unlock
-      bp_fail "unable to create rental device"
+      bp_fail "enrollment device verification failed"
     }
-    bp_rental_policy_ensure "$did" || {
-      bp_rental_device_revoke "$did" >/dev/null 2>&1 || true
-      bp_rental_enroll_unlock
-      bp_fail "unable to initialize rental policy"
-    }
+    bp_rental_enroll_unlock
 
     server_ms=$((now*1000))
-    lease_ms=$((now*1000))
+    lease_ms=$server_ms
     if [ "$protocol" = 2 ]; then
       kdf="hmac-sha256-v1"
       response_canonical="enroll-response-v2|$nonce|$did|$server_ms|$lease_ms|$kdf"
-      enroll_sig="$(bp_rental_hmac "$token" "$response_canonical")" || {
-        bp_rental_device_revoke "$did" >/dev/null 2>&1 || true
-        bp_rental_enroll_unlock
-        bp_fail "rental crypto unavailable"
-      }
-      bp_rental_enroll_unlock
-      bp_json "$(printf '{"ok":true,"enrollment_protocol":2,"device_id":"%s","identity_kdf":"%s","server_time_ms":%s,"lease_until_ms":%s,"enroll_sig":"%s"}' "$did" "$kdf" "$server_ms" "$lease_ms" "$enroll_sig")"
+      enroll_sig="$(bp_rental_hmac "$token" "$response_canonical")" || bp_fail "rental crypto unavailable"
+      bp_json "$(printf '{"ok":true,"enrollment_protocol":2,"reused":%s,"device_id":"%s","identity_kdf":"%s","server_time_ms":%s,"lease_until_ms":%s,"enroll_sig":"%s"}' "$reused" "$did" "$kdf" "$server_ms" "$lease_ms" "$enroll_sig")"
     else
-      bp_rental_enroll_unlock
       bp_json "$(printf '{"ok":true,"enrollment_protocol":1,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$server_ms" "$lease_ms")"
     fi
     ;;
@@ -105,6 +153,23 @@ case "$action" in
     label="$(printf '%s' "$line" | cut -f4)"
     expected="$(bp_rental_hmac "$secret" "$action|$nonce|$secret")" || bp_fail "rental crypto unavailable"
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+
+    # Retire the temporary retry-redemption record only after the device proves
+    # possession of its derived long-lived secret.
+    bp_rental_enroll_lock || bp_fail "enrollment cleanup busy"
+    if bp_rental_enroll_consume_device "$did"; then
+      bp_durable_sync || {
+        bp_rental_enroll_unlock
+        bp_fail "enrollment cleanup sync failed"
+      }
+    else
+      cleanup_rc=$?
+      [ "$cleanup_rc" -eq 3 ] || {
+        bp_rental_enroll_unlock
+        bp_fail "enrollment cleanup failed"
+      }
+    fi
+    bp_rental_enroll_unlock
 
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"

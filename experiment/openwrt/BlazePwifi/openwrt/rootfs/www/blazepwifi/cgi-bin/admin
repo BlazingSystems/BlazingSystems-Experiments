@@ -99,7 +99,7 @@ case "$action" in
     bp_rental_init
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
     server="$(bp_admin_rental_server_url)" || bp_fail "invalid server url"
-    token="$(bp_rental_enroll_create "$label" 600)"
+    token="$(bp_rental_enroll_create "$label" 600 2)"
     qr_payload="$(bp_admin_standard_qr_payload "$server" "$token" "$label")"
     bp_auth_audit rental_standard_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
     bp_json "$(printf '{"ok":true,"qr_type":"standard_enrollment","schema":"blazerental.enrollment.v2","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","qr_payload":"%s"}' \
@@ -144,7 +144,7 @@ case "$action" in
       wifi_password=""
       hidden=false
     fi
-    token="$(bp_rental_enroll_create "$label" 3600)"
+    token="$(bp_rental_enroll_create "$label" 3600 2)"
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s:%s:%s' "$apk_channel" "$apk_version" "$label" | cut -c1-120)"
     bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v2","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"qr_payload":"%s"}' \

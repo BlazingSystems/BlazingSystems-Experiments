@@ -14,14 +14,16 @@ import java.util.List;
 public final class LeaseClient {
     private LeaseClient() {}
 
-    public static boolean sync(Context context) {
+    public static synchronized boolean sync(Context context) {
         try {
             String base = RentalLeaseStore.server(context);
             if (base.length() == 0) return false;
             String deviceSecret = RentalLeaseStore.deviceSecret(context);
             String enrollment = RentalLeaseStore.enrollment(context);
-            String nonce = Hmac.nonce();
             boolean enrolling = deviceSecret.length() == 0;
+            String nonce = enrolling
+                    ? RentalLeaseStore.enrollmentRequestNonce(context) : Hmac.nonce();
+            if (nonce.length() == 0) return false;
             String action = enrolling ? "enroll" : "status";
             String authSecret = enrolling ? enrollment : deviceSecret;
             if (authSecret.length() == 0) return false;
@@ -69,7 +71,9 @@ public final class LeaseClient {
                 newSecret = Hmac.sha256Hex(authSecret,
                         "device-secret-v2|" + nonce + "|" + deviceId);
                 if (newSecret.length() != 64) return false;
-                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
+                if (!RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret)) {
+                    return false;
+                }
             }
             RentalLeaseStore.recordLease(context, serverNow, leaseUntil);
 
