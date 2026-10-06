@@ -6,6 +6,9 @@
 #include <ESP8266HTTPClient.h>
 #include <LittleFS.h>
 #include <bearssl/bearssl.h>
+extern "C" {
+#include <user_interface.h>
+}
 using BlazeWebServer = ESP8266WebServer;
 #else
 #include <WiFi.h>
@@ -13,15 +16,22 @@ using BlazeWebServer = ESP8266WebServer;
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <mbedtls/sha256.h>
+#include <esp_system.h>
 using BlazeWebServer = WebServer;
 #endif
 
 #ifndef BLAZE_SLOT_COUNT
 #ifdef ESP8266
 #define BLAZE_SLOT_COUNT 2
-#define BLAZE_MAX_DEVICES 6
 #else
 #define BLAZE_SLOT_COUNT 4
+#endif
+#endif
+
+#ifndef BLAZE_MAX_DEVICES
+#ifdef ESP8266
+#define BLAZE_MAX_DEVICES 6
+#else
 #define BLAZE_MAX_DEVICES 18
 #endif
 #endif
@@ -81,12 +91,12 @@ public:
   }
 
 private:
-  static String esc(String s){s.replace("&","&amp;");s.replace("<","&lt;");s.replace(">","&gt;");s.replace(""","&quot;");return s;}
-  static String json(String s){s.replace("\\","\\\\");s.replace(""","\\"");s.replace("\r"," ");s.replace("\n"," ");return s;}
+  static String esc(String s){s.replace("&","&amp;");s.replace("<","&lt;");s.replace(">","&gt;");s.replace("\"","&quot;");return s;}
+  static String json(String s){s.replace("\\","\\\\");s.replace("\"","\\\"");s.replace("\r"," ");s.replace("\n"," ");return s;}
   static String clean(String s){s.replace("\t"," ");s.replace("\r"," ");s.replace("\n"," ");return s;}
   static String fld(const String& line,int idx){int start=0,n=0;for(int i=0;i<=(int)line.length();i++){if(i==(int)line.length()||line[i]=='\t'){if(n==idx)return line.substring(start,i);start=i+1;n++;}}return "";}
-  static bool validHex(const String&s,int n){if((int)s.length()!=n)return false;for(char c:s)if(!isxdigit(c))return false;return true;}
-  static bool validPkgList(const String&s){if(s.length()>2048)return false;for(char c:s)if(!(isalnum(c)||c=='.'||c=='_'||c=='-'||c==','||c=='*'))return false;return true;}
+  static bool validHex(const String&s,int n){if((int)s.length()!=n)return false;for(size_t i=0;i<s.length();i++){char ch=s[i];if(!isxdigit((unsigned char)ch))return false;}return true;}
+  static bool validPkgList(const String&s){if(s.length()>2048)return false;for(size_t i=0;i<s.length();i++){char ch=s[i];if(!(isalnum((unsigned char)ch)||ch=='.'||ch=='_'||ch=='-'||ch==','||ch=='*'))return false;}return true;}
   uint8_t rb(){
 #ifdef ESP8266
     return (uint8_t)(os_random()&0xff);
