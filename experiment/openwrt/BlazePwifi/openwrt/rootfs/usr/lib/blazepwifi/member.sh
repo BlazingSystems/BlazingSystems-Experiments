@@ -55,6 +55,11 @@ bp_member_event_line() {
   awk -F '\t' -v e="$1" '$1==e {print; exit}' "$BP_MEMBER_EVENTS"
 }
 
+bp_member_replay_line() {
+  event_id="$1"; controller_id="$2"; username="$3"; kind="$4"
+  awk -F '\t' -v e="$event_id" -v s="softtimer:$controller_id" -v u="$username" -v k="$kind"     '$1==e && $3==u && $4==k && $7==s {print; exit}' "$BP_MEMBER_EVENTS"
+}
+
 bp_member_hash_password() {
   pass="$1"
   [ "${#pass}" -ge 4 ] || return 2
