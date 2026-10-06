@@ -140,6 +140,8 @@ public final class RentalSystemPages {
         final TextView detail = body(launcher, "TIME FINISHED");
         final TextView coinWindow = body(launcher, "");
         coinWindow.setVisibility(View.GONE);
+        final TextView coinProgress = body(launcher, "");
+        coinProgress.setVisibility(View.GONE);
         final Button coin = actionButton(launcher, "INSERT COIN");
         final Button coinDone = smallButton(launcher, "DONE INSERTING");
         coinDone.setVisibility(View.GONE);
@@ -148,6 +150,7 @@ public final class RentalSystemPages {
         root.addView(timer);
         root.addView(detail);
         root.addView(coinWindow);
+        root.addView(coinProgress);
         root.addView(coin, buttonMargins(launcher));
         root.addView(coinDone, rowMargins(launcher));
 
@@ -202,12 +205,20 @@ public final class RentalSystemPages {
                 coin.setEnabled(!coinActive);
                 if (coinActive) {
                     String vendo = LeaseClient.coinWindowVendo();
+                    int pulses = LeaseClient.coinWindowReceivedPulses();
+                    int cents = LeaseClient.coinWindowReceivedCents();
                     setTextIfChanged(coinWindow, "Coin window • " + formatCoinDuration(coinRemaining)
                             + (vendo.length() > 0 ? " • " + vendo : ""));
+                    setTextIfChanged(coinProgress, pulses > 0
+                            ? "Received • " + pulses + " pulse" + (pulses == 1 ? "" : "s")
+                              + " • " + LeaseClient.formatCentavos(cents)
+                            : "Waiting for coin…");
                     coinWindow.setVisibility(View.VISIBLE);
+                    coinProgress.setVisibility(View.VISIBLE);
                     coinDone.setVisibility(View.VISIBLE);
                 } else {
                     coinWindow.setVisibility(View.GONE);
+                    coinProgress.setVisibility(View.GONE);
                     coinDone.setVisibility(View.GONE);
                 }
                 if (root.getWindowToken() != null) root.postDelayed(this, 1000L);
