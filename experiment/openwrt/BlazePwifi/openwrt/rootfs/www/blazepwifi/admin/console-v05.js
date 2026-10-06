@@ -35,18 +35,22 @@ function setRemoteEditable(enabled){
    '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword']
     .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
 }
-async function loadRemote(){
-  const generation=++remoteLoadGeneration;
-  const x=await C().api('remote_status');
-  if(generation!==remoteLoadGeneration)return;
-  if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
-  const r=x.remote||{},wg=q('#wgState'),zt=q('#ztState');
+function renderRemoteStatus(r){
+  r=r||{};
+  const wg=q('#wgState'),zt=q('#ztState');
   if(wg){wg.textContent=r.wireguard||'Unavailable';wg.className='metric-value small '+(String(r.wireguard).indexOf('online:')===0?'good':'');}
   if(zt){zt.textContent=r.zerotier||'Unavailable';zt.className='metric-value small '+(String(r.zerotier).indexOf('ONLINE')>=0?'good':'');}
   const mode=q('#remoteModeState');if(mode)mode.textContent=r.mode||'disabled';
   const ready=q('#remoteReadyState');if(ready)ready.textContent=r.mode==='disabled'?'Remote access off':(r.ready?'Profile complete · activation staged':'Profile incomplete');
   const node=q('#remoteNodeState');if(node)node.textContent=r.node_name||'BlazePwifi';
   const site=q('#remoteSiteState');if(site)site.textContent=r.site_label||'No site label';
+}
+async function loadRemote(){
+  const generation=++remoteLoadGeneration;
+  const x=await C().api('remote_status');
+  if(generation!==remoteLoadGeneration)return;
+  if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
+  renderRemoteStatus(x.remote||{});
 
   const cfg=await C().api('remote_config_get');
   if(generation!==remoteLoadGeneration)return;
@@ -89,6 +93,9 @@ async function saveRemote(){
   const x=await C().api('remote_config_set',data);
   if(pass)pass.value='';
   if(!x.ok){C().toast(x.error||'Remote profile validation failed',true);return}
+  // The save response is authoritative. Render it immediately so a delayed
+  // follow-up status request cannot leave the operator looking at stale state.
+  renderRemoteStatus(x.remote||{});
   C().toast('Remote profile validated and stored. Live transport activation remains safety-locked.');
   await loadRemote();
 }
