@@ -30,7 +30,7 @@ async function load(render=true){
 }
 async function create(){
   const username=q('#memberCreateUser').value.trim(),label=q('#memberCreateLabel').value.trim(),password=q('#memberCreatePassword').value;
-  if(!username||password.length<4){C().toast('Username and a password of at least 4 characters are required',true);return}
+  if(!username||password.length<8){C().toast('Username and a password of at least 8 characters are required',true);return}
   const x=await C().api('member_create',{username,label,password});
   q('#memberCreatePassword').value='';
   C().toast(x.ok?'Member created':(x.error||'Member creation failed'),!x.ok);
@@ -49,7 +49,7 @@ async function balance(user){
 }
 async function password(user){
   const n=node(user);if(!n)return;const password=n.querySelector('.password').value;
-  if(password.length<4){C().toast('Use at least 4 characters for the member password',true);return}
+  if(password.length<8){C().toast('Use at least 8 characters for the member password',true);return}
   const x=await C().api('member_password',{username:user,password});n.querySelector('.password').value='';
   C().toast(x.ok?'Member password reset':(x.error||'Password reset failed'),!x.ok);if(x.ok)loadEvents(user);
 }
