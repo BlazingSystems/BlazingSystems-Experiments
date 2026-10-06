@@ -1,4 +1,4 @@
-# ESP Standalone Rental Server — rc.2
+# ESP Standalone Rental Server — rc.3
 
 One firmware, three persistent operating modes:
 

@@ -15,3 +15,9 @@ After installation:
 The SSH password is written only to a temporary local file for plink/pscp and is overwritten/deleted at the end of the run.
 
 The package includes PuTTY command-line SSH tools (plink/pscp) solely for deployment. See the included PuTTY licence file.
+
+
+rc.3 hotfix:
+- First-time PuTTY host-key output is captured instead of becoming a PowerShell NativeCommandError.
+- A GUI trust dialog is shown automatically on the first SSH connection.
+- No manual PuTTY launch or host-key pre-caching is required.

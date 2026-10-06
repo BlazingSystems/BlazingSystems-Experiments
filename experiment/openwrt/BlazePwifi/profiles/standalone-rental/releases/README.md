@@ -1,34 +1,29 @@
 # Standalone Rental Releases
 
-This folder is the project-specific release index for **BlazePwifi Standalone Rental Server**.
-
-GitHub stores downloadable Release assets at repository level, so this index links the Rental project's releases and binaries from inside the Rental subfolder.
+This is the project-specific release index for **BlazePwifi Standalone Rental Server**.
 
 ## Latest
 
-### [v0.5.0-rental-rc.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.2) — Latest Rental Release
+### [v0.5.0-rental-rc.3](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.3) — Latest Rental Release
 
-Recommended first download for existing OpenWrt hardware:
+**Recommended existing-router installer:**
 
-**[BlazePwifi Rental Windows OneClick rc.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-Windows-OneClick-v0.5.0-rental-rc.2.zip)**
+[BlazePwifi Rental Windows OneClick rc.3](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.3/BlazePwifi-Rental-Standalone-Windows-OneClick-v0.5.0-rental-rc.3.zip)
 
-Also available:
+rc.3 fixes first-time SSH host-key handling on Windows PowerShell. PuTTY's expected host-key message is captured, a GUI trust dialog is shown, and the install continues without requiring manual PuTTY setup.
 
-- [OpenWrt bundle](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.2.tar.gz)
-- [ESP8266 BIN](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-ESP8266.bin)
-- [ESP32 BIN](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-ESP32.bin)
-- [EW1200G Pro sysupgrade BIN](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-EW1200G-Pro-v1.1-sysupgrade.bin)
-- [x86_64 BIOS image](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-x86_64-BIOS.img.gz)
-- [x86_64 UEFI image](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazePwifi-Rental-Standalone-x86_64-UEFI.img.gz)
-- [BlazeRental APK](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/BlazeRental-v0.5.0-TEST.apk)
-- [Checksums](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.0-rental-rc.2/SHA256SUMS)
-
-[Read local rc.2 notes](./v0.5.0-rental-rc.2.md)
+[Read local rc.3 notes](./v0.5.0-rental-rc.3.md)
 
 ## Older
 
+### [v0.5.0-rental-rc.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.2)
+
+Superseded by rc.3 because of the Windows first-SSH installer bug.
+
+[Read local rc.2 notes](./v0.5.0-rental-rc.2.md)
+
 ### [v0.5.0-rental-rc.1](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.0-rental-rc.1)
 
-Superseded. Kept for historical comparison only.
+Superseded. Historical release only.
 
 [Read local rc.1 notes](./v0.5.0-rental-rc.1.md)

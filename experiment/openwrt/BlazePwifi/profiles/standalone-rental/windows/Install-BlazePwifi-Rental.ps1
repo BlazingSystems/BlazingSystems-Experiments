@@ -8,6 +8,52 @@ function Show-Error([string]$Message) {
 function Show-Info([string]$Message) {
     [System.Windows.Forms.MessageBox]::Show($Message, "BlazePwifi Rental Installer", "OK", "Information") | Out-Null
 }
+
+# Windows PowerShell 5.1 can promote stderr from a native program into a
+# NativeCommandError when the script-wide ErrorActionPreference is Stop.
+# PuTTY intentionally writes first-connection host-key information to stderr,
+# so every PuTTY call goes through these wrappers.
+function Invoke-NativeCapture {
+    param(
+        [Parameter(Mandatory=$true)][string]$FilePath,
+        [Parameter(Mandatory=$true)][string[]]$Arguments
+    )
+
+    $oldPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $lines = & $FilePath @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+        $text = (($lines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine)
+        return [pscustomobject]@{
+            ExitCode = $exitCode
+            Output   = $text
+        }
+    }
+    finally {
+        $ErrorActionPreference = $oldPreference
+    }
+}
+
+function Invoke-NativeVisible {
+    param(
+        [Parameter(Mandatory=$true)][string]$FilePath,
+        [Parameter(Mandatory=$true)][string[]]$Arguments
+    )
+
+    $oldPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $FilePath @Arguments 2>&1 | ForEach-Object {
+            Write-Host $_.ToString()
+        }
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $oldPreference
+    }
+}
+
 function Prompt-Password {
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "BlazePwifi Rental - SSH Password"
@@ -57,7 +103,8 @@ function Prompt-Password {
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Plink = Join-Path $Here "plink.exe"
 $Pscp = Join-Path $Here "pscp.exe"
-$Bundle = Get-ChildItem -Path $Here -Filter "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.2.tar.gz" -ErrorAction SilentlyContinue | Select-Object -First 1
+$BundleName = "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.3.tar.gz"
+$Bundle = Get-ChildItem -Path $Here -Filter $BundleName -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if (!(Test-Path $Plink) -or !(Test-Path $Pscp)) {
     Show-Error "The installer package is incomplete. plink.exe and pscp.exe must be beside this script."
@@ -112,42 +159,63 @@ $HostKeyArgs = @()
 try {
     Write-Host ""
     Write-Host "Checking SSH connection to $SshUser@$HostName`:$Port ..." -ForegroundColor Cyan
-    $base = @("-ssh","-P",$Port.ToString(),"-batch","-pwfile",$PwFile)
-    $probe = & $Plink @base "$SshUser@$HostName" "echo BLAZE_SSH_OK" 2>&1
-    $probeText = ($probe | Out-String)
 
-    if ($LASTEXITCODE -ne 0) {
-        $match = [regex]::Match($probeText, '(?m)(ssh-[A-Za-z0-9@._+-]+|ecdsa-[A-Za-z0-9@._+-]+)\s+\d+\s+SHA256:[A-Za-z0-9+/=]+')
+    $base = @("-ssh","-P",$Port.ToString(),"-batch","-pwfile",$PwFile)
+    $probeArgs = $base + @("$SshUser@$HostName","echo BLAZE_SSH_OK")
+    $probe = Invoke-NativeCapture -FilePath $Plink -Arguments $probeArgs
+
+    if ($probe.ExitCode -ne 0) {
+        # Typical PuTTY first-connection output contains:
+        # ssh-ed25519 255 SHA256:...
+        # ecdsa-sha2-nistp256 256 SHA256:...
+        # ssh-rsa 2048 SHA256:...
+        $match = [regex]::Match(
+            $probe.Output,
+            '(?im)(ssh-[A-Za-z0-9@._+-]+|ecdsa-[A-Za-z0-9@._+-]+)\s+\d+\s+SHA256:[A-Za-z0-9+/=]+'
+        )
+
         if (!$match.Success) {
-            Write-Host $probeText
-            Show-Error "SSH connection failed. Check the IP, SSH service, username and password."
+            Write-Host $probe.Output
+            Show-Error "SSH connection failed. Check the router IP, SSH service, username and password."
             exit 5
         }
 
         $fingerprint = $match.Value.Trim()
         $choice = [System.Windows.Forms.MessageBox]::Show(
-            "This is the first connection to this router.`r`n`r`nSSH host key:`r`n$fingerprint`r`n`r`nTrust this key for this installation?",
+            "First connection to this router.`r`n`r`nSSH host key:`r`n$fingerprint`r`n`r`nTrust this router and continue the installation?",
             "BlazePwifi Rental - Verify Router",
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Question
         )
         if ($choice -ne [System.Windows.Forms.DialogResult]::Yes) { exit 6 }
-        $HostKeyArgs = @("-hostkey",$fingerprint)
 
-        $probe = & $Plink @base @HostKeyArgs "$SshUser@$HostName" "echo BLAZE_SSH_OK" 2>&1
-        if ($LASTEXITCODE -ne 0 -or (($probe | Out-String) -notmatch "BLAZE_SSH_OK")) {
-            Write-Host ($probe | Out-String)
-            Show-Error "SSH authentication failed after host-key verification."
+        # Pin the accepted fingerprint for every remaining SSH/SCP operation.
+        # This avoids a second interactive PuTTY host-key prompt and does not
+        # require the user to open PuTTY or pre-cache anything manually.
+        $HostKeyArgs = @("-hostkey",$fingerprint)
+        $probeArgs = $base + $HostKeyArgs + @("$SshUser@$HostName","echo BLAZE_SSH_OK")
+        $probe = Invoke-NativeCapture -FilePath $Plink -Arguments $probeArgs
+
+        if ($probe.ExitCode -ne 0 -or $probe.Output -notmatch "BLAZE_SSH_OK") {
+            Write-Host $probe.Output
+            Show-Error "SSH authentication failed after router host-key verification."
             exit 7
         }
+    }
+    elseif ($probe.Output -notmatch "BLAZE_SSH_OK") {
+        Write-Host $probe.Output
+        Show-Error "SSH connected but the router did not return the expected validation response."
+        exit 7
     }
 
     Write-Host "SSH connection OK." -ForegroundColor Green
     Write-Host "Uploading Rental Standalone package..." -ForegroundColor Cyan
 
-    $scpArgs = @("-scp","-P",$Port.ToString(),"-batch","-pwfile",$PwFile) + $HostKeyArgs
-    & $Pscp @scpArgs $Bundle.FullName ("$SshUser@$HostName`:/tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.2.tar.gz")
-    if ($LASTEXITCODE -ne 0) {
+    $scpArgs = @("-scp","-P",$Port.ToString(),"-batch","-pwfile",$PwFile) + $HostKeyArgs +
+        @($Bundle.FullName,"$SshUser@$HostName`:/tmp/$BundleName")
+    $scp = Invoke-NativeCapture -FilePath $Pscp -Arguments $scpArgs
+    if ($scp.ExitCode -ne 0) {
+        Write-Host $scp.Output
         Show-Error "Package upload failed."
         exit 8
     }
@@ -156,16 +224,17 @@ try {
 set -e
 rm -rf /tmp/blazepwifi-rental-install
 mkdir -p /tmp/blazepwifi-rental-install
-tar -xzf /tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.2.tar.gz -C /tmp/blazepwifi-rental-install --strip-components=1
+tar -xzf /tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.0-rental-rc.3.tar.gz -C /tmp/blazepwifi-rental-install --strip-components=1
 cd /tmp/blazepwifi-rental-install
 sh ./install.sh --target=auto
 '@
 
     Write-Host ""
     Write-Host "Installing on OpenWrt..." -ForegroundColor Cyan
-    $installArgs = @("-ssh","-P",$Port.ToString(),"-batch","-pwfile",$PwFile) + $HostKeyArgs
-    & $Plink @installArgs "$SshUser@$HostName" $remote
-    $rc = $LASTEXITCODE
+    $installArgs = @("-ssh","-P",$Port.ToString(),"-batch","-pwfile",$PwFile) + $HostKeyArgs +
+        @("$SshUser@$HostName",$remote)
+    $rc = Invoke-NativeVisible -FilePath $Plink -Arguments $installArgs
+
     if ($rc -ne 0) {
         Show-Error "The router-side installer failed. Review the console output above. Existing network/Wi-Fi/firewall settings were not intentionally changed."
         exit $rc
