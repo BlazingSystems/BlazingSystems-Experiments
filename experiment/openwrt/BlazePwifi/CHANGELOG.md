@@ -11,6 +11,7 @@
 - Remote profiles never accept or expose a WireGuard private key. Saving a profile requires admin re-authentication and is serialized/crash-safe.
 - Live WireGuard/ZeroTier network/firewall activation remains intentionally safety-locked in dev.2. The profile can be validated/staged, but transport apply/rollback must pass a separate network-survival matrix before activation is enabled.
 - Browser runtime audit now exercises remote-profile save, password re-authentication, terminal enable/open/execute/close, dual CSRF transport and confirms no console errors.
+- Fixed a real Remote Access edit race where an unconditional delayed startup refresh could reset the selected mode while the operator was editing; remote configuration now loads only on page entry/explicit refresh/save, stale responses are suppressed, and the authoritative save response is rendered immediately.
 - Added dynamic console-operations security tests for password re-authentication, session binding, close/disable behavior, blocked commands, command concurrency, remote-profile validation and absence of private-key storage.
 - Development identity advanced to `0.5.3-dev.2` / Android versionCode `50291`; frozen v0.5.2 production/recovery workflows remain untouched.
 
