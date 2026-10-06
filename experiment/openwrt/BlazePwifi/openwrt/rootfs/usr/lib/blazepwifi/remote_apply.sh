@@ -359,12 +359,30 @@ bp_remote_admin_running() {
   /etc/init.d/blazepwifi-remote-admin running >/dev/null 2>&1
 }
 
+bp_remote_effective_admin_state() {
+  BP_REMOTE_EFFECTIVE_STATE=staged
+  BP_REMOTE_EFFECTIVE_LISTENER=""
+  mode="$(bp_remote_get mode disabled 2>/dev/null || printf disabled)"
+  case "$mode" in
+    wireguard)
+      BP_REMOTE_EFFECTIVE_STATE="$(bp_remote_runtime_get state staged)"
+      BP_REMOTE_EFFECTIVE_LISTENER="$(bp_remote_runtime_get wg_listener)"
+      ;;
+    zerotier)
+      if command -v bp_zt_get >/dev/null 2>&1; then
+        BP_REMOTE_EFFECTIVE_STATE="$(bp_zt_get state staged)"
+        BP_REMOTE_EFFECTIVE_LISTENER="$(bp_zt_get listener)"
+      fi
+      ;;
+  esac
+  export BP_REMOTE_EFFECTIVE_STATE BP_REMOTE_EFFECTIVE_LISTENER
+}
+
 bp_remote_admin_sync() {
-  state="$(bp_remote_runtime_get state staged)"
-  listener="$(bp_remote_runtime_get wg_listener)"
-  case "$state" in
+  bp_remote_effective_admin_state
+  case "$BP_REMOTE_EFFECTIVE_STATE" in
     active|active_staged_changes|applying)
-      if [ -n "$listener" ]; then
+      if [ -n "$BP_REMOTE_EFFECTIVE_LISTENER" ]; then
         bp_remote_admin_start || return 1
         bp_remote_admin_running || return 1
       else
