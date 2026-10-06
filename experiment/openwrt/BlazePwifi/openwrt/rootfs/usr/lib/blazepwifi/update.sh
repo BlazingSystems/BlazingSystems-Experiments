@@ -195,7 +195,9 @@ bp_update_apply() {
     version="$(bp_update_release_value "$release" VERSION)"
     [ -n "$version" ] || { echo "bundle version missing" >&2; rm -rf "$extracted"; bp_update_unlock; return 1; }
     previous="$(bp_update_current_version)"
-    grace="$(bp_update_release_value "$release" STABILITY_GRACE_SECONDS)"; [ -n "$grace" ] || grace=600
+    grace="$(uci -q get blazepwifi.main.update_stability_seconds 2>/dev/null || true)"
+    [ -n "$grace" ] || grace="$(bp_update_release_value "$release" STABILITY_GRACE_SECONDS)"
+    [ -n "$grace" ] || grace=600
     case "$grace" in ''|*[!0-9]*) grace=600;; esac
     [ -r "$BP_UPDATE_STABLE" ] || bp_update_write_env "$BP_UPDATE_STABLE" "VERSION=$previous" "PROMOTED_AT=$(date +%s)" "SOURCE=pre-update"
 
@@ -222,6 +224,21 @@ bp_update_apply() {
     return 0
 }
 
+bp_update_prune_snapshots() {
+    keep="$(uci -q get blazepwifi.main.update_retention 2>/dev/null || true)"
+    case "$keep" in ''|*[!0-9]*) keep=3;; esac
+    [ "$keep" -ge 1 ] 2>/dev/null || keep=1
+    protected="$(bp_update_env_get "$BP_UPDATE_LAST_ROLLBACK" SNAPSHOT_ID)"
+    count=0
+    for d in $(ls -1dt "$BP_UPDATE_ROOT"/snapshots/* 2>/dev/null || true); do
+        [ -d "$d" ] || continue
+        id="$(basename "$d")"
+        [ "$id" = "$protected" ] && continue
+        count=$((count+1))
+        [ "$count" -le "$keep" ] || rm -rf "$d"
+    done
+}
+
 bp_update_guard() {
     bp_update_init
     [ -r "$BP_UPDATE_PENDING" ] || return 0
@@ -243,6 +260,7 @@ bp_update_guard() {
         bp_update_write_env "$BP_UPDATE_STABLE" "VERSION=$version" "PROMOTED_AT=$now" "SOURCE=health-grace"
         rm -f "$BP_UPDATE_PENDING"
         bp_update_history stable "$version" "health-grace-passed"
+        bp_update_prune_snapshots
     fi
     return 0
 }
