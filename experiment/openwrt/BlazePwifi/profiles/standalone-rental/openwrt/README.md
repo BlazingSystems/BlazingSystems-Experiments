@@ -1,22 +1,31 @@
-# OpenWrt Rental Standalone — rc.2
+# OpenWrt Standalone Rental — v0.5.3-rental-rc.1
 
-The installer is intentionally **network-neutral**. It does not change the router's WAN, LAN, Wi-Fi, cellular, repeater or firewall UCI packages.
+Core baseline: BlazePwifi `0.5.3-dev.1`.
+
+The installer is intentionally network-neutral. Normal Standalone installation does not take ownership of WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration.
 
 After installation:
 
-- existing router/basic UI stays at whatever routes the device already uses;
-- BlazePwifi Rental management is added at `https://LocalIP/rental/`;
-- BlazeRental phones use `http://LocalIP` as their server URL;
-- authenticated remote ESP coinslot interfaces use `http://LocalIP:4455/cgi-bin/vendo`.
+- Rental console: `https://LocalIP/rental/`
+- BlazeRental server: `https://LocalIP`
+- Rental API: `https://LocalIP/cgi-bin/rental`
+- remote ESP coin API: `http://LocalIP:4455/cgi-bin/vendo`
 
-The complete BlazePwifi v0.5 payload is installed, but the hotspot core is disabled. Conversion to full BlazePwifi is explicit:
+## R281 / EasyMode
 
-```sh
-/usr/sbin/blazepwifi-rental-upgrade --full
-```
+The Windows installer detects `notion,r281` and invokes `install-r281.sh`.
 
-Only that conversion step is allowed to activate BlazePwifi firewall/hotspot ownership.
+The R281 adapter validates:
 
-Supported installer target hints are `r281`, `ew1200g-pro`, `generic`, and `auto` (default). OpenWrt 24.10.x and 25.12.x are accepted by the RC installer.
+- OpenWrt 24.10.x;
+- uHTTPd root `/www`;
+- CGI prefix `/cgi-bin`;
+- HTTPS :443.
 
-The preferred release path is the Windows one-click installer package; manual tarball installation remains supported.
+Archive extraction uses BusyBox-supported options only.
+
+## Device Owner provisioning
+
+The source tree fails closed without exact release metadata. Release CI injects `rental-provisioning.tsv` into the generated OpenWrt bundle only after building, signing, verifying, and hashing the exact TEST APK.
+
+That metadata is separate from the normal BlazeRental update channel.

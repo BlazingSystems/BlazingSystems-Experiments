@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.0-rental-rc.3"
+PROFILE_VERSION="0.5.3-rental-rc.1"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -97,7 +97,7 @@ for f in rental blaze-rental-admin blaze-rental-login blaze-rental-session blaze
 done
 
 if [ "$PREINSTALLED" -eq 0 ]; then
-  note "Installing complete BlazePwifi v0.5 payload; hotspot core remains dormant..."
+  note "Installing complete BlazePwifi 0.5.3-dev.1 payload; hotspot core remains dormant..."
   EXISTING_CFG=0
   [ -f /etc/config/blazepwifi ] && { EXISTING_CFG=1; cp -p /etc/config/blazepwifi "$BACKUP/blazepwifi.original"; }
   cp -a "$ROOTFS/." /
@@ -179,11 +179,53 @@ BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_
   sh -c '. "$BP_LIB"; . "$BP_AUTH_LIB"; . "$BP_RENTAL_LIB"; . "$BP_RENTAL_POLICY_LIB"; bp_init_dirs; bp_auth_init; bp_rental_init; bp_rental_policy_v2_init' \
   || die "Unable to initialize rental state."
 
+PROV_STATE=/etc/blazepwifi/state/rental-provisioning.tsv
+if [ -s "$SELF/rental-provisioning.tsv" ]; then
+  IFS="$(printf '\t')" read -r PV_VERSION PV_CODE PV_URL PV_SHA PV_CHANNEL PV_READY PV_SIGNER < "$SELF/rental-provisioning.tsv"
+  printf '%s' "$PV_VERSION" | grep -Eq '^[A-Za-z0-9._+-]{1,48}$' || die "Invalid provisioning APK version."
+  case "$PV_CODE" in ''|*[!0-9]*) die "Invalid provisioning APK version code.";; esac
+  [ "$PV_CODE" -gt 0 ] 2>/dev/null || die "Invalid provisioning APK version code."
+  case "$PV_URL" in https://*) ;; *) die "Provisioning APK URL must use HTTPS.";; esac
+  printf '%s' "$PV_URL" | grep -q '[[:space:][:cntrl:]]' && die "Invalid provisioning APK URL."
+  printf '%s' "$PV_SHA" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Invalid provisioning APK SHA-256."
+  case "$PV_CHANNEL" in test|production) ;; *) die "Invalid provisioning APK channel.";; esac
+  case "$PV_READY" in 0|1) ;; *) die "Invalid provisioning production-ready flag.";; esac
+  printf '%s' "$PV_SIGNER" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Invalid provisioning signer SHA-256."
+  [ "$PV_CHANNEL" != production ] || [ "$PV_READY" = 1 ] || die "Production provisioning channel must be production-ready."
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$PV_VERSION" "$PV_CODE" "$PV_URL" "$(printf '%s' "$PV_SHA" | tr A-F a-f)" \
+    "$PV_CHANNEL" "$PV_READY" "$(printf '%s' "$PV_SIGNER" | tr A-F a-f)" > "$PROV_STATE"
+  chmod 600 "$PROV_STATE"
+else
+  rm -f "$PROV_STATE"
+fi
+
 BOOT=""
 if ! grep -q "^admin$(printf '\t')" /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
-  BOOT="$(randhex 12)"
-  BP_LIB=/usr/lib/blazepwifi/common.sh /usr/lib/blazepwifi/auth.sh --set-bootstrap admin admin "$BOOT" || die "Unable to create administrator."
-  printf '%s\n' "$BOOT" > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
+  BOOT="admin"
+  BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh \
+  sh -c '
+    set -eu
+    . "$BP_LIB"
+    . "$BP_AUTH_LIB"
+    bp_auth_init
+    salt="$(bp_auth_random_hex 8 2>/dev/null || true)"
+    [ -n "$salt" ] || salt="$(printf "%s|%s|admin-default" "$(date +%s)" "$$" | bp_sha256 | cut -c1-16)"
+    rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"
+    case "$rounds" in ""|*[!0-9]*) rounds=2048;; esac
+    [ "$rounds" -ge 1 ] 2>/dev/null || rounds=2048
+    hash="$(bp_auth_sha256i admin "$salt" "$rounds")"
+    tmp="$BP_STATE/.admin-users.default.$$"
+    awk -F "\t" '"'"'$1!="admin"{print}'"'"' "$BP_ADMIN_USERS" > "$tmp"
+    printf "admin\tadmin\tsha256i\t%s\t%s\t%s\t0\n" "$salt" "$hash" "$rounds" >> "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$BP_ADMIN_USERS"
+    : > "$BP_ADMIN_SESSIONS"
+    : > "$BP_AUTH_FAILURES"
+    chmod 600 "$BP_ADMIN_SESSIONS" "$BP_AUTH_FAILURES"
+    bp_auth_verify_password admin admin
+  ' || die "Unable to create verified default administrator."
+  printf 'admin\n' > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
   chmod 600 /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 fi
 
@@ -234,21 +276,33 @@ chmod 600 /etc/blazepwifi/RENTAL_STANDALONE
   die "uHTTPd failed; configuration rolled back where possible."
 }
 
-OUT="$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=80 REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
+[ -s /etc/uhttpd.crt ] || die "HTTPS certificate was not created; Device Provisioning cannot be secured."
+command -v base64 >/dev/null 2>&1 || die "BusyBox/base64 support is required for certificate pinning."
+CERT_PIN="$(awk '/-----BEGIN CERTIFICATE-----/{on=1;next}/-----END CERTIFICATE-----/{exit}on{gsub(/[[:space:]]/,"");printf "%s",$0}' /etc/uhttpd.crt | base64 -d 2>/dev/null | sha256sum | awk '{print $1}')"
+printf '%s' "$CERT_PIN" | grep -Eq '^[0-9a-fA-F]{64}$' || die "Unable to fingerprint the local HTTPS certificate."
+
+OUT="$(printf 'action=status' | REQUEST_METHOD=POST SERVER_PORT=443 HTTPS=on REMOTE_ADDR=127.0.0.1 sh "$CGI_DIR/rental" 2>/dev/null || true)"
 printf '%s' "$OUT" | grep -q '"error":"missing authentication"' || die "BlazeRental API smoke test failed."
 
 echo
 echo "BlazePwifi Rental Standalone $PROFILE_VERSION installed."
 echo "Target:            $TARGET ($BOARD / $MODEL)"
 echo "Rental console:    https://$LAN_IP/rental/"
-echo "Android server:    http://$LAN_IP"
-echo "Android API:       http://$LAN_IP/cgi-bin/rental"
+echo "Android server:    https://$LAN_IP"
+echo "Android API:       https://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
+if [ -s /etc/blazepwifi/state/rental-provisioning.tsv ]; then
+  echo "Device provisioning: exact DPC channel available; HTTPS certificate pinned"
+  echo "Server cert SHA256: $CERT_PIN"
+else
+  echo "Device provisioning: unavailable (signed APK update channel not installed)"
+fi
 echo "Full server core:  installed but DISABLED"
 echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
 echo "Backup:            $BACKUP"
 echo "Admin username:    admin"
-[ -n "$BOOT" ] && echo "Bootstrap password: $BOOT"
+[ -n "$BOOT" ] && echo "Default password:   admin"
+[ -n "$BOOT" ] && echo "Change it later in Rental settings."
 echo
 echo "Existing root/admin UI preserved."
 echo "No network, wireless or firewall UCI package was modified."

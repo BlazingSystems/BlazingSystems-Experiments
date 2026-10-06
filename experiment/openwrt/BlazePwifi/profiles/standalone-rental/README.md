@@ -1,14 +1,12 @@
 # BlazePwifi Standalone Rental Server
 
-## Release status
+**Core baseline:** BlazePwifi `0.5.3-dev.1`  
+**Latest stable Rental line:** `v0.5.2-rental.1`  
+**Current provisioning/security candidate:** `v0.5.3-rental-rc.1`
 
-**Latest stable:** `v0.5.2-rental.1`
+This candidate reconciles the hardened Device Owner provisioning work from the 0.5.2 RC3 line with the newer 0.5.3 runtime.
 
-**Latest provisioning candidate:** `v0.5.2-rental.2-rc.2`
-
-The provisioning candidate intentionally remains a prerelease because its Device Owner APK is TEST-signed and real factory-reset Android Setup Wizard validation is still required.
-
-## Two different QR systems
+## Two separate Android onboarding modes
 
 ### Standard Enrollment QR
 
@@ -17,47 +15,47 @@ For phones where BlazeRental is already installed.
 - scanned inside BlazeRental;
 - schema `blazerental.enrollment.v1`;
 - binds the app to the Rental Server;
-- does **not** provision Android or grant Device Owner.
+- does **not** provision Android;
+- does **not** grant Device Owner.
 
-### Device Provisioning QR
+### Device Owner Provisioning QR
 
 For a new or factory-reset, owned/authorized Android phone.
 
 - scanned by Android Setup Wizard;
 - schema `blazerental.provisioning.v1`;
-- contains the exact DPC component, HTTPS APK URL, APK checksum, minimum version code, one-time server enrollment data, and optional Wi-Fi configuration;
-- Android installs/verifies BlazeRental and provisions Device Owner where supported;
-- BlazeRental must then successfully bind to the Rental Server before managed provisioning is considered complete.
+- exact DPC APK URL and Android provisioning checksum;
+- minimum APK version code;
+- pinned local BlazePwifi TLS certificate fingerprint;
+- one-time server enrollment data;
+- optional Wi-Fi configuration;
+- modern Android provisioning mode/compliance activities;
+- BlazeRental must finish server binding before provisioning is considered complete.
 
-These QR formats are deliberately incompatible. BlazeRental's in-app scanner rejects Device Provisioning payloads.
+The in-app scanner explicitly rejects Device Provisioning payloads.
 
-## RC2 audit status
+## Release candidate status
 
-`v0.5.2-rental.2-rc.2` passed:
+The RC builds an exact **TEST-signed** BlazeRental APK with release package ID `com.blazesystems.blazerental`.
 
-- Standalone Rental validation and release pipeline;
-- exact TEST APK build/signature/package/version verification;
-- OpenWrt bundle and Windows OneClick packaging;
-- R281/BusyBox compatibility gates;
-- ESP8266 and ESP32 builds;
-- EW1200G Pro and x86 images;
-- repository-wide BlazePwifi validation;
-- persistence/replay stress tests;
-- browser, x86, Ruijie, Orange Pi, ESP, and Android emulator simulations.
+`production_ready=false` remains mandatory. Do not promote Device Owner provisioning to stable until:
 
-The Android emulator audit is useful compatibility coverage, but it is **not** represented as proof of factory-reset Setup Wizard QR provisioning.
+1. the exact hardened APK is signed by the locked production identity;
+2. a physical factory-reset Android device completes Setup Wizard provisioning;
+3. Device Owner is confirmed;
+4. BlazeRental binds to the server and completes policy sync;
+5. representative older Android and Android 12+ provisioning paths are tested.
 
-## Credentials
+## R281/OpenWrt safety
 
-Fresh Standalone Rental installation:
+The current Windows OneClick installer:
 
-```text
-Username: admin
-Password: admin
-```
+- detects `notion,r281` and uses the dedicated R281/EasyMode path;
+- uses BusyBox-compatible archive extraction;
+- never uses GNU `tar --strip-components`;
+- retains BusyBox-safe locking;
+- keeps Standalone installation network-neutral.
 
-The Windows package also includes the one-click administrator reset tool for Standalone Rental and full BlazePwifi.
+Standalone installation does not intentionally modify OpenWrt `network`, `wireless`, or `firewall` UCI packages.
 
-## Standalone boundary
-
-Standalone installation preserves the router's existing network, wireless, and firewall configuration. Full-network behavior remains gated behind explicit conversion to full BlazePwifi.
+Fresh Rental console credentials remain `admin / admin`. The Windows package also includes the one-click admin reset BAT.

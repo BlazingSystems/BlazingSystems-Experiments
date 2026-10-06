@@ -87,11 +87,46 @@ bp_admin_sha256_b64url() {
   '
 }
 
+BP_RENTAL_PROVISIONING_FILE="${BP_RENTAL_PROVISIONING_FILE:-/etc/blazepwifi/state/rental-provisioning.tsv}"
+
+bp_admin_provisioning_line() {
+  [ -r "$BP_RENTAL_PROVISIONING_FILE" ] || return 0
+  head -n1 "$BP_RENTAL_PROVISIONING_FILE"
+}
+
+bp_admin_provisioning_read() {
+  line="$(bp_admin_provisioning_line)"
+  [ -n "$line" ] || return 1
+  IFS="$(printf '\t')" read -r apk_version apk_code apk_url apk_sha apk_channel production_ready signer_sha <<EOF
+$line
+EOF
+  printf '%s' "$apk_version" | grep -Eq '^[A-Za-z0-9._+-]{1,48}$' || return 2
+  case "$apk_code" in ''|*[!0-9]*) return 2;; esac
+  [ "$apk_code" -gt 0 ] 2>/dev/null || return 2
+  case "$apk_url" in https://*) ;; *) return 2;; esac
+  printf '%s' "$apk_url" | grep -q '[[:space:][:cntrl:]]' && return 2
+  printf '%s' "$apk_sha" | grep -Eq '^[0-9a-fA-F]{64}$' || return 2
+  case "$apk_channel" in test|production) ;; *) return 2;; esac
+  case "$production_ready" in 0|1) ;; *) return 2;; esac
+  printf '%s' "$signer_sha" | grep -Eq '^[0-9a-fA-F]{64}$' || return 2
+  [ "$apk_channel" != production ] || [ "$production_ready" = 1 ] || return 2
+  apk_sha="$(printf '%s' "$apk_sha" | tr A-F a-f)"
+  signer_sha="$(printf '%s' "$signer_sha" | tr A-F a-f)"
+  return 0
+}
+
 bp_admin_provisioning_payload() {
   server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"; cert_pin="$7"
-  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}}' \
+  ssid="$8"; security="$9"; wifi_password="${10}"; hidden="${11}"
+  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
     "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$checksum")" "${version_code:-0}" \
     "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
+  if [ -n "$ssid" ]; then
+    printf ',"android.app.extra.PROVISIONING_WIFI_SSID":"%s","android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE":"%s","android.app.extra.PROVISIONING_WIFI_HIDDEN":%s' \
+      "$(bp_json_escape "$ssid")" "$(bp_json_escape "$security")" "$hidden"
+    [ "$security" = NONE ] || printf ',"android.app.extra.PROVISIONING_WIFI_PASSWORD":"%s"' "$(bp_json_escape "$wifi_password")"
+  fi
+  printf '}'
 }
 require_role() {
 	need="$1"
@@ -107,7 +142,8 @@ case "$action" in
     require_role operator
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
-    label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
+    label="$(bp_rental_clean "$(bp_param label)")"; [ -n "$label" ] || label="Rental phone"
+    label="$(printf '%s' "$label" | cut -c1-64)"
     token="$(bp_rental_enroll_create "$label" 600)"
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
@@ -116,31 +152,60 @@ case "$action" in
     bp_json "$(printf '{"ok":true,"qr_type":"binding","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","qr_payload":"%s"}' \
       "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$qr_payload")")"
     ;;
-  rental_provisioning_qr)
-    require_role operator
-    bp_auth_csrf_ok || bp_fail "csrf validation failed"
-    command -v bp_rental_update_line >/dev/null 2>&1 || bp_fail "rental update subsystem unavailable"
-    bp_rental_init
-    label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
+  rental_provisioning_status)
+    require_role viewer
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
     case "$server" in https://*) ;; *) bp_fail "Device Owner provisioning server URL must use HTTPS";; esac
-    update_line="$(bp_rental_update_line)"
-    [ -n "$update_line" ] || bp_fail "publish the signed BlazeRental update channel before provisioning"
-    IFS="$(printf '\t')" read -r apk_version apk_code apk_url apk_sha rollback_version rollback_code rollback_url rollback_sha <<EOF
-$update_line
-EOF
-    case "$apk_code" in ''|*[!0-9]*) bp_fail "invalid published BlazeRental version code";; esac
-    [ "$apk_code" -gt 0 ] 2>/dev/null || bp_fail "invalid published BlazeRental version code"
-    case "$apk_url" in https://*) ;; *) bp_fail "provisioning APK URL must use HTTPS";; esac
+    if bp_admin_provisioning_read; then
+      :
+    else
+      rc=$?
+      [ "$rc" -eq 1 ] && {
+        bp_json '{"ok":true,"ready":false,"production_ready":false,"error":"exact Device Owner provisioning APK metadata is not installed"}'
+        exit 0
+      }
+      bp_fail "invalid Device Owner provisioning metadata"
+    fi
     checksum="$(bp_admin_sha256_b64url "$apk_sha")" || bp_fail "unable to encode provisioning APK checksum"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
     [ -n "$cert_pin" ] || bp_fail "Device Owner provisioning requires the local pinned admin certificate"
-    token="$(bp_rental_enroll_create "$label" 600)"
-    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code" "$cert_pin")"
-    bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label:$apk_version" | cut -c1-96)"
-    bp_json "$(printf '{"ok":true,"qr_type":"device_owner","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_checksum":"%s","qr_payload":"%s"}' \
-      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" \
-      "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$checksum")" "$(bp_json_escape "$qr_payload")")"
+    bp_json "$(printf '{"ok":true,"ready":true,"apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_sha256":"%s","apk_checksum":"%s","apk_channel":"%s","production_ready":%s,"signer_sha256":"%s","server_url":"%s","server_cert_sha256":"%s","dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
+      "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_sha")" "$(bp_json_escape "$checksum")" "$(bp_json_escape "$apk_channel")" "$production_ready" "$(bp_json_escape "$signer_sha")" "$(bp_json_escape "$server")" "$(bp_json_escape "$cert_pin")")"
+    ;;
+  rental_provisioning_qr)
+    require_role operator
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    bp_rental_init
+    label="$(bp_rental_clean "$(bp_param label)")"; [ -n "$label" ] || label="Rental phone"
+    label="$(printf '%s' "$label" | cut -c1-64)"
+    server="$(bp_admin_server_url)" || bp_fail "invalid server url"
+    case "$server" in https://*) ;; *) bp_fail "Device Owner provisioning server URL must use HTTPS";; esac
+    bp_admin_provisioning_read || bp_fail "Device Owner provisioning unavailable: exact current DPC metadata missing or invalid"
+    checksum="$(bp_admin_sha256_b64url "$apk_sha")" || bp_fail "unable to encode provisioning APK checksum"
+    cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
+    [ -n "$cert_pin" ] || bp_fail "Device Owner provisioning requires the local pinned admin certificate"
+    ssid="$(bp_param wifi_ssid)"
+    security="$(bp_param wifi_security)"
+    wifi_password="$(bp_param wifi_password)"
+    case "$(bp_param wifi_hidden)" in 1|true|yes|on) hidden=true;; *) hidden=false;; esac
+    if [ -n "$ssid" ]; then
+      case "$security" in NONE|WPA|WEP) ;; *) bp_fail "wifi security must be NONE, WPA or WEP";; esac
+      [ "$security" = NONE ] || [ -n "$wifi_password" ] || bp_fail "wifi password required"
+      printf '%s' "$ssid" | grep -q '[[:cntrl:]]' && bp_fail "invalid wifi ssid"
+      printf '%s' "$wifi_password" | grep -q '[[:cntrl:]]' && bp_fail "invalid wifi password"
+      [ "$(printf '%s' "$ssid" | wc -c)" -le 64 ] || bp_fail "wifi ssid too long"
+      [ "$(printf '%s' "$wifi_password" | wc -c)" -le 128 ] || bp_fail "wifi password too long"
+    else
+      security=""
+      wifi_password=""
+      hidden=false
+    fi
+    token="$(bp_rental_enroll_create "$label" 3600)"
+    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code" "$cert_pin" "$ssid" "$security" "$wifi_password" "$hidden")"
+    bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label:$apk_version:$apk_channel" | cut -c1-120)"
+    bp_json "$(printf '{"ok":true,"qr_type":"device_owner","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","server_cert_sha256":"%s","device_name":"%s","apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_sha256":"%s","apk_checksum":"%s","apk_channel":"%s","production_ready":%s,"signer_sha256":"%s","qr_payload":"%s"}' \
+      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$cert_pin")" "$(bp_json_escape "$label")" \
+      "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_sha")" "$(bp_json_escape "$checksum")" "$(bp_json_escape "$apk_channel")" "$production_ready" "$(bp_json_escape "$signer_sha")" "$(bp_json_escape "$qr_payload")")"
     ;;
   rental_list|rental_device_list)
     require_role viewer
