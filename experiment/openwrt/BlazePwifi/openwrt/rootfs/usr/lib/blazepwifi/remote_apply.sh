@@ -414,13 +414,19 @@ bp_remote_pending_clear() {
   bp_durable_sync
 }
 
+bp_remote_pending_owned() {
+  id="$1"
+  line="$(bp_remote_pending_read 2>/dev/null || true)"
+  [ "$(printf '%s' "$line" | cut -f1)" = "$id" ]
+}
+
 bp_remote_guard_spawn() {
   id="$1"
   if [ -n "${BP_REMOTE_GUARD_HOOK:-}" ]; then
     BP_REMOTE_GUARD_ID="$id" sh -c "$BP_REMOTE_GUARD_HOOK"
     return
   fi
-  seconds="${BP_REMOTE_GUARD_SECONDS:-60}"
+  seconds="${BP_REMOTE_GUARD_SECONDS:-90}"
   (
     sleep "$seconds"
     /usr/sbin/blazepwifi-remote-guard "$id"
@@ -597,14 +603,21 @@ bp_remote_wireguard_apply() {
   bp_remote_guard_spawn "$id"
 
   if ! bp_remote_wg_write_uci; then bp_remote_rollback_pending "$id" uci-write-failed; return 24; fi
+  bp_remote_pending_owned "$id" || return 30
   bp_remote_ifdown || true
   bp_remote_wg_link_delete || true
   if ! bp_remote_wg_link_precreate; then bp_remote_rollback_pending "$id" interface-create-failed; return 25; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_ifup; then bp_remote_rollback_pending "$id" interface-up-failed; return 25; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_firewall_reload; then bp_remote_rollback_pending "$id" firewall-reload-failed; return 26; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_wg_wait_health; then bp_remote_rollback_pending "$id" handshake-timeout; return 27; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_wg_listener_apply; then bp_remote_rollback_pending "$id" admin-listener-failed; return 28; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" route-survival-failed; return 29; fi
+  bp_remote_pending_owned "$id" || return 30
 
   bp_remote_lock || { bp_remote_rollback_pending "$id" finalize-lock-failed; return 30; }
   line="$(bp_remote_pending_read 2>/dev/null || true)"
@@ -646,12 +659,17 @@ bp_remote_wireguard_disable() {
   bp_remote_guard_spawn "$id"
 
   if ! bp_remote_admin_stop; then bp_remote_rollback_pending "$id" disable-admin-stop-failed; return 28; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_wireguard_remove_uci; then bp_remote_rollback_pending "$id" disable-uci-failed; return 24; fi
+  bp_remote_pending_owned "$id" || return 30
   bp_remote_ifdown || true
   bp_remote_wg_link_delete || true
   if ! bp_remote_network_reload; then bp_remote_rollback_pending "$id" disable-network-reload-failed; return 25; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_firewall_reload; then bp_remote_rollback_pending "$id" disable-firewall-failed; return 26; fi
+  bp_remote_pending_owned "$id" || return 30
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" disable-route-survival-failed; return 29; fi
+  bp_remote_pending_owned "$id" || return 30
 
   bp_remote_lock || { bp_remote_rollback_pending "$id" disable-finalize-lock-failed; return 30; }
   bp_remote_pending_clear
