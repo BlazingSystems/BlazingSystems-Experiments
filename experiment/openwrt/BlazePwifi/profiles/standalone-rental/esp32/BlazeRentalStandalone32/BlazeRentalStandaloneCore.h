@@ -118,7 +118,7 @@ private:
 #ifdef ESP8266
     br_sha256_context c;br_sha256_init(&c);br_sha256_update(&c,data,len);br_sha256_out(&c,out);
 #else
-    mbedtls_sha256_context c;mbedtls_sha256_init(&c);mbedtls_sha256_starts_ret(&c,0);mbedtls_sha256_update_ret(&c,data,len);mbedtls_sha256_finish_ret(&c,out);mbedtls_sha256_free(&c);
+    mbedtls_sha256_context c;mbedtls_sha256_init(&c);mbedtls_sha256_starts(&c,0);mbedtls_sha256_update(&c,data,len);mbedtls_sha256_finish(&c,out);mbedtls_sha256_free(&c);
 #endif
   }
   String hex32(const uint8_t b[32]){static const char*h="0123456789abcdef";String o;o.reserve(64);for(int i=0;i<32;i++){o+=h[b[i]>>4];o+=h[b[i]&15];}return o;}
@@ -132,8 +132,8 @@ private:
     br_sha256_context c;br_sha256_init(&c);br_sha256_update(&c,in,64);br_sha256_update(&c,msg.c_str(),msg.length());br_sha256_out(&c,inner);
     br_sha256_init(&c);br_sha256_update(&c,outp,64);br_sha256_update(&c,inner,32);uint8_t fin[32];br_sha256_out(&c,fin);
 #else
-    mbedtls_sha256_context c;mbedtls_sha256_init(&c);mbedtls_sha256_starts_ret(&c,0);mbedtls_sha256_update_ret(&c,in,64);mbedtls_sha256_update_ret(&c,(const unsigned char*)msg.c_str(),msg.length());mbedtls_sha256_finish_ret(&c,inner);
-    mbedtls_sha256_starts_ret(&c,0);mbedtls_sha256_update_ret(&c,outp,64);mbedtls_sha256_update_ret(&c,inner,32);uint8_t fin[32];mbedtls_sha256_finish_ret(&c,fin);mbedtls_sha256_free(&c);
+    mbedtls_sha256_context c;mbedtls_sha256_init(&c);mbedtls_sha256_starts(&c,0);mbedtls_sha256_update(&c,in,64);mbedtls_sha256_update(&c,(const unsigned char*)msg.c_str(),msg.length());mbedtls_sha256_finish(&c,inner);
+    mbedtls_sha256_starts(&c,0);mbedtls_sha256_update(&c,outp,64);mbedtls_sha256_update(&c,inner,32);uint8_t fin[32];mbedtls_sha256_finish(&c,fin);mbedtls_sha256_free(&c);
 #endif
     return hex32(fin);
   }
