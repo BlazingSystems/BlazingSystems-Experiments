@@ -12,7 +12,7 @@ Starting with BlazeRental **v0.5.2**, production releases use:
 - Frozen application candidate: `bf2992977fe8504d21b107df02826032c31d3a62`
 - Validated build run: `37443570618`
 
-The exact production certificate fingerprint is written here and to the release after the one-time Lineage-2 signing run succeeds.
+The one-time Lineage-2 signing run succeeded. The fingerprint below is now permanent for all future BlazeRental production APKs.
 
 ## Recovery architecture
 
@@ -94,6 +94,16 @@ The v0.5.2 Lineage-2 certificate intentionally replaces the abandoned old v0.4 p
 
 Devices carrying BlazeRental signed by the old v0.4 certificate cannot perform an ordinary in-place APK signature update to Lineage 2. Reprovision/factory reset is required for migration. Once provisioned with v0.5.2 Lineage 2, future releases must keep this Lineage-2 certificate.
 
+## Verified signing creation and recovery
+
+- Signing workflow run: `37448352082` — PASS
+- Signing artifact: `11404278200`
+- Recovery A end-to-end decrypt/P12 fingerprint drill: PASS
+- Recovery B end-to-end decrypt/P12 fingerprint drill: PASS
+- Signed BlazeRental SHA-256: `d0ad20bed00ea304db9bff45928542fed574070d416ed65b4fbf3d8ba23d7102`
+- Signed rollback-rescue SHA-256: `a1c8d759405842b85879c77e9525b1a6e9c4f6d62eb8bda9b0abc60fb899d513`
+
 ## Production certificate fingerprint
 
-`PENDING_ONE_TIME_V052_LINEAGE2_SIGNING`
+
+`1A:18:D5:8E:1F:95:55:96:89:10:20:71:F5:6C:93:E9:B9:D2:EA:6B:E4:0E:6F:20:70:06:C9:89:62:A1:6A:25`
