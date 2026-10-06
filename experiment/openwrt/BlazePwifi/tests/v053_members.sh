@@ -125,5 +125,10 @@ grep -Fq 'Pisonet Members' "$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
 grep -Fq 'BlazeMembers' "$ROOT/openwrt/rootfs/www/blazepwifi/admin/members.js"
 grep -Fq 'member_password)' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
 grep -Fq 'member_snapshot)' "$VENDO"
+[ "$(grep -c '^  coin)' "$VENDO")" -eq 1 ]
+[ "$(grep -c '^  member_snapshot)' "$VENDO")" -eq 1 ]
+[ "$(grep -c 'unknown vendo action' "$VENDO")" -eq 1 ]
+! grep -Fq '\${BP_AUTH_MUST_CHANGE' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
+! grep -Fq '"hash":"%s"' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/member.sh"
 
 echo 'BlazePwifi v0.5.3-dev.3 centralized SoftTimer member checks passed'
