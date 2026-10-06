@@ -73,6 +73,7 @@ Full firmware/sysupgrade remains reserved for base-system changes such as kernel
 - Pull request `#14` — merged.
 - Main merge commit: `1aa8926563e6dccb6a512a035e8f6f662b997d57`.
 - Main merge tree: `f1c0194f8039577bad88a6e93b02d9b837e228c2`, exactly matching the green integration tree.
+- Post-merge main build run: `37427339687` — PASS, including Android Device Owner emulator, x86 QEMU and final candidate gate.
 - All 19 newer main-only standalone-rental/release files were preserved byte-for-byte.
 - Superseded conflicting PR `#13` was closed without merging.
 - GitHub Release `v0.5.1` remains pinned to exact candidate `65f87d775793a1fdc09a9522cf752349f68c3b41`; main integration did not retag or rewrite the release.

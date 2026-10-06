@@ -55,6 +55,11 @@ Main merge commit:
 The merge tree is exactly the already-green integration tree:
 `f1c0194f8039577bad88a6e93b02d9b837e228c2`
 
+Post-merge `main` build run:
+`37427339687`
+
+Result: **PASS**, including Android Device Owner emulator, x86 QEMU and final candidate gate.
+
 Superseded PR #13 was closed without merging.
 
 ## Release identity
@@ -86,7 +91,7 @@ When the exact locked v0.4 signer is restored:
 2. Read the newest handover log, especially 2026-10-06-v051-release-published.md and 2026-10-06-v051-main-integrated.md.
 3. Verify main contains merge commit 1aa8926563e6dccb6a512a035e8f6f662b997d57 or a descendant.
 4. Verify the v0.5.1 implementation is present on main and the 19 standalone-rental/release files remain present.
-5. Verify integration run 37426701445 passed for reconciled SHA e081c6bdfc41d22ac07f918c4cbc62a745bca883, including Android Device Owner, x86 QEMU and final candidate gate.
+5. Verify integration run 37426701445 passed for reconciled SHA e081c6bdfc41d22ac07f918c4cbc62a745bca883, and post-merge main run 37427339687 passed for merge SHA 1aa8926563e6dccb6a512a035e8f6f662b997d57, including Android Device Owner, x86 QEMU and final candidate gates.
 6. Verify GitHub Release v0.5.1 still targets exact published candidate 65f87d775793a1fdc09a9522cf752349f68c3b41 and remains prerelease unless the exact production signer has since been restored.
 7. Verify build run 37425063793 and release run 37426030884 remain successful.
 8. Preserve transactional no-reflash updates, last-known-good rollback, boot health guard, v0.5.0 bootstrap updater, same-signer Rental APK verification, health promotion and rescue APK architecture.
