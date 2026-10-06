@@ -31,10 +31,28 @@ bp_admin_server_url() {
   printf 'https://%s' "$host"
 }
 
+bp_admin_cert_sha256() {
+  cert="${BP_ADMIN_CERT:-/etc/uhttpd.crt}"
+  [ -r "$cert" ] || return 1
+  command -v base64 >/dev/null 2>&1 || return 1
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  digest="$(awk '/-----BEGIN CERTIFICATE-----/{on=1;next}/-----END CERTIFICATE-----/{exit}on{gsub(/[[:space:]]/,"");printf "%s",$0}' "$cert" | base64 -d 2>/dev/null | sha256sum 2>/dev/null | awk '{print $1}')"
+  [ "$(printf '%s' "$digest" | wc -c)" -eq 64 ] || return 1
+  case "$digest" in *[!0-9a-fA-F]*) return 1;; esac
+  printf '%s' "$digest" | tr A-F a-f
+}
+
+bp_admin_local_cert_pin() {
+  server="$1"
+  host="${HTTP_HOST:-}"
+  [ -n "$host" ] || host="${SERVER_NAME:-blazepwifi.local}:$admin_port"
+  [ "$server" = "https://$host" ] || { printf ''; return 0; }
+  bp_admin_cert_sha256
+}
 bp_admin_binding_payload() {
-  server="$1"; token="$2"; label="$3"
-  printf '{"server_url":"%s","enrollment_token":"%s","device_name":"%s"}' \
-    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+  server="$1"; token="$2"; label="$3"; cert_pin="$4"
+  printf '{"server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
 }
 
 bp_admin_sha256_b64url() {
@@ -70,10 +88,10 @@ bp_admin_sha256_b64url() {
 }
 
 bp_admin_provisioning_payload() {
-  server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"
-  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"server_url":"%s","enrollment_token":"%s","device_name":"%s"}}' \
+  server="$1"; token="$2"; label="$3"; apk_url="$4"; checksum="$5"; version_code="$6"; cert_pin="$7"
+  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}}' \
     "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$checksum")" "${version_code:-0}" \
-    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
 }
 require_role() {
 	need="$1"
@@ -92,7 +110,8 @@ case "$action" in
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
     token="$(bp_rental_enroll_create "$label" 600)"
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
-    qr_payload="$(bp_admin_binding_payload "$server" "$token" "$label")"
+    cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
+    qr_payload="$(bp_admin_binding_payload "$server" "$token" "$label" "$cert_pin")"
     bp_auth_audit rental_binding_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
     bp_json "$(printf '{"ok":true,"qr_type":"binding","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","qr_payload":"%s"}' \
       "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$qr_payload")")"
@@ -114,8 +133,10 @@ EOF
     [ "$apk_code" -gt 0 ] 2>/dev/null || bp_fail "invalid published BlazeRental version code"
     case "$apk_url" in https://*) ;; *) bp_fail "provisioning APK URL must use HTTPS";; esac
     checksum="$(bp_admin_sha256_b64url "$apk_sha")" || bp_fail "unable to encode provisioning APK checksum"
+    cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
+    [ -n "$cert_pin" ] || bp_fail "Device Owner provisioning requires the local pinned admin certificate"
     token="$(bp_rental_enroll_create "$label" 600)"
-    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code")"
+    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label:$apk_version" | cut -c1-96)"
     bp_json "$(printf '{"ok":true,"qr_type":"device_owner","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_checksum":"%s","qr_payload":"%s"}' \
       "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" \
