@@ -357,6 +357,20 @@ bp_remote_snapshot_create() {
   return 0
 }
 
+bp_remote_snapshot_delete() {
+  id="$1"
+  case "$id" in ''|*[!A-Za-z0-9._-]*) return 1;; esac
+  rm -rf "$BP_REMOTE_APPLY_ROOT/snapshots/$id"
+}
+
+bp_remote_snapshot_cleanup_orphans() {
+  [ ! -e "$BP_REMOTE_PENDING" ] || return 0
+  for snap in "$BP_REMOTE_APPLY_ROOT"/snapshots/*; do
+    [ -d "$snap" ] || continue
+    rm -rf "$snap"
+  done
+}
+
 bp_remote_config_restore_file() {
   snap="$1"; name="$2"; file="$3"
   if [ -f "$snap/$name.absent" ]; then
@@ -534,6 +548,7 @@ bp_remote_rollback_pending() {
     restored_handshake="$(bp_remote_runtime_get last_handshake 0)"
     bp_remote_runtime_write "$restored_state" "$restored_id" "$restored_profile" "$restored_applied" "$reason" \
       "$restored_listener" "$restored_public" "$restored_handshake"
+    bp_remote_snapshot_delete "$id" || true
     bp_remote_unlock
     return 0
   fi
@@ -553,7 +568,10 @@ bp_remote_guard() {
 bp_remote_guard_boot() {
   line="$(bp_remote_pending_read 2>/dev/null || true)"
   id="$(printf '%s' "$line" | cut -f1)"
-  [ -n "$id" ] || return 0
+  if [ -z "$id" ]; then
+    bp_remote_snapshot_cleanup_orphans
+    return 0
+  fi
   bp_remote_rollback_pending "$id" reboot-during-apply
 }
 
@@ -711,6 +729,7 @@ bp_remote_wireguard_apply() {
   listener="${BP_REMOTE_NEW_LISTENER:-}"
   bp_remote_pending_clear
   bp_remote_runtime_write active "$id" "$profile_sha" "$(bp_now)" "" "$listener" "$public" "$handshake"
+  bp_remote_snapshot_delete "$id" || true
   bp_remote_unlock
   return 0
 }
@@ -759,6 +778,7 @@ bp_remote_wireguard_disable() {
   bp_remote_lock || { bp_remote_rollback_pending "$id" disable-finalize-lock-failed; return 30; }
   bp_remote_pending_clear
   bp_remote_runtime_write staged "$id" "$profile_sha" "$(bp_now)" "" "" "$public" 0
+  bp_remote_snapshot_delete "$id" || true
   bp_remote_unlock
   return 0
 }
@@ -1065,6 +1085,7 @@ bp_remote_zerotier_apply() {
   bp_remote_zt_runtime_write 1 "$(bp_remote_get zt_network_id)" "$BP_REMOTE_ZT_NODE_ID" "$BP_REMOTE_ZT_IF" "$BP_REMOTE_ZT_ADDR" OK
   bp_remote_pending_clear
   bp_remote_runtime_write active "$id" "$profile_sha" "$(bp_now)" "" "$listener" "$(bp_remote_runtime_get public_key)" 0
+  bp_remote_snapshot_delete "$id" || true
   bp_remote_unlock
 }
 
@@ -1100,6 +1121,7 @@ bp_remote_zerotier_disable() {
   bp_remote_pending_clear
   bp_remote_zt_runtime_write 0 "$zt_nwid" "$zt_node" "" "" staged
   bp_remote_runtime_write staged "$id" "$profile_sha" "$(bp_now)" "" "" "$(bp_remote_runtime_get public_key)" 0
+  bp_remote_snapshot_delete "$id" || true
   bp_remote_unlock
 }
 
