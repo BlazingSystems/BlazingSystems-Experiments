@@ -23,6 +23,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -68,6 +69,7 @@ public class BlazeAdminActivity extends Activity {
 
     private void showInitialSetup() {
         content = page();
+        addBrandHeader();
         content.addView(title("BlazeRental Initial Setup"));
         content.addView(label("Choose daily-driver or rental operation, configure administrator "
                 + "protection, and optionally bind this phone to BlazePwifi."));
@@ -209,6 +211,7 @@ public class BlazeAdminActivity extends Activity {
 
     private void showDashboard() {
         content = page();
+        addBrandHeader();
         content.addView(title("BlazeRental Control Center"));
         content.addView(label("Native BlazeRental administration · v0.5.2 Launcher Edition"));
 
@@ -795,6 +798,17 @@ public class BlazeAdminActivity extends Activity {
         } else if (request == REQUEST_DEVICE_ADMIN) {
             showInitialSetup();
         }
+    }
+
+    private void addBrandHeader() {
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.blaze_lcm_brand);
+        logo.setAdjustViewBounds(true);
+        logo.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(112));
+        lp.setMargins(0, 0, 0, dp(12));
+        content.addView(logo, lp);
     }
 
     private ScrollView wrap(View child) {
