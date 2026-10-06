@@ -176,7 +176,10 @@ EOF
       IFS="$(printf '\t')" read -r active_device active_mac active_nonce active_expires active_vendo active_kind < "$active_file"
       [ "$active_device" = "$did" ] || continue
       [ "${active_kind:-hotspot}" = rental ] || continue
-      [ "${active_expires:-0}" -gt "$now" ] 2>/dev/null || continue
+      if ! [ "${active_expires:-0}" -gt "$now" ] 2>/dev/null; then
+        rm -f "$active_file" "$BP_TARGET_DIR/$active_vendo.progress"
+        continue
+      fi
       progress_file="$BP_TARGET_DIR/$active_vendo.progress"
       received_pulses=0
       [ -r "$progress_file" ] && received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
