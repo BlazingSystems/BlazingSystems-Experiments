@@ -5,6 +5,8 @@ on:
     branches: [blazepwifi-rental-v0.5.2-rc2]
     paths:
       - 'experiment/openwrt/BlazePwifi/profiles/standalone-rental/**'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/**'
+      - 'experiment/openwrt/BlazePwifi/tests/**'
       - 'experiment/openwrt/BlazePwifi/releases/0.5.2-rental-rc.2/**'
       - '.github/workflows/blazepwifi-rental-release.yml'
   workflow_dispatch:
