@@ -38,6 +38,8 @@ jobs:
         run: sh "$PROFILE/tests/static.sh"
       - name: Provisioning split and one-time enrollment race validation
         run: sh experiment/openwrt/BlazePwifi/tests/provisioning_split.sh
+      - name: Rental server enrollment lifecycle validation
+        run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Confirm BlazePwifi 0.5.2 rental protocol baseline
         run: |
           set -euo pipefail
