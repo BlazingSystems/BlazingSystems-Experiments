@@ -143,11 +143,11 @@ jobs:
           test -n "$BOOTSTRAP" -a -s "$BOOTSTRAP" -a -n "$BOOTSTRAP_SHA" -a -s "$BOOTSTRAP_SHA"
           cp "$BOOTSTRAP" release-out/BlazePwifi-v0.5.2-update-bootstrap.sh
           cp "$BOOTSTRAP_SHA" release-out/BlazePwifi-v0.5.2-update-bootstrap.sh.sha256
-          cp experiment/openwrt/BlazePwifi/releases/0.5.1/README.md release-out/README.md
+          cp experiment/openwrt/BlazePwifi/releases/0.5.2/README.md release-out/README.md
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           cp "$GATE" release-out/CANDIDATE-GATE.json
           jq -n --arg release "0.5.1" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" \
-            '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:($sign!="0"),transactional_update:"blazepwifi-overlay-v1",rollback_rescue:"0.5.0-rescue-for-0.5.1",android_package:"com.blazesystems.blazerental"}' \
+            '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:($sign!="0"),transactional_update:"blazepwifi-overlay-v1",rollback_rescue:"0.5.1-rescue-for-0.5.2",android_package:"com.blazesystems.blazerental"}' \
             > release-out/RELEASE-MANIFEST.json
           (cd release-out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
