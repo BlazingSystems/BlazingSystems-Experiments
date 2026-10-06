@@ -301,10 +301,10 @@ with sync_playwright() as p:
     assert ("TailAdmin" in system_text
             or ("System & Security" in system_text and "Security posture" in system_text))
 
-    # dev.2 Remote Access control plane: authenticated profile save, staged-only apply.
+    # dev.3 Remote Access control plane: authenticated staging plus guarded WireGuard activation.
     page.click('[data-page="remote"]')
     page.wait_for_selector("#page-remote.active")
-    page.wait_for_function("document.getElementById('remoteConfigState').textContent.includes('safety-locked')")
+    page.wait_for_function("document.getElementById('remoteConfigState').textContent.includes('disabled/staged')")
     page.select_option("#remoteMode","wireguard")
     page.fill("#remoteNodeName","AuditNode")
     page.fill("#remoteSiteLabel","Audit Site")
@@ -312,6 +312,7 @@ with sync_playwright() as p:
     page.fill("#wgAddress","10.20.0.2/32")
     page.fill("#wgPeerKey","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
     page.fill("#wgAllowedIps","10.20.0.0/24")
+    page.fill("#remoteAllowlist","10.20.0.0/24")
     page.check("#remoteManagement")
     page.fill("#remotePassword","browser-password")
     page.click('button:has-text("Validate & save profile")')
