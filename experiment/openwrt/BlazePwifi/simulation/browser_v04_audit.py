@@ -176,6 +176,12 @@ with sync_playwright() as p:
     assert "0123456789abcdef" in page.locator("#qrToken").inner_text()
 
     page.click('button:has-text("Provision factory-reset phone")')
+    page.wait_for_function(
+        "'Device Owner provisioning' in document.getElementById('qrNotice').textContent")
+    page.wait_for_function(
+        "'APK 0.5.2 (50200)' in document.getElementById('qrMeta').textContent")
+    page.wait_for_function(
+        "'fedcba9876543210' in document.getElementById('qrToken').textContent")
     page.wait_for_selector("#qrBox svg")
     assert "Device Owner provisioning" in page.locator("#qrNotice").inner_text()
     assert "APK 0.5.2 (50200)" in page.locator("#qrMeta").inner_text()
