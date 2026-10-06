@@ -8,6 +8,7 @@
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 . "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
+. "${BP_REMOTE_APPLY_LIB:-/usr/lib/blazepwifi/remote_apply.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -101,6 +102,18 @@ require_role() {
 	[ "$rc" -eq 0 ] && return 0
 	[ "$rc" -eq 2 ] && bp_fail "insufficient role"
 	bp_fail "unauthorized"
+}
+
+bp_admin_is_wireguard_listener() {
+  wg_ip="$(bp_remote_get wg_address 2>/dev/null | cut -d/ -f1)"
+  [ -n "$wg_ip" ] || return 1
+  [ "${SERVER_ADDR:-}" = "$wg_ip" ]
+}
+
+require_remote_terminal_permission() {
+  if bp_admin_is_wireguard_listener; then
+    [ "$(bp_remote_get terminal 0)" = 1 ] || bp_fail "Remote Terminal permission is disabled"
+  fi
 }
 
 case "$action" in
@@ -444,8 +457,101 @@ EOF
     remote="$(bp_remote_status_json)"
     bp_json "$(printf '{"ok":true,"remote":%s,"apply_supported":false}' "$remote")"
     ;;
+  remote_wireguard_key)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    public="$(bp_remote_wg_public_key)"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      127) bp_fail "WireGuard tools are not installed on this target" ;;
+      2) bp_fail "existing WireGuard private key is invalid" ;;
+      *) bp_fail "unable to generate local WireGuard key" ;;
+    esac
+    bp_remote_runtime_set_public_key "$public"
+    bp_auth_audit remote_wireguard_key "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "generated_or_loaded"
+    bp_json "$(printf '{"ok":true,"public_key":"%s"}' "$(bp_json_escape "$public")")"
+    ;;
+  remote_wireguard_apply)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_remote_wireguard_apply "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      10) bp_fail "WireGuard mode is not selected" ;;
+      11) bp_fail "WireGuard live apply is unavailable on this target" ;;
+      12) bp_fail "dev.3 live apply supports validated IPv4 WireGuard addresses/routes only" ;;
+      13) bp_fail "unsafe WireGuard route: default or overly broad routes are blocked" ;;
+      14) bp_fail "WireGuard Allowed IPs overlap an existing directly connected network" ;;
+      15) bp_fail "WireGuard Allowed IPs would capture the current admin source path" ;;
+      16) bp_fail "apply must be started from a non-WireGuard management path" ;;
+      17) bp_fail "remote management requires valid source CIDRs contained inside WireGuard Allowed IPs" ;;
+      18) bp_fail "WireGuard Allowed IPs would route the tunnel endpoint into the tunnel itself" ;;
+      20) bp_fail "another remote-access transaction is already pending" ;;
+      21) bp_fail "WireGuard key setup failed" ;;
+      22) bp_fail "default route unavailable; refusing remote apply" ;;
+      23) bp_fail "unable to create remote-access rollback snapshot" ;;
+      24) bp_fail "unable to write WireGuard configuration; previous network restored" ;;
+      25) bp_fail "WireGuard interface failed to start; previous network restored" ;;
+      26) bp_fail "firewall reload failed; previous network restored" ;;
+      27) bp_fail "WireGuard handshake timed out; previous network restored" ;;
+      28) bp_fail "remote admin listener failed; previous network restored" ;;
+      29) bp_fail "management/default route changed unexpectedly; previous network restored" ;;
+      *) bp_fail "WireGuard apply did not finalize safely; previous network restored" ;;
+    esac
+    bp_auth_audit remote_wireguard_apply "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "active"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
+    ;;
+  remote_wireguard_disable)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_remote_wireguard_disable "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      20) bp_fail "another remote-access transaction is already pending" ;;
+      22) bp_fail "default route unavailable; refusing remote disable" ;;
+      23) bp_fail "unable to create remote-access rollback snapshot" ;;
+      24|25|26|28|29|30) bp_fail "WireGuard disable could not be completed safely; previous network restored" ;;
+      31) bp_fail "disable WireGuard from a local/non-WireGuard management path" ;;
+      *) bp_fail "WireGuard disable failed safely" ;;
+    esac
+    bp_auth_audit remote_wireguard_disable "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "staged"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
+    ;;
   terminal_status)
     require_role admin
+    require_remote_terminal_permission
     if bp_terminal_enabled; then enabled=true; else enabled=false; fi
     active="$(bp_terminal_active_count)"
     ttl="$(bp_terminal_cfg_uint terminal_ttl_seconds 300 60 1800)"
@@ -456,6 +562,7 @@ EOF
     ;;
   terminal_set_enabled)
     require_role admin
+    require_remote_terminal_permission
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     enabled="$(bp_param enabled)"
@@ -475,6 +582,7 @@ EOF
     ;;
   terminal_open)
     require_role admin
+    require_remote_terminal_permission
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     password="$(bp_param password)"
     token="$(bp_terminal_open "$password")"
@@ -493,6 +601,7 @@ EOF
     ;;
   terminal_exec)
     require_role admin
+    require_remote_terminal_permission
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     token="$(bp_param terminal_token)"; command_text="$(bp_param command)"
     bp_terminal_exec "$token" "$command_text"
@@ -509,6 +618,7 @@ EOF
     ;;
   terminal_close)
     require_role admin
+    require_remote_terminal_permission
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     token="$(bp_param terminal_token)"
     bp_terminal_close "$token" || bp_fail "unable to close terminal session"

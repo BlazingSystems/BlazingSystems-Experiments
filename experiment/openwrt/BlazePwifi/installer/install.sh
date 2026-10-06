@@ -11,7 +11,7 @@ FREE_KB="$(df -k /overlay 2>/dev/null | awk 'NR==2{print $4}')"; [ -n "${FREE_KB
 [ "$FREE_KB" -ge 900 ] || { echo "ERROR: need at least 900 KB free overlay space; found ${FREE_KB} KB." >&2; exit 1; }
 
 echo "Installing runtime packages..."
-apk -U add uhttpd nftables px5g-mbedtls flock >/dev/null
+apk -U add uhttpd nftables px5g-mbedtls flock ip-full kmod-wireguard wireguard-tools >/dev/null
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
@@ -36,7 +36,7 @@ if [ -s "$PRESERVED_PORTAL" ]; then
   mkdir -p /etc/blazepwifi/portal
   cp -a "$PRESERVED_PORTAL" /etc/blazepwifi/portal/portal.json
 fi
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
+chmod +x /etc/init.d/blazepwifi* /usr/sbin/blazepwifi-* /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
 mkdir -p /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
 [ ! -f /etc/blazepwifi/portal/portal.json ] || chmod 600 /etc/blazepwifi/portal/portal.json
@@ -168,6 +168,8 @@ uci commit firewall
 /etc/init.d/firewall reload 2>/dev/null || true
 /etc/init.d/uhttpd restart
 /etc/init.d/blazepwifi enable
+/etc/init.d/blazepwifi-remote-guard enable 2>/dev/null || true
+/etc/init.d/blazepwifi-remote-admin enable 2>/dev/null || true
 /etc/init.d/blazepwifi restart
 sleep 2
 

@@ -89,6 +89,7 @@
       <div class="card"><div class="card-body"><div class="metric-label">WireGuard</div><div id="wgState" class="metric-value small">—</div><div class="metric-sub">Recommended</div></div></div>
       <div class="card"><div class="card-body"><div class="metric-label">ZeroTier</div><div id="ztState" class="metric-value small">—</div><div class="metric-sub">Easy mesh</div></div></div>
       <div class="card"><div class="card-body"><div class="metric-label">Node</div><div id="remoteNodeState" class="metric-value small">—</div><div id="remoteSiteState" class="metric-sub">—</div></div></div>
+      <div class="card"><div class="card-body"><div class="metric-label">Live activation</div><div id="wgActivationState" class="metric-value small">—</div><div id="wgHandshakeState" class="metric-sub">—</div></div></div>
     </div>
 
     <div class="card" style="margin-top:16px"><div class="card-body"><div class="card-title">Remote access profile</div>
@@ -115,6 +116,7 @@
           <label><span class="field-label">UDP port</span><input id="wgPort" class="field" type="number" min="1" max="65535" value="51820"></label>
           <label><span class="field-label">Tunnel address</span><input id="wgAddress" class="field mono" placeholder="10.20.0.2/32"></label>
           <label><span class="field-label">Persistent keepalive</span><input id="wgKeepalive" class="field" type="number" min="0" max="3600" value="25"></label>
+          <label class="span2"><span class="field-label">This BlazePwifi public key</span><div class="toolbar"><input id="wgLocalPublicKey" class="field mono" readonly placeholder="Generate after installing WireGuard support"><button id="wgKeyButton" class="btn" type="button" onclick="BlazeConsole.generateWireGuardKey()">Generate / show key</button></div></label>
           <label class="span2"><span class="field-label">Hub public key</span><input id="wgPeerKey" class="field mono" placeholder="WireGuard peer public key"></label>
           <label class="span2"><span class="field-label">Allowed IPs / management routes</span><input id="wgAllowedIps" class="field mono" placeholder="10.20.0.0/24"></label>
           <label><span class="field-label">DNS</span><input id="wgDns" class="field" placeholder="Optional"></label>
@@ -123,15 +125,15 @@
       </div></div>
       <div class="card"><div class="card-body"><div class="card-title">ZeroTier profile</div>
         <label><span class="field-label">Network ID</span><input id="ztNetworkId" class="field mono" maxlength="16" placeholder="16 hexadecimal characters"></label>
-        <p class="muted" style="margin-top:10px">The node still requires authorization in your ZeroTier network before it can be used for management.</p>
+        <p class="muted" style="margin-top:10px">The node still requires authorization in your ZeroTier network. In dev.3, ZeroTier remains profile/staging only; live activation is not enabled yet.</p>
       </div></div>
     </div>
 
     <div class="card" style="margin-top:16px"><div class="card-body">
-      <div class="form-grid"><label><span class="field-label">Admin password to save</span><input id="remotePassword" class="field" type="password" autocomplete="current-password" placeholder="Re-authentication required"></label><div style="align-self:end"><button class="btn primary" onclick="BlazeConsole.saveRemote()">Validate & save profile</button></div></div>
+      <div class="form-grid"><label><span class="field-label">Admin password</span><input id="remotePassword" class="field" type="password" autocomplete="current-password" placeholder="Required for save, key, apply and disable"></label><div style="align-self:end" class="toolbar"><button class="btn" onclick="BlazeConsole.saveRemote()">Validate & save profile</button><button id="wgApplyButton" class="btn primary" onclick="BlazeConsole.applyWireGuard()">Test & Apply WireGuard</button><button id="wgDisableButton" class="btn danger" onclick="BlazeConsole.disableWireGuard()">Disable live WireGuard</button></div></div>
       <div id="remoteConfigState" class="small muted" style="margin-top:10px">Admin role is required to edit the profile.</div>
     </div></div>
-    <div class="notice warn"><b>Development safety gate:</b> this profile is validated and stored, but live WireGuard/ZeroTier network/firewall activation is intentionally not applied yet. The transport apply/rollback path must pass its own network-survival tests before it is enabled.</div>
+    <div class="notice warn"><b>WireGuard dev.3 safety model:</b> apply is transactional and requires an actual handshake before it is accepted. A watchdog restores the previous network/firewall/runtime state on failure or reboot. Apply/disable must be started from a local/non-WireGuard management path. IPv4 management routes only; default/full-tunnel and directly connected route overlaps are blocked. <b>ZeroTier live activation remains disabled.</b></div>
   </section>
 
   <section id="page-vouchers" class="section"><div class="page-head"><div><h2>Vouchers & Rates</h2><p>Create vouchers and manage rate packages.</p></div></div>
