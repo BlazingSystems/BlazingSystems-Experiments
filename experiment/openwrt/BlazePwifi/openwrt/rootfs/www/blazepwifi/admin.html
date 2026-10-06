@@ -14,7 +14,7 @@
 
 <div id="appView" class="app hidden">
 <aside id="sidebar" class="sidebar">
-  <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.5</small></span></div>
+  <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.5.1</small></span></div>
   <div class="nav-label">OVERVIEW</div>
   <button class="nav-btn active" data-page="dashboard"><span class="nav-dot"></span>Dashboard</button>
   <button class="nav-btn" data-page="sessions"><span class="nav-dot"></span>Clients & Sessions</button>
@@ -36,6 +36,7 @@
   <div class="nav-label">DEVICE</div>
   <button class="nav-btn" data-page="storage"><span class="nav-dot"></span>Storage</button>
   <button class="nav-btn" data-page="backups"><span class="nav-dot"></span>Backups</button>
+  <button class="nav-btn" data-page="updates"><span class="nav-dot"></span>Updates & Recovery</button>
   <button class="nav-btn" data-page="tools"><span class="nav-dot"></span>Tools & Terminal</button>
   <button class="nav-btn" data-page="alerts"><span class="nav-dot"></span>Alerts & Logs</button>
   <button class="nav-btn" data-page="system"><span class="nav-dot"></span>System & Security</button>
@@ -120,6 +121,25 @@
   <section id="page-backups" class="section"><div class="page-head"><div><h2>Backups</h2><p>Manual and scheduled configuration/state backups with bounded retention.</p></div></div>
     <div class="grid two"><div class="card"><div class="card-body"><div class="card-title">Automatic backup</div><p class="muted">Configurable schedule and retention (for example keep the latest 5, deleting older snapshots automatically).</p></div></div>
     <div class="card"><div class="card-body"><div class="card-title">Restore</div><p class="muted">Upload/import, inspect compatibility, then selectively or fully restore supported state.</p></div></div></div>
+  </section>
+
+  <section id="page-updates" class="section"><div class="page-head"><div><h2>Updates & Recovery</h2><p>Install feature/revision updates without reflashing, keep the previous stable version, and roll back safely.</p></div><button class="btn" onclick="BlazeConsole.loadUpdate()">Refresh</button></div>
+    <div class="grid two">
+      <div class="card"><div class="card-body"><div class="card-title">Version state</div>
+        <div class="switch-row"><span>Current</span><span id="updateCurrent" class="badge">—</span></div>
+        <div class="switch-row"><span>Stable</span><span id="updateStable" class="badge good">—</span></div>
+        <div class="switch-row"><span>Pending candidate</span><span id="updatePending" class="badge">—</span></div>
+        <div class="switch-row"><span>Rollback target</span><span id="updateRollback" class="badge">—</span></div>
+        <p id="updateSource" class="small muted"></p>
+      </div></div>
+      <div class="card"><div class="card-body"><div class="card-title">Install update bundle</div>
+        <p class="muted">Normal feature updates are applied transactionally to the writable overlay. Exact SHA-256 verification is required before activation.</p>
+        <label><span class="field-label">Bundle HTTPS URL</span><input id="updateUrl" class="field" placeholder="https://.../BlazePwifi-v0.5.1-update.tar.gz"></label>
+        <label><span class="field-label">SHA-256</span><input id="updateSha" class="field mono" maxlength="64" placeholder="64 hexadecimal characters"></label>
+        <div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="BlazeConsole.installUpdate()">Stage & install</button><button class="btn" onclick="BlazeConsole.rollbackUpdate()">Rollback stable</button></div>
+      </div></div>
+    </div>
+    <div class="notice warn"><b>Safety model:</b> the previous stable files remain available while the new candidate proves healthy. Failed immediate health checks roll back automatically; boot health failures also trigger rollback. Full firmware flashing remains available only for base-OS/kernel/partition changes that cannot be delivered safely as an overlay update.</div>
   </section>
 
   <section id="page-tools" class="section"><div class="page-head"><div><h2>Tools & Terminal</h2><p>Safe allowlisted diagnostics. Advanced raw terminal remains a separately gated owner feature.</p></div></div>
