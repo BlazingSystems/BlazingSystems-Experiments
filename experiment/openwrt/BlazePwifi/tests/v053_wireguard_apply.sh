@@ -111,6 +111,11 @@ expect_validate_rc() {
   [ "$got" -eq "$want" ] || { echo "expected validate rc $want, got $got" >&2; exit 1; }
 }
 
+# IPv4 helper must recognize real hosts before route-safety checks rely on it.
+bp_remote_ipv4_host 192.168.1.10
+! bp_remote_ipv4_host 192.168.1
+! bp_remote_ipv4_host 999.168.1.10
+
 # Unsafe route contracts.
 save_wg 198.51.100.8 0.0.0.0/0 10.20.0.0/24
 expect_validate_rc 13 192.168.1.10
