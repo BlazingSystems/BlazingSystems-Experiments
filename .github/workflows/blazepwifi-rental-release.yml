@@ -47,7 +47,7 @@ jobs:
       - name: Post-v0.5.2 security hardening validation
         run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
       - name: Rental protocol/runtime regression
-        run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
+        run: sh -x experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Confirm BlazePwifi 0.5.2 rental protocol baseline
         run: |
           set -euo pipefail
