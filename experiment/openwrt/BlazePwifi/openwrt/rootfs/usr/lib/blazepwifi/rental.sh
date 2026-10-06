@@ -17,6 +17,20 @@ bp_rental_init() {
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
 bp_rental_hex() { bp_auth_random_hex "$1"; }
 
+bp_rental_enroll_lock() {
+  mkdir -p "$BP_RUN"
+  exec 7>"$BP_RUN/rental-enroll.lock"
+  if ! bp_flock_wait 7 10; then
+    exec 7>&-
+    return 1
+  fi
+}
+
+bp_rental_enroll_unlock() {
+  flock -u 7 2>/dev/null || true
+  exec 7>&-
+}
+
 bp_rental_hmac() {
   secret="$1"; data="$2"
   command -v openssl >/dev/null 2>&1 || return 2
@@ -27,9 +41,25 @@ bp_rental_enroll_create() {
   label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; now="$(bp_now)"
   case "$ttl" in ''|*[!0-9]*) ttl=600;; esac
   [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
-  id="$(bp_rental_hex 6)"; secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
-  printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"
-  chmod 600 "$BP_RENTAL_ENROLL"; bp_durable_sync
+  bp_rental_enroll_lock || return 1
+  tries=0; id=""
+  while [ "$tries" -lt 8 ]; do
+    candidate="$(bp_rental_hex 6)"
+    if [ -z "$(bp_rental_enroll_lookup "$candidate")" ]; then id="$candidate"; break; fi
+    tries=$((tries+1))
+  done
+  if [ -z "$id" ]; then
+    bp_rental_enroll_unlock
+    return 1
+  fi
+  secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
+  if ! printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"; then
+    bp_rental_enroll_unlock
+    return 1
+  fi
+  chmod 600 "$BP_RENTAL_ENROLL"
+  bp_durable_sync
+  bp_rental_enroll_unlock
   printf '%s\n' "$token"
 }
 

@@ -17,20 +17,47 @@ case "$action" in
   enroll)
     eid="$(bp_param enroll_id)"
     printf '%s' "$eid" | grep -Eq '^[0-9a-f]{12}$' || bp_fail "invalid enrollment id"
+    bp_rental_enroll_lock || bp_fail "enrollment state busy"
     line="$(bp_rental_enroll_lookup "$eid")"
-    [ -n "$line" ] || bp_fail "enrollment invalid or used"
+    [ -n "$line" ] || { bp_rental_enroll_unlock; bp_fail "enrollment invalid or used"; }
     secret="$(printf '%s' "$line" | cut -f2)"
     expiry="$(printf '%s' "$line" | cut -f3)"
     label="$(printf '%s' "$line" | cut -f4-)"
-    [ "$expiry" -ge "$now" ] 2>/dev/null || { bp_rental_enroll_consume "$eid"; bp_fail "enrollment expired"; }
+    [ "$expiry" -ge "$now" ] 2>/dev/null || {
+      bp_rental_enroll_consume "$eid" || true
+      bp_rental_enroll_unlock
+      bp_fail "enrollment expired"
+    }
     token="$eid.$secret"
-    expected="$(bp_rental_hmac "$token" "enroll|$nonce|$token")" || bp_fail "rental crypto unavailable"
-    [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    expected="$(bp_rental_hmac "$token" "enroll|$nonce|$token")" || {
+      bp_rental_enroll_unlock
+      bp_fail "rental crypto unavailable"
+    }
+    [ "$sig" = "$expected" ] || {
+      bp_rental_enroll_unlock
+      bp_fail "authentication failed"
+    }
+
+    # Claim the one-time token while the enrollment lock is still held.
+    # Once a correctly authenticated client reaches this point, replay of the
+    # same token is rejected even if another request arrives concurrently.
+    bp_rental_enroll_consume "$eid" || {
+      bp_rental_enroll_unlock
+      bp_fail "unable to consume enrollment"
+    }
+
     did="$(bp_rental_hex 12)"
     dsecret="$(bp_rental_hex 24)"
-    bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
-    bp_rental_policy_ensure "$did"
-    bp_rental_enroll_consume "$eid"
+    bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now" || {
+      bp_rental_enroll_unlock
+      bp_fail "unable to create rental device"
+    }
+    bp_rental_policy_ensure "$did" || {
+      bp_rental_device_revoke "$did" >/dev/null 2>&1 || true
+      bp_rental_enroll_unlock
+      bp_fail "unable to initialize rental policy"
+    }
+    bp_rental_enroll_unlock
     bp_json "$(printf '{"ok":true,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
     ;;
   status|policy_get)
