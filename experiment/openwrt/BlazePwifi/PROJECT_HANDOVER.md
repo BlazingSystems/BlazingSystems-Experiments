@@ -62,6 +62,22 @@ Full firmware/sysupgrade remains reserved for base-system changes such as kernel
 - Canonical release log:
   `docs/handover/2026-10-06-v051-release-published.md`
 
+## v0.5.1 main integration status
+
+- BlazePwifi v0.5.1 is integrated into `main`.
+- Published release candidate remains `65f87d775793a1fdc09a9522cf752349f68c3b41`.
+- Published release build run: `37425063793` — PASS.
+- Published release workflow: `37426030884` — PASS.
+- Reconciled main integration SHA: `e081c6bdfc41d22ac07f918c4cbc62a745bca883`.
+- Reconciled integration build run: `37426701445` — PASS, including Android Device Owner emulator, x86 QEMU and final candidate gate.
+- Pull request `#14` — merged.
+- Main merge commit: `1aa8926563e6dccb6a512a035e8f6f662b997d57`.
+- Main merge tree: `f1c0194f8039577bad88a6e93b02d9b837e228c2`, exactly matching the green integration tree.
+- All 19 newer main-only standalone-rental/release files were preserved byte-for-byte.
+- Superseded conflicting PR `#13` was closed without merging.
+- GitHub Release `v0.5.1` remains pinned to exact candidate `65f87d775793a1fdc09a9522cf752349f68c3b41`; main integration did not retag or rewrite the release.
+- Production Android signing remains blocked only by unavailable exact locked v0.4 signing material.
+
 ## Main branch integration status
 
 - Full BlazePwifi v0.5.0 implementation is integrated into `main`.
