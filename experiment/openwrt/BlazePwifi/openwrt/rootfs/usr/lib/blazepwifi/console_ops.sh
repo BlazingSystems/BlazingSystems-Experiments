@@ -378,13 +378,17 @@ bp_remote_status_json() {
   mode="$(bp_remote_get mode disabled)"
   if bp_remote_ready; then ready=true; else ready=false; fi
   runtime='{"activation_state":"staged","apply_supported":false,"public_key":"","applied_at":0,"last_handshake":0,"last_error":""}'
+  zt_runtime='{"supported":false,"version":"","layout":"unknown","state":"staged","network_id":"","node_id":"","device":"","ipv4":"","listener":"","reboot_required":0,"last_error":""}'
   if command -v bp_remote_runtime_status_json >/dev/null 2>&1; then
     runtime="$(bp_remote_runtime_status_json 2>/dev/null || printf '%s' "$runtime")"
   fi
-  printf '{"mode":"%s","ready":%s,"monitoring":%s,"management":%s,"terminal":%s,"node_name":"%s","site_label":"%s","wireguard":"%s","zerotier":"%s","runtime":%s}' \
+  if command -v bp_zt_status_json >/dev/null 2>&1; then
+    zt_runtime="$(bp_zt_status_json 2>/dev/null || printf '%s' "$zt_runtime")"
+  fi
+  printf '{"mode":"%s","ready":%s,"monitoring":%s,"management":%s,"terminal":%s,"node_name":"%s","site_label":"%s","wireguard":"%s","zerotier":"%s","runtime":%s,"zerotier_runtime":%s}' \
     "$(bp_json_escape "$mode")" "$ready" "$(bp_remote_get monitoring 1)" "$(bp_remote_get management 0)" "$(bp_remote_get terminal 0)" \
     "$(bp_json_escape "$(bp_remote_get node_name BlazePwifi)")" "$(bp_json_escape "$(bp_remote_get site_label)")" \
-    "$(bp_json_escape "$(bp_remote_wireguard_state)")" "$(bp_json_escape "$(bp_remote_zerotier_state)")" "$runtime"
+    "$(bp_json_escape "$(bp_remote_wireguard_state)")" "$(bp_json_escape "$(bp_remote_zerotier_state)")" "$runtime" "$zt_runtime"
 }
 
 bp_remote_config_json() {
