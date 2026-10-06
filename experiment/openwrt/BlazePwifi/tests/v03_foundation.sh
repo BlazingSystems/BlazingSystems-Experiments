@@ -1,10 +1,17 @@
 #!/bin/sh
-# v0.3 foundation release gate
+# v0.3 foundation compatibility gate retained for v0.4+
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
-[ "$(cat "$ROOT/VERSION")" = "0.3.0" ] || {
-  echo "VERSION must be 0.3.0" >&2
+case "$(cat "$ROOT/VERSION")" in
+  0.3.0|0.4.0|0.5.0) ;;
+  *)
+    echo "unexpected BlazePwifi VERSION" >&2
+    exit 1
+    ;;
+esac
+test -d "$ROOT/releases/0.3.0" || {
+  echo "v0.3.0 release history must remain preserved" >&2
   exit 1
 }
 
@@ -34,4 +41,4 @@ BP_CAP_TIER=auto BP_CAP_ARCH=aarch64 BP_CAP_MEM_KB=524288 BP_CAP_OVERLAY_KB=1048
 BP_CAP_TIER=auto BP_CAP_ARCH=x86_64 BP_CAP_MEM_KB=2097152 BP_CAP_OVERLAY_KB=2097152 sh "$CAP" --detect | grep -qx full
 BP_CAP_TIER=lite BP_CAP_ARCH=x86_64 BP_CAP_MEM_KB=2097152 BP_CAP_OVERLAY_KB=2097152 sh "$CAP" --detect | grep -qx lite
 
-echo "BlazePwifi v0.3 foundation checks passed"
+echo "BlazePwifi v0.3 foundation compatibility checks passed"

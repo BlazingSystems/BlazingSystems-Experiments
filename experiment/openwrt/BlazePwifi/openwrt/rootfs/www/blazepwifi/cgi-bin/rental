@@ -2,7 +2,9 @@
 . "${BP_LIB:-/usr/lib/blazepwifi/common.sh}"
 . "${BP_AUTH_LIB:-/usr/lib/blazepwifi/auth.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
+. "${BP_RENTAL_POLICY_LIB:-/usr/lib/blazepwifi/rental_policy.sh}"
 bp_rental_init
+bp_rental_policy_v2_init
 
 action="$(bp_param action)"
 nonce="$(bp_param nonce)"
@@ -30,7 +32,7 @@ case "$action" in
     bp_rental_enroll_consume "$eid"
     bp_json "$(printf '{"ok":true,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
     ;;
-  status)
+  status|policy_get)
     did="$(bp_param device_id)"
     printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}$' || bp_fail "invalid device id"
     line="$(bp_rental_device_line "$did")"
@@ -38,32 +40,86 @@ case "$action" in
     secret="$(printf '%s' "$line" | cut -f2)"
     lease="$(printf '%s' "$line" | cut -f3)"
     label="$(printf '%s' "$line" | cut -f4)"
-    expected="$(bp_rental_hmac "$secret" "status|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    expected="$(bp_rental_hmac "$secret" "$action|$nonce|$secret")" || bp_fail "rental crypto unavailable"
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
     bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"
-    policy="$(bp_rental_policy_line "$did")"
-    allowed="$(printf '%s' "$policy" | cut -f2)"
-    salt="$(printf '%s' "$policy" | cut -f3)"
-    hash="$(printf '%s' "$policy" | cut -f4)"
-    rounds="$(printf '%s' "$policy" | cut -f5)"
-    preferred="$(printf '%s' "$policy" | cut -f6)"
+
+    v2="$(bp_rental_policy_v2_get "$did")" || bp_fail "policy unavailable"
+    IFS="$(printf '\t')" read -r _did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
+$v2
+EOF
+    [ "$allowed" = "-" ] && allowed=""
+    [ "$hidden" = "-" ] && hidden=""
+    [ "$preferred" = "-" ] && preferred=""
+    [ "$quick" = "-" ] && quick=""
     [ "$salt" = "-" ] && salt=""
     [ "$hash" = "-" ] && hash=""
-    [ "$preferred" = "-" ] && preferred=""
-    per="$(bp_cfg rental_seconds_per_pulse)"
-    [ -n "$per" ] || per=600
+
+    per="$(bp_cfg rental_seconds_per_pulse)"; [ -n "$per" ] || per=600
     server_ms=$((now*1000))
-    # Keep expired devices synchronized. The authoritative stored lease remains
-    # expired; only the signed report is clamped to server-now because the
-    # Android client rejects lease_until_ms values older than server_time_ms.
     report_lease="${lease:-0}"
     [ "$report_lease" -ge "$now" ] 2>/dev/null || report_lease="$now"
     lease_ms=$((report_lease*1000))
-    canonical="$did|$nonce|$server_ms|$lease_ms|$allowed|$salt|$hash|$rounds|$preferred|$per"
-    psig="$(bp_rental_hmac "$secret" "$canonical")" || bp_fail "rental crypto unavailable"
-    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"allowed_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"policy_sig":"%s"}' "$did" "$server_ms" "$lease_ms" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per" "$psig")"
+
+    legacy="$did|$nonce|$server_ms|$lease_ms|$allowed|$salt|$hash|$rounds|$preferred|$per"
+    legacy_sig="$(bp_rental_hmac "$secret" "$legacy")" || bp_fail "rental crypto unavailable"
+    v2canonical="v2|$did|$nonce|$server_ms|$lease_ms|$rev|$mode|$allowed|$hidden|$salt|$hash|$rounds|$preferred|$per"
+    v2sig="$(bp_rental_hmac "$secret" "$v2canonical")" || bp_fail "rental crypto unavailable"
+    v3canonical="v3|$did|$nonce|$server_ms|$lease_ms|$rev|$mode|$allowed|$hidden|$salt|$hash|$rounds|$preferred|$per|$timer_mode|$timer_toggle|$quick|$notifications|$gesture_type|$gesture_value|$grace"
+    v3sig="$(bp_rental_hmac "$secret" "$v3canonical")" || bp_fail "rental crypto unavailable"
+
+    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"policy_sig":"%s","policy_sig_v2":"%s","policy_sig_v3":"%s"}'       "$did" "$server_ms" "$lease_ms" "${rev:-1}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per"       "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}"       "$(bp_json_escape "$gesture_type")" "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$legacy_sig" "$v2sig" "$v3sig")"
+    ;;
+  policy_patch)
+    did="$(bp_param device_id)"
+    printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}$' || bp_fail "invalid device id"
+    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown device"
+    secret="$(printf '%s' "$line" | cut -f2)"
+    expected_rev="$(bp_param expected_revision)"
+    mode_new="$(bp_param launcher_mode)"; [ -n "$mode_new" ] || mode_new="@keep"
+    allowed_new="$(bp_param allowed_packages)"; [ -n "$allowed_new" ] || allowed_new="@keep"
+    hidden_new="$(bp_param hidden_packages)"; [ -n "$hidden_new" ] || hidden_new="@keep"
+    preferred_new="$(bp_param preferred_vendo)"; [ -n "$preferred_new" ] || preferred_new="@keep"
+    timer_toggle_new="$(bp_param timer_user_toggle)"; [ -n "$timer_toggle_new" ] || timer_toggle_new="@keep"
+    notifications_new="$(bp_param notifications_enabled)"; [ -n "$notifications_new" ] || notifications_new="@keep"
+    quick_new="$(bp_param quick_controls)"; [ -n "$quick_new" ] || quick_new="@keep"
+    gesture_new="$(bp_param admin_gesture_value)"; [ -n "$gesture_new" ] || gesture_new="@keep"
+    admin_password="$(bp_param admin_password)"; [ -n "$admin_password" ] || admin_password="@keep"
+
+    canonical="policy_patch|$nonce|$did|$expected_rev|$mode_new|$allowed_new|$hidden_new|$preferred_new|$timer_toggle_new|$notifications_new|$quick_new|$gesture_new|$admin_password"
+    expected="$(bp_rental_hmac "$secret" "$canonical")" || bp_fail "rental crypto unavailable"
+    [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+
+    if newrev="$(bp_rental_policy_v2_patch "$did" "$expected_rev" device "$mode_new" "$allowed_new" "$hidden_new" "$preferred_new" "$timer_toggle_new" "$notifications_new" "$quick_new" "$gesture_new" "$admin_password")"; then
+      policy_json="$(bp_rental_policy_v2_json "$did")" || bp_fail "policy unavailable"
+      bp_json "{\"ok\":true,\"policy_revision\":$newrev,\"policy\":$policy_json}"
+    else
+      rc=$?
+      [ "$rc" -eq 4 ] && {
+        current="$(bp_rental_policy_v2_get "$did" | cut -f2)"
+        bp_json "{\"ok\":false,\"error\":\"stale policy revision\",\"current_revision\":${current:-0}}"
+        exit 0
+      }
+      [ "$rc" -eq 2 ] && bp_fail "invalid policy patch"
+      bp_fail "policy write failed"
+    fi
+    ;;
+  inventory_update|device_capabilities)
+    did="$(bp_param device_id)"
+    printf '%s' "$did" | grep -Eq '^[0-9a-f]{24}$' || bp_fail "invalid device id"
+    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown device"
+    secret="$(printf '%s' "$line" | cut -f2)"
+    payload="$(bp_param inventory)"
+    [ "$action" = device_capabilities ] && payload="$(bp_param capabilities)"
+    expected="$(bp_rental_hmac "$secret" "$action|$nonce|$payload|$secret")" || bp_fail "rental crypto unavailable"
+    [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    if [ "$action" = inventory_update ]; then
+      bp_rental_inventory_write "$did" "$payload" || bp_fail "invalid app inventory"
+    fi
+    bp_json '{"ok":true}'
     ;;
   coin_start)
     did="$(bp_param device_id)"

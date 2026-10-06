@@ -1,7 +1,7 @@
 #!/bin/sh
 # Validated, capability-neutral BlazePwifi configuration layer.
 
-BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos rental_seconds_per_pulse event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms"
+BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos rental_seconds_per_pulse event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms default_speed_limit_kbps"
 
 bp_config_key_allowed() {
 	key="$1"
@@ -39,6 +39,7 @@ bp_config_validate() {
 		coin_line|relay_line|led_line) bp_config_uint_range "$value" 0 4095 ;;
 		coin_debounce_ms) bp_config_uint_range "$value" 1 2000 ;;
 		pulse_group_ms) bp_config_uint_range "$value" 10 10000 ;;
+		default_speed_limit_kbps) bp_config_uint_range "$value" 0 10000000 ;;
 		*) return 1 ;;
 	esac
 }
