@@ -47,7 +47,23 @@ Official reference: https://support.google.com/work/android/answer/16694822
 
 ## Checksum canonicalization
 
-Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC4 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
+Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC5 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
+
+## Secure enrollment transport
+
+RC4 still returned the newly issued long-lived `device_secret` in the first HTTP enrollment response. The request was HMAC-authenticated, but the credential itself could be observed by a passive client on an untrusted LAN.
+
+RC5 replaces the generated onboarding contracts with protocol/schema v2:
+
+- Standard Enrollment QR schema: `blazerental.enrollment.v2`;
+- Device Provisioning admin-extras schema: `blazerental.provisioning.v2`;
+- the APK sends `protocol=2` and authenticates the request with `enroll_v2|nonce|one-time-token`;
+- server and phone independently derive the long-lived secret as HMAC-SHA256 over `device-secret-v2|nonce|device-id`, keyed by the one-time token;
+- the server returns only the device ID, KDF identifier, timestamps and an HMAC response signature;
+- the APK verifies `enroll-response-v2|nonce|device-id|server-time|lease-until|kdf` before persisting identity;
+- the consumed one-time enrollment token is removed from phone storage after successful identity setup.
+
+The legacy protocol-1 server path remains only for backward compatibility. RC5-generated QR payloads and the RC5 APK use protocol 2.
 
 ## Release gate
 
@@ -70,13 +86,13 @@ Do not promote Device Owner provisioning to stable production status until:
 The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, or privileged platform exploits.
 
 
-## ESP scope in RC4
+## ESP scope in RC5
 
-ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC4 does not claim Android Device Provisioning QR parity on ESP.
+ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC5 does not claim Android Device Provisioning QR parity on ESP.
 
 Current ESP Rental Server onboarding is a manual one-time server/token enrollment flow. The ESP firmware does not embed the OpenWrt QR renderer or release-bound Android DPC APK/checksum metadata. Adding those features must be evaluated separately against ESP flash/RAM limits and must use the same distinct Standard Enrollment vs Device Provisioning contract if implemented.
 
-Therefore RC4 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.
+Therefore RC5 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.
 
 
 ## TEST signing continuity

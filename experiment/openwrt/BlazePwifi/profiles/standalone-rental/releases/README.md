@@ -2,6 +2,18 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.5
+
+RC5 supersedes RC4 for testing. It keeps the separated Standard Enrollment / Device Provisioning architecture and closes the first-enrollment transport exposure:
+
+- Standard Enrollment schema `blazerental.enrollment.v2`;
+- Device Provisioning admin-extras schema `blazerental.provisioning.v2`;
+- enrollment protocol 2 derives the long-lived device secret from the one-time token, nonce and server-issued device ID;
+- the long-lived device secret is not transmitted over LAN HTTP;
+- the APK verifies an HMAC-signed enrollment response before storing identity;
+- the consumed one-time enrollment secret is removed from local storage;
+- Android package identity is `0.5.2-rental.2-rc.5`, versionCode `50206`.
+
 ### v0.5.2-rental.2-rc.4
 
 RC4 keeps the separated Standard Enrollment / Device Provisioning architecture, requires administrator role for Device Provisioning QR generation, and fixes canonical padded Base64URL checksum parsing in the immutable release assembler.

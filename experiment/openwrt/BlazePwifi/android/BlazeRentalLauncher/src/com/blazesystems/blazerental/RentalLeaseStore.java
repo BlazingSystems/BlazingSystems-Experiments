@@ -48,6 +48,7 @@ public final class RentalLeaseStore {
         prefs(context).edit()
                 .putString("device_id", safe(id))
                 .putString("device_secret", safe(secret))
+                .remove("enrollment")
                 .apply();
     }
 

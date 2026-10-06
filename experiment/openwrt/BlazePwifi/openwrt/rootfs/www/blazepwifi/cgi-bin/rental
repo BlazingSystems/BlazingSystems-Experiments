@@ -16,6 +16,8 @@ now="$(bp_now)"
 case "$action" in
   enroll)
     eid="$(bp_param enroll_id)"
+    protocol="$(bp_param protocol)"; [ -n "$protocol" ] || protocol=1
+    case "$protocol" in 1|2) ;; *) bp_fail "unsupported enrollment protocol";; esac
     printf '%s' "$eid" | grep -Eq '^[0-9a-f]{12}$' || bp_fail "invalid enrollment id"
     bp_rental_enroll_lock || bp_fail "enrollment state busy"
     line="$(bp_rental_enroll_lookup "$eid")"
@@ -29,7 +31,12 @@ case "$action" in
       bp_fail "enrollment expired"
     }
     token="$eid.$secret"
-    expected="$(bp_rental_hmac "$token" "enroll|$nonce|$token")" || {
+    if [ "$protocol" = 2 ]; then
+      request_canonical="enroll_v2|$nonce|$token"
+    else
+      request_canonical="enroll|$nonce|$token"
+    fi
+    expected="$(bp_rental_hmac "$token" "$request_canonical")" || {
       bp_rental_enroll_unlock
       bp_fail "rental crypto unavailable"
     }
@@ -38,16 +45,29 @@ case "$action" in
       bp_fail "authentication failed"
     }
 
-    # Claim the one-time token while the enrollment lock is still held.
-    # Once a correctly authenticated client reaches this point, replay of the
-    # same token is rejected even if another request arrives concurrently.
+    # Atomically claim the one-time token before creating the device.
     bp_rental_enroll_consume "$eid" || {
       bp_rental_enroll_unlock
       bp_fail "unable to consume enrollment"
     }
 
     did="$(bp_rental_hex 12)"
-    dsecret="$(bp_rental_hex 24)"
+    if [ "$protocol" = 2 ]; then
+      # Secure bootstrap: both peers derive the same long-lived secret.
+      # The device secret itself never crosses the HTTP transport.
+      dsecret="$(bp_rental_hmac "$token" "device-secret-v2|$nonce|$did")" || {
+        bp_rental_enroll_unlock
+        bp_fail "rental crypto unavailable"
+      }
+      printf '%s' "$dsecret" | grep -Eq '^[a-f0-9]{64}$' || {
+        bp_rental_enroll_unlock
+        bp_fail "device secret derivation failed"
+      }
+    else
+      # Legacy compatibility only. New RC5 clients always request protocol 2.
+      dsecret="$(bp_rental_hex 24)"
+    fi
+
     bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now" || {
       bp_rental_enroll_unlock
       bp_fail "unable to create rental device"
@@ -57,8 +77,23 @@ case "$action" in
       bp_rental_enroll_unlock
       bp_fail "unable to initialize rental policy"
     }
-    bp_rental_enroll_unlock
-    bp_json "$(printf '{"ok":true,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
+
+    server_ms=$((now*1000))
+    lease_ms=$((now*1000))
+    if [ "$protocol" = 2 ]; then
+      kdf="hmac-sha256-v1"
+      response_canonical="enroll-response-v2|$nonce|$did|$server_ms|$lease_ms|$kdf"
+      enroll_sig="$(bp_rental_hmac "$token" "$response_canonical")" || {
+        bp_rental_device_revoke "$did" >/dev/null 2>&1 || true
+        bp_rental_enroll_unlock
+        bp_fail "rental crypto unavailable"
+      }
+      bp_rental_enroll_unlock
+      bp_json "$(printf '{"ok":true,"enrollment_protocol":2,"device_id":"%s","identity_kdf":"%s","server_time_ms":%s,"lease_until_ms":%s,"enroll_sig":"%s"}' "$did" "$kdf" "$server_ms" "$lease_ms" "$enroll_sig")"
+    else
+      bp_rental_enroll_unlock
+      bp_json "$(printf '{"ok":true,"enrollment_protocol":1,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$did" "$dsecret" "$server_ms" "$lease_ms")"
+    fi
     ;;
   status|policy_get)
     did="$(bp_param device_id)"

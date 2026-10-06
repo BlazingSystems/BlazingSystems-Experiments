@@ -21,7 +21,7 @@ public final class BlazeProvisioningContract {
             "android.app.extra.PROVISIONING_MODE";
 
     public static final int MODE_FULLY_MANAGED_DEVICE = 1;
-    public static final String SCHEMA = "blazerental.provisioning.v1";
+    public static final String SCHEMA = "blazerental.provisioning.v2";
 
     private BlazeProvisioningContract() {}
 

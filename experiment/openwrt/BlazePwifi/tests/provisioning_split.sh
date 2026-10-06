@@ -11,8 +11,8 @@ SRC="$LAUNCHER/src/com/blazesystems/blazerental"
 grep -q 'rental_standard_qr' "$ADMIN"
 grep -q 'rental_provisioning_status' "$ADMIN"
 grep -q 'rental_provisioning_qr' "$ADMIN"
-grep -q 'blazerental.enrollment.v1' "$ADMIN"
-grep -q 'blazerental.provisioning.v1' "$ADMIN"
+grep -q 'blazerental.enrollment.v2' "$ADMIN"
+grep -q 'blazerental.provisioning.v2' "$ADMIN"
 grep -q 'PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME' "$ADMIN"
 grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION' "$ADMIN"
 grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$ADMIN"
@@ -40,11 +40,19 @@ test -s "$SRC/BlazeProvisioningContract.java"
 test -s "$SRC/BlazeProvisioningModeActivity.java"
 test -s "$SRC/BlazeProvisioningComplianceActivity.java"
 grep -q 'MODE_FULLY_MANAGED_DEVICE = 1' "$SRC/BlazeProvisioningContract.java"
-grep -q 'blazerental.provisioning.v1' "$SRC/BlazeProvisioningContract.java"
+grep -q 'blazerental.provisioning.v2' "$SRC/BlazeProvisioningContract.java"
 grep -q 'device_owner_provisioning' "$SRC/RentalLeaseStore.java"
 grep -q 'standard_manual' "$SRC/RentalLeaseStore.java"
 grep -q 'This is a Device Provisioning QR' "$SRC/QrEnrollmentScannerActivity.java"
 grep -q 'Manual first-run administrator setup is disabled' "$SRC/BlazeAdminActivity.java"
+grep -q '&protocol=2' "$SRC/LeaseClient.java"
+grep -q 'enroll_v2|' "$SRC/LeaseClient.java"
+grep -q 'enroll-response-v2|' "$SRC/LeaseClient.java"
+grep -q 'device-secret-v2|' "$SRC/LeaseClient.java"
+! grep -q 'response.optString("device_secret"' "$SRC/LeaseClient.java"
+grep -q '.remove("enrollment")' "$SRC/RentalLeaseStore.java"
+grep -q '"enrollment_protocol":2' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/rental"
+grep -q 'identity_kdf' "$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/rental"
 
 test -f "$META"
 grep -q '^READY=0$' "$META"
@@ -61,18 +69,18 @@ python3 "$ROOT/tools/make-provisioning.py" \
   --server-url 'http://192.168.1.1' \
   --enrollment-token '0123456789ab.0123456789abcdef0123456789abcdef' \
   --device-name 'Audit phone' \
-  --version-code 50205 \
+  --version-code 50206 \
   --out "$TMP/provisioning.json"
 python3 - "$TMP/provisioning.json" "$TMP/app.apk" <<'PY'
 import base64,hashlib,json,pathlib,sys
 p=json.load(open(sys.argv[1],encoding="utf-8"))
 assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME"]=="com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"
-assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE"]==50205
+assert p["android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE"]==50206
 checksum=p["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM"]
 assert len(checksum)==44 and checksum.endswith("=")
 assert base64.urlsafe_b64decode(checksum)==hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).digest()
 x=p["android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE"]
-assert x["blaze_schema"]=="blazerental.provisioning.v1"
+assert x["blaze_schema"]=="blazerental.provisioning.v2"
 assert x["server_url"]=="http://192.168.1.1"
 assert x["enrollment_token"].startswith("0123456789ab.")
 PY
@@ -82,8 +90,8 @@ APK_SHA="$(sha256sum "$TMP/app.apk" | awk '{print $1}')"
 APK_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode())' "$TMP/app.apk")"
 printf '%s\n' \
   'PACKAGE_NAME=com.blazesystems.blazerental' \
-  'APK_VERSION=0.5.2-rental.2-rc.4' \
-  'APK_VERSION_CODE=50205' \
+  'APK_VERSION=0.5.2-rental.2-rc.5' \
+  'APK_VERSION_CODE=50206' \
   'APK_CHANNEL=test' \
   'PRODUCTION_READY=0' \
   'GMS_DPC_APPROVED=0' \
@@ -94,13 +102,30 @@ printf '%s\n' \
 python3 "$ROOT/profiles/standalone-rental/build/make-release-provisioning-meta.py" \
   --apk "$TMP/app.apk" \
   --metadata "$TMP/build-meta.txt" \
-  --tag 'v0.5.2-rental.2-rc.4' \
+  --tag 'v0.5.2-rental.2-rc.5' \
   --repository 'BlazingSystems/BlazingSystems-Experiments' \
   --out "$TMP/release-meta.env"
 grep -qx "APK_SHA256=$APK_SHA" "$TMP/release-meta.env"
 grep -qx "APK_CHECKSUM=$APK_CHECKSUM" "$TMP/release-meta.env"
 grep -qx 'GMS_DPC_APPROVED=0' "$TMP/release-meta.env"
 grep -Eq '^APK_CHECKSUM=[A-Za-z0-9_-]{43}=$' "$TMP/release-meta.env"
+
+# Secure enrollment v2 derivation parity: the long-lived device secret is
+# derived independently from the one-time token and never needs transport.
+TOKEN='0123456789ab.0123456789abcdef0123456789abcdef'
+NONCE='00112233445566778899aabbccddeeff'
+DID='00112233445566778899aabb'
+SERVER_MS=1700000000000
+LEASE_MS=1700000000000
+KDF='hmac-sha256-v1'
+DERIVED_SERVER="$(printf '%s' "device-secret-v2|$NONCE|$DID" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{print $NF}')"
+DERIVED_CLIENT="$(printf '%s' "device-secret-v2|$NONCE|$DID" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{print $NF}')"
+[ "$DERIVED_SERVER" = "$DERIVED_CLIENT" ]
+[ "${#DERIVED_SERVER}" -eq 64 ]
+RESP="enroll-response-v2|$NONCE|$DID|$SERVER_MS|$LEASE_MS|$KDF"
+SIG_SERVER="$(printf '%s' "$RESP" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{print $NF}')"
+SIG_CLIENT="$(printf '%s' "$RESP" | openssl dgst -sha256 -hmac "$TOKEN" | awk '{print $NF}')"
+[ "$SIG_SERVER" = "$SIG_CLIENT" ]
 
 # Runtime regression: a one-time enrollment record must have exactly one
 # successful claimant even when two processes race it.

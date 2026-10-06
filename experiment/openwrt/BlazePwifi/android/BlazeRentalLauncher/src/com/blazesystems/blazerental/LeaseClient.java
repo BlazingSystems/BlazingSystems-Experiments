@@ -33,27 +33,44 @@ public final class LeaseClient {
             if (enrolling) {
                 int dot = enrollment.indexOf('.');
                 if (dot <= 0) return false;
-                body.append("&enroll_id=").append(enc(enrollment.substring(0, dot)));
+                body.append("&enroll_id=").append(enc(enrollment.substring(0, dot)))
+                        .append("&protocol=2");
             } else {
                 body.append("&device_id=").append(enc(RentalLeaseStore.deviceId(context)));
                 body.append("&inventory=").append(enc(inventoryCsv(context)));
             }
 
-            String canonicalAuth = action + "|" + nonce + "|" + authSecret;
+            String canonicalAuth = enrolling
+                    ? "enroll_v2|" + nonce + "|" + authSecret
+                    : action + "|" + nonce + "|" + authSecret;
             body.append("&sig=").append(enc(Hmac.sha256Hex(authSecret, canonicalAuth)));
 
             JSONObject response = post(base, body.toString());
             if (response == null || !response.optBoolean("ok", false)) return false;
 
-            String newSecret = response.optString("device_secret", deviceSecret);
             String deviceId = response.optString("device_id", RentalLeaseStore.deviceId(context));
-            if (deviceId.length() > 0 && newSecret.length() > 0) {
-                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
-            }
-
             long serverNow = response.optLong("server_time_ms", 0L);
             long leaseUntil = response.optLong("lease_until_ms", 0L);
             if (serverNow <= 0L || leaseUntil < serverNow) return false;
+
+            String newSecret = deviceSecret;
+            if (enrolling) {
+                if (response.optInt("enrollment_protocol", 0) != 2) return false;
+                if (deviceId.length() != 24) return false;
+                String kdf = response.optString("identity_kdf", "");
+                if (!"hmac-sha256-v1".equals(kdf)) return false;
+                String responseSig = response.optString("enroll_sig", "");
+                String responseCanonical = "enroll-response-v2|" + nonce + "|" + deviceId
+                        + "|" + serverNow + "|" + leaseUntil + "|" + kdf;
+                if (responseSig.length() == 0
+                        || !responseSig.equals(Hmac.sha256Hex(authSecret, responseCanonical))) {
+                    return false;
+                }
+                newSecret = Hmac.sha256Hex(authSecret,
+                        "device-secret-v2|" + nonce + "|" + deviceId);
+                if (newSecret.length() != 64) return false;
+                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
+            }
             RentalLeaseStore.recordLease(context, serverNow, leaseUntil);
 
             if (!enrolling) {

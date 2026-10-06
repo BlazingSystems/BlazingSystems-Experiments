@@ -133,11 +133,11 @@ public class QrEnrollmentScannerActivity extends Activity
             if (raw.trim().startsWith("{")) {
                 JSONObject json = new JSONObject(raw);
                 if (json.has("android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME")
-                        || "blazerental.provisioning.v1".equals(json.optString("schema", ""))) {
+                        || "blazerental.provisioning.v2".equals(json.optString("schema", ""))) {
                     throw new IllegalStateException("PROVISIONING_QR");
                 }
                 String schema = json.optString("schema", "");
-                if (schema.length() > 0 && !"blazerental.enrollment.v1".equals(schema)) {
+                if (schema.length() > 0 && !"blazerental.enrollment.v2".equals(schema)) {
                     throw new IllegalArgumentException();
                 }
                 server = json.optString("server_url", "");

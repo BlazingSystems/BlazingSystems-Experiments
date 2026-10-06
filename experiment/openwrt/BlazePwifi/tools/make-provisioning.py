@@ -36,7 +36,7 @@ data={
  "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":checksum,
  "android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":a.version_code,
  "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{
-   "blaze_schema":"blazerental.provisioning.v1",
+   "blaze_schema":"blazerental.provisioning.v2",
    "server_url":a.server_url,
    "enrollment_token":a.enrollment_token,
    "device_name":a.device_name
