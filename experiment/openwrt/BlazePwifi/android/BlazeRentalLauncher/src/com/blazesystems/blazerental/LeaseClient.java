@@ -10,7 +10,17 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.List;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public final class LeaseClient {
     private static volatile long coinWindowDeadlineElapsedMs;
@@ -76,7 +86,7 @@ public final class LeaseClient {
             String canonicalAuth = action + "|" + nonce + "|" + authSecret;
             body.append("&sig=").append(enc(Hmac.sha256Hex(authSecret, canonicalAuth)));
 
-            JSONObject response = post(base, body.toString());
+            JSONObject response = post(context, base, body.toString());
             if (response == null || !response.optBoolean("ok", false)) return false;
 
             String newSecret = response.optString("device_secret", deviceSecret);
@@ -217,7 +227,7 @@ public final class LeaseClient {
             if (preferredVendo != null && preferredVendo.trim().length() > 0) {
                 body += "&vendo=" + enc(preferredVendo.trim());
             }
-            JSONObject response = post(base, body);
+            JSONObject response = post(context, base, body);
             if (response == null) return "Server unavailable.";
             if (!response.optBoolean("ok", false)) {
                 return response.optString("error", "Unable to start coin slot.");
@@ -254,7 +264,7 @@ public final class LeaseClient {
                     + "&device_id=" + enc(deviceId)
                     + "&sig=" + enc(Hmac.sha256Hex(secret,
                     "coin_stop|" + nonce + "|" + secret));
-            JSONObject response = post(base, body);
+            JSONObject response = post(context, base, body);
             if (response == null) return "Server unavailable.";
             if (!response.optBoolean("ok", false)) {
                 return response.optString("error", "Unable to close coin slot.");
@@ -283,9 +293,10 @@ public final class LeaseClient {
         return out.toString();
     }
 
-    static JSONObject post(String base, String body) throws Exception {
+    static JSONObject post(Context context, String base, String body) throws Exception {
         URL url = new URL(base.replaceAll("/+$", "") + "/cgi-bin/rental");
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        applyPinnedTls(context, connection);
         connection.setConnectTimeout(3500);
         connection.setReadTimeout(3500);
         connection.setRequestMethod("POST");
@@ -298,6 +309,65 @@ public final class LeaseClient {
                 ? connection.getInputStream() : connection.getErrorStream();
         if (input == null) return null;
         return new JSONObject(read(input));
+    }
+
+    private static void applyPinnedTls(Context context, HttpURLConnection connection)
+            throws Exception {
+        final String expectedPin = RentalLeaseStore.serverCertSha256(context);
+        if (expectedPin.length() == 0) return;
+        if (!(connection instanceof HttpsURLConnection)) {
+            throw new CertificateException("Pinned BlazePwifi server requires HTTPS");
+        }
+
+        final X509TrustManager pinnedTrust = new X509TrustManager() {
+            @Override public void checkClientTrusted(X509Certificate[] chain, String authType)
+                    throws CertificateException {
+                throw new CertificateException("Client certificate trust is not supported");
+            }
+
+            @Override public void checkServerTrusted(X509Certificate[] chain, String authType)
+                    throws CertificateException {
+                if (chain == null || chain.length == 0 || !certificateMatches(expectedPin, chain[0])) {
+                    throw new CertificateException("BlazePwifi TLS certificate pin mismatch");
+                }
+            }
+
+            @Override public X509Certificate[] getAcceptedIssuers() {
+                return new X509Certificate[0];
+            }
+        };
+
+        SSLContext tls = SSLContext.getInstance("TLS");
+        tls.init(null, new TrustManager[]{pinnedTrust}, null);
+        HttpsURLConnection https = (HttpsURLConnection) connection;
+        https.setSSLSocketFactory(tls.getSocketFactory());
+        https.setHostnameVerifier(new HostnameVerifier() {
+            @Override public boolean verify(String hostname, SSLSession session) {
+                try {
+                    Certificate[] peer = session.getPeerCertificates();
+                    return peer != null && peer.length > 0
+                            && certificateMatches(expectedPin, peer[0]);
+                } catch (Exception ignored) {
+                    return false;
+                }
+            }
+        });
+    }
+
+    private static boolean certificateMatches(String expectedPin, Certificate certificate) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(certificate.getEncoded());
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte value : bytes) {
+                int v = value & 0xff;
+                if (v < 16) hex.append('0');
+                hex.append(Integer.toHexString(v));
+            }
+            return expectedPin.equals(hex.toString());
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     static String enc(String value) throws Exception {
