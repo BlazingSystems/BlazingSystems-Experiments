@@ -26,7 +26,7 @@ grep -q 'Device Provisioning QR' "$HTML"
 grep -q "api('rental_standard_qr'" "$HTML"
 grep -q "api('rental_provisioning_qr'" "$HTML"
 grep -q "api('rental_provisioning_status'" "$HTML"
-grep -q "renderQr(j.qr_payload,'L')" "$HTML"
+grep -q 'renderQr(j.qr_payload,4)' "$HTML"
 
 grep -q 'android.app.action.GET_PROVISIONING_MODE' "$MANIFEST"
 grep -q 'android.app.action.ADMIN_POLICY_COMPLIANCE' "$MANIFEST"
@@ -68,5 +68,44 @@ assert x["blaze_schema"]=="blazerental.provisioning.v1"
 assert x["server_url"]=="http://192.168.1.1"
 assert x["enrollment_token"].startswith("0123456789ab.")
 PY
+
+# Runtime regression: a one-time enrollment record must have exactly one
+# successful claimant even when two processes race it.
+STATE="$TMP/state"
+RUN="$TMP/run"
+mkdir -p "$STATE" "$RUN"
+EID=0123456789ab
+printf '%s\t%s\t%s\t%s\n' "$EID" \
+  0123456789abcdef0123456789abcdef0123 \
+  4102444800 "Race phone" > "$STATE/rental-enroll.tsv"
+: > "$TMP/claims"
+
+cat > "$TMP/claim.sh" <<'EOF'
+#!/bin/sh
+set -eu
+STATE="$1"; RUN="$2"; ROOT="$3"; EID="$4"; OUT="$5"
+BP_STATE="$STATE"; BP_RUN="$RUN"; export BP_STATE BP_RUN
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+bp_rental_init
+bp_rental_enroll_lock || exit 3
+line="$(bp_rental_enroll_lookup "$EID")"
+if [ -n "$line" ]; then
+  sleep 1
+  bp_rental_enroll_consume "$EID"
+  printf 'claimed\n' >> "$OUT"
+fi
+bp_rental_enroll_unlock
+EOF
+chmod +x "$TMP/claim.sh"
+
+"$TMP/claim.sh" "$STATE" "$RUN" "$ROOT" "$EID" "$TMP/claims" &
+P1=$!
+"$TMP/claim.sh" "$STATE" "$RUN" "$ROOT" "$EID" "$TMP/claims" &
+P2=$!
+wait "$P1"
+wait "$P2"
+[ "$(wc -l < "$TMP/claims" | tr -d ' ')" = 1 ]
+! grep -q "^$EID$(printf '\t')" "$STATE/rental-enroll.tsv"
 
 echo "BlazeRental provisioning/enrollment split audit passed"

@@ -43,6 +43,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v05_android_source.sh
       - name: BlazeRental PC QR tool validation
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
+      - name: BlazeRental provisioning split and enrollment race validation
+        run: sh experiment/openwrt/BlazePwifi/tests/provisioning_split.sh
       - name: BlazeRental server validation
         run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: BlazeRental v0.4 policy validation
