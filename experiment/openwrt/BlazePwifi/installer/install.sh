@@ -36,7 +36,7 @@ if [ -s "$PRESERVED_PORTAL" ]; then
   mkdir -p /etc/blazepwifi/portal
   cp -a "$PRESERVED_PORTAL" /etc/blazepwifi/portal/portal.json
 fi
-chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
+chmod +x /etc/init.d/blazepwifi* /usr/sbin/blazepwifi-* /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/*
 mkdir -p /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
 chmod 700 /etc/blazepwifi /etc/blazepwifi/state /etc/blazepwifi/portal /tmp/blazepwifi
 [ ! -f /etc/blazepwifi/portal/portal.json ] || chmod 600 /etc/blazepwifi/portal/portal.json
