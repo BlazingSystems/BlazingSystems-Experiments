@@ -8,7 +8,11 @@ if grep -Fq '"$" | sha256sum' "$ROOT/openwrt/rootfs/etc/uci-defaults/99-blazepwi
 fi
 
 for f in $(find "$ROOT" -type f \( -name '*.sh' -o -path '*/etc/init.d/*' -o -name 'api' -o -name 'admin' -o -name 'admin-login' -o -name 'admin-session' -o -name 'admin-logout' -o -name 'vendo' -o -name 'blazepwifi-core' \)); do
-  sh -n "$f"
+  first="$(head -n1 "$f" 2>/dev/null || true)"
+  case "$first" in
+    *bash*) bash -n "$f" ;;
+    *) sh -n "$f" ;;
+  esac
 done
 
 grep -q 'table inet blazepwifi' "$ROOT/openwrt/rootfs/usr/sbin/blazepwifi-core"

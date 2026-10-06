@@ -10,6 +10,10 @@ on:
       - 'experiment/openwrt/BlazePwifi/**'
       - '.github/workflows/blazepwifi-build.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -27,14 +31,32 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/template_gallery.sh
       - name: Controller protocol parity
         run: sh experiment/openwrt/BlazePwifi/tests/controllers.sh
+      - name: BlazePwifi v0.4 controller compatibility
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_controller_compat.sh
       - name: Linux GPIO agent validation
         run: sh experiment/openwrt/BlazePwifi/tests/linux_agent.sh
       - name: BlazeRental source validation
         run: sh experiment/openwrt/BlazePwifi/tests/android.sh
+      - name: BlazeRental v0.4 compatibility source validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_android_source.sh
+      - name: BlazeRental v0.5 launcher source validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v05_android_source.sh
       - name: BlazeRental PC QR tool validation
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
       - name: BlazeRental server validation
         run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
+      - name: BlazeRental v0.4 policy validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_policy.sh
+      - name: BlazeRental v0.4 device API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_api.sh
+      - name: BlazeRental v0.4 admin API validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_rental_admin.sh
+      - name: BlazePwifi v0.4 admin UI validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_admin_ui.sh
+      - name: BlazePwifi v0.5 console and portal validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v05_console.sh
+      - name: BlazePwifi v0.4 build matrix validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation
         run: sh experiment/openwrt/BlazePwifi/tests/portal.sh
       - name: Admin UI validation
@@ -152,39 +174,243 @@ jobs:
 
 
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Install Android SDK components
+      - name: Install Android SDK 27 and isolate legacy SDK root
+        shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - uses: gradle/actions/setup-gradle@v4
+          "$SDKMANAGER" "platforms;android-27" "build-tools;27.0.3" "build-tools;36.0.0"
+          rm -rf /tmp/android-sdk-27
+          mkdir -p /tmp/android-sdk-27/platforms /tmp/android-sdk-27/build-tools
+          cp -a "${ANDROID_SDK_ROOT}/platforms/android-27" /tmp/android-sdk-27/platforms/
+          cp -a "${ANDROID_SDK_ROOT}/build-tools/27.0.3" /tmp/android-sdk-27/build-tools/
+          printf 'sdk.dir=/tmp/android-sdk-27\n' > experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/local.properties
+      - name: Set up JDK 8 for Launcher3
+        uses: actions/setup-java@v5
         with:
-          gradle-version: '9.6.0'
-      - name: Build BlazeRental validation and unsigned release APKs
-        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRental
+          distribution: temurin
+          java-version: '8'
+      - name: Install Gradle 4.4.1
+        shell: bash
         run: |
-          gradle --no-daemon :app:assembleDebug :app:assembleRelease
+          set -euo pipefail
+          curl -fsSL https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          echo /opt/gradle-4.4.1/bin >> "$GITHUB_PATH"
+      - name: Build BlazeRental Launcher Edition APKs
+        shell: bash
+        working-directory: experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher
+        run: |
+          set -euo pipefail
+          ANDROID_HOME=/tmp/android-sdk-27 ANDROID_SDK_ROOT=/tmp/android-sdk-27 \
+            gradle --no-daemon --stacktrace testAospDebugUnitTest assembleAospDebug assembleAospRelease
           mkdir -p ../../dist/android
-          cp app/build/outputs/apk/debug/app-debug.apk ../../dist/android/BlazeRental-ci-debug.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk ../../dist/android/BlazeRental-release-unsigned.apk
-          if [ -f ../../releases/0.3.0/BlazeRental.apk ]; then
-            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs ../../releases/0.3.0/BlazeRental.apk
-          fi
-          (cd ../../dist/android && sha256sum BlazeRental-ci-debug.apk BlazeRental-release-unsigned.apk > SHA256SUMS)
+          DEBUG_APK="$(find build/outputs/apk/aosp/debug -type f -name '*.apk' | head -n1)"
+          RELEASE_APK="$(find build/outputs/apk/aosp/release -type f -name '*.apk' | head -n1)"
+          test -n "$DEBUG_APK" -a -f "$DEBUG_APK"
+          test -n "$RELEASE_APK" -a -f "$RELEASE_APK"
+          cp "$DEBUG_APK" ../../dist/android/BlazeRental-v0.5.0-ci.apk
+          cp "$RELEASE_APK" ../../dist/android/BlazeRental-v0.5.0-release-unsigned.apk
+          cp BLAZE_UPSTREAM.md ../../dist/android/Launcher3-UPSTREAM.txt
+          (cd ../../dist/android && sha256sum BlazeRental-v0.5.0-ci.apk BlazeRental-v0.5.0-release-unsigned.apk > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental
+          name: BlazePwifi-android-BlazeRental-v0.5
           path: experiment/openwrt/BlazePwifi/dist/android/
 
 
+  v04_browser_simulation:
+    needs: [validate]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m pip install --disable-pip-version-check playwright
+          python -m playwright install --with-deps chromium
+      - run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-browser-simulation
+          path: simulation-out/browser/
+          if-no-files-found: warn
+
+  v04_android_emulator:
+    needs: [validate, android]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BlazePwifi-android-BlazeRental-v0.5
+          path: candidate/android
+      - name: Select exact built APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find candidate/android -type f -name 'BlazeRental-v0.5.0-ci.apk' -print -quit)"
+          test -n "$APK" -a -s "$APK"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          mkdir -p simulation-out/android
+          sha256sum "$APK" > simulation-out/android/AUDITED_APK_SHA256
+      - name: Enable Android emulator KVM acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+            test -r /dev/kvm -a -w /dev/kvm
+          fi
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 27
+          arch: x86
+          target: default
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-metrics
+          emulator-boot-timeout: 300
+          script: timeout 180s bash experiment/openwrt/BlazePwifi/simulation/android_v05_audit.sh "$APK" simulation-out/android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-android-simulation
+          path: simulation-out/android/
+          if-no-files-found: warn
+
+  v04_esp_simulation:
+    needs: [validate, esp8266, esp32]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [esp8266, esp32]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BlazePwifi-${{ matrix.kind }}-firmware
+          path: candidate/${{ matrix.kind }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check esptool
+      - run: bash experiment/openwrt/BlazePwifi/simulation/esp_v04_audit.sh "candidate/${{ matrix.kind }}" "${{ matrix.kind }}" "simulation-out/${{ matrix.kind }}"
+      - run: sh experiment/openwrt/BlazePwifi/tests/v04_controller_compat.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-${{ matrix.kind }}-simulation
+          path: simulation-out/${{ matrix.kind }}/
+          if-no-files-found: warn
+
+  v04_ruijie_simulation:
+    needs: [validate, firmware]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BlazePwifi-ruijie-firmware
+          path: candidate/ruijie
+      - run: sudo apt-get update && sudo apt-get install -y squashfs-tools
+      - run: bash experiment/openwrt/BlazePwifi/simulation/ruijie_v04_audit.sh candidate/ruijie simulation-out/ruijie
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-ruijie-simulation
+          path: simulation-out/ruijie/
+          if-no-files-found: warn
+
+  v04_orangepi_simulation:
+    needs: [validate, firmware]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [orangepi_zero3, orangepi_one, orangepi_pc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BlazePwifi-${{ matrix.target }}-firmware
+          path: candidate/${{ matrix.target }}
+      - run: sudo apt-get update && sudo apt-get install -y qemu-user-static util-linux
+      - run: bash experiment/openwrt/BlazePwifi/simulation/orangepi_v04_userspace_audit.sh "candidate/${{ matrix.target }}" "${{ matrix.target }}" "simulation-out/${{ matrix.target }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-${{ matrix.target }}-simulation
+          path: simulation-out/${{ matrix.target }}/
+          if-no-files-found: warn
+
+  v04_x86_simulation:
+    needs: [validate, firmware]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: BlazePwifi-x86_64-firmware
+          path: candidate/x86
+      - run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf util-linux
+      - run: bash experiment/openwrt/BlazePwifi/simulation/x86_v04_qemu_audit.sh candidate/x86 simulation-out/x86
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v0.5-x86-simulation
+          path: simulation-out/x86/
+          if-no-files-found: warn
+
+  v04_candidate_gate:
+    needs:
+      - validate
+      - android
+      - esp8266
+      - esp32
+      - firmware
+      - v04_browser_simulation
+      - v04_android_emulator
+      - v04_esp_simulation
+      - v04_ruijie_simulation
+      - v04_orangepi_simulation
+      - v04_x86_simulation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record passing candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate-gate
+          cat > candidate-gate/CANDIDATE-GATE.json <<JSON
+          {
+            "release": "0.5.0",
+            "commit": "${GITHUB_SHA}",
+            "status": "passed",
+            "required_targets": ["android","esp8266","esp32","ruijie","x86_64","orangepi_zero3","orangepi_one","orangepi_pc"],
+            "simulation": "passed"
+          }
+          JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-v0.5-candidate-gate
+          path: candidate-gate/CANDIDATE-GATE.json
+          if-no-files-found: error
 
   production_sign_handoff:
     if: github.ref == 'refs/heads/blazepwifi-v0.3.0-production' && contains(github.event.head_commit.message, '[sign]')

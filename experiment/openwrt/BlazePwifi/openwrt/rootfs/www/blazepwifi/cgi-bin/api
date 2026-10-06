@@ -55,7 +55,12 @@ case "$action" in
     else
       remaining=0; time_sync=false
     fi
-    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync}"
+    vlan="$(bp_cfg hotspot_vlan)"; [ -n "$vlan" ] || vlan=0
+    speed="$(bp_cfg default_speed_limit_kbps)"; [ -n "$speed" ] || speed=0
+    free_kb="$(awk '/MemAvailable:/ {print $2; found=1} END{if(!found) print 0}' /proc/meminfo 2>/dev/null)"
+    load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+    uptime="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
+    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync,\"hotspot_vlan\":$vlan,\"speed_limit_kbps\":$speed,\"mem_available_kb\":${free_kb:-0},\"load1\":\"$(bp_json_escape "${load1:-0}")\",\"uptime_seconds\":${uptime:-0}}"
     ;;
 
   coin_start)
