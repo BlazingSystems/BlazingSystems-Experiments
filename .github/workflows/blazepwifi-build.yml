@@ -215,12 +215,14 @@ jobs:
           curl -fsSL https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /opt
           echo /opt/gradle-4.4.1/bin >> "$GITHUB_PATH"
-      - name: Build BlazeRental 0.5.2 and exact 0.5.1 rollback rescue APKs
+      - name: Build current BlazeRental development APK and frozen v0.5.2 rollback rescue
         shell: bash
         run: |
           set -euo pipefail
-          CUR="$GITHUB_WORKSPACE/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
-          DIST="$GITHUB_WORKSPACE/experiment/openwrt/BlazePwifi/dist/android"
+          ROOT="$GITHUB_WORKSPACE/experiment/openwrt/BlazePwifi"
+          VERSION="$(cat "$ROOT/VERSION")"
+          CUR="$ROOT/android/BlazeRentalLauncher"
+          DIST="$ROOT/dist/android"
           mkdir -p "$DIST"
 
           (
@@ -232,19 +234,19 @@ jobs:
           RELEASE_APK="$(find "$CUR/build/outputs/apk/aosp/release" -type f -name '*.apk' | head -n1)"
           test -n "$DEBUG_APK" -a -s "$DEBUG_APK"
           test -n "$RELEASE_APK" -a -s "$RELEASE_APK"
-          cp "$DEBUG_APK" "$DIST/BlazeRental-v0.5.2-ci.apk"
-          cp "$RELEASE_APK" "$DIST/BlazeRental-v0.5.2-release-unsigned.apk"
+          cp "$DEBUG_APK" "$DIST/BlazeRental-$VERSION-ci.apk"
+          cp "$RELEASE_APK" "$DIST/BlazeRental-$VERSION-release-unsigned.apk"
           cp "$CUR/BLAZE_UPSTREAM.md" "$DIST/Launcher3-UPSTREAM.txt"
 
-          # Rollback rescue is the exact fully validated v0.5.1 production candidate source.
-          # Only Android version metadata is raised so Android accepts it as a
-          # forward install while behavior returns to the previous stable code.
-          RESCUE_ROOT=/tmp/blazerental-v051-rescue
+          # Rollback rescue uses the exact frozen v0.5.2 production application
+          # candidate. Only Android version metadata is raised so Android can
+          # accept it as a forward install while behavior returns to v0.5.2.
+          RESCUE_ROOT=/tmp/blazerental-v052-rescue
           rm -rf "$RESCUE_ROOT"
-          git worktree add --detach "$RESCUE_ROOT" 65f87d775793a1fdc09a9522cf752349f68c3b41
+          git worktree add --detach "$RESCUE_ROOT" bf2992977fe8504d21b107df02826032c31d3a62
           RESCUE="$RESCUE_ROOT/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
-          sed -i 's/versionCode 50100/versionCode 50201/' "$RESCUE/build.gradle"
-          sed -i 's/versionName "0.5.1"/versionName "0.5.1-rescue-for-0.5.2"/' "$RESCUE/build.gradle"
+          sed -i 's/versionCode 50200/versionCode 50301/' "$RESCUE/build.gradle"
+          sed -i "s/versionName \"0.5.2\"/versionName \"0.5.2-rescue-for-$VERSION\"/" "$RESCUE/build.gradle"
           printf 'sdk.dir=/tmp/android-sdk-27\n' > "$RESCUE/local.properties"
           (
             cd "$RESCUE"
@@ -255,21 +257,21 @@ jobs:
           RESCUE_RELEASE="$(find "$RESCUE/build/outputs/apk/aosp/release" -type f -name '*.apk' | head -n1)"
           test -n "$RESCUE_DEBUG" -a -s "$RESCUE_DEBUG"
           test -n "$RESCUE_RELEASE" -a -s "$RESCUE_RELEASE"
-          cp "$RESCUE_DEBUG" "$DIST/BlazeRental-v0.5.1-rescue-for-v0.5.2-TEST.apk"
-          cp "$RESCUE_RELEASE" "$DIST/BlazeRental-v0.5.1-rescue-for-v0.5.2-release-unsigned.apk"
+          cp "$RESCUE_DEBUG" "$DIST/BlazeRental-v0.5.2-rescue-for-$VERSION-TEST.apk"
+          cp "$RESCUE_RELEASE" "$DIST/BlazeRental-v0.5.2-rescue-for-$VERSION-release-unsigned.apk"
           git worktree remove --force "$RESCUE_ROOT"
 
           (
             cd "$DIST"
             sha256sum \
-              BlazeRental-v0.5.2-ci.apk \
-              BlazeRental-v0.5.2-release-unsigned.apk \
-              BlazeRental-v0.5.1-rescue-for-v0.5.2-TEST.apk \
-              BlazeRental-v0.5.1-rescue-for-v0.5.2-release-unsigned.apk > SHA256SUMS
+              "BlazeRental-$VERSION-ci.apk" \
+              "BlazeRental-$VERSION-release-unsigned.apk" \
+              "BlazeRental-v0.5.2-rescue-for-$VERSION-TEST.apk" \
+              "BlazeRental-v0.5.2-rescue-for-$VERSION-release-unsigned.apk" > SHA256SUMS
           )
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental-v0.5.2
+          name: BlazePwifi-android-current
           path: experiment/openwrt/BlazePwifi/dist/android/
 
   update_bundle:
@@ -277,7 +279,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build no-reflash v0.5.2 update assets
+      - name: Build current no-reflash update assets
         shell: bash
         run: |
           set -euo pipefail
@@ -290,7 +292,7 @@ jobs:
           )
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-v0.5.2-update
+          name: BlazePwifi-current-update
           path: experiment/openwrt/BlazePwifi/dist/update/
           if-no-files-found: error
 
@@ -322,13 +324,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: BlazePwifi-android-BlazeRental-v0.5.2
+          name: BlazePwifi-android-current
           path: candidate/android
       - name: Select exact built APK
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find candidate/android -type f -name 'BlazeRental-v0.5.2-ci.apk' -print -quit)"
+          APK="$(find candidate/android -type f -name 'BlazeRental-*-ci.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
           echo "APK=$APK" >> "$GITHUB_ENV"
           mkdir -p simulation-out/android
@@ -462,14 +464,16 @@ jobs:
       - v04_x86_simulation
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Record passing candidate
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="$(cat experiment/openwrt/BlazePwifi/VERSION)"
           mkdir -p candidate-gate
           cat > candidate-gate/CANDIDATE-GATE.json <<JSON
           {
-            "release": "0.5.2",
+            "release": "$VERSION",
             "commit": "${GITHUB_SHA}",
             "status": "passed",
             "required_targets": ["android","esp8266","esp32","ruijie","x86_64","orangepi_zero3","orangepi_one","orangepi_pc"],
@@ -478,7 +482,7 @@ jobs:
           JSON
       - uses: actions/upload-artifact@v4
         with:
-          name: BlazePwifi-v0.5.2-candidate-gate
+          name: BlazePwifi-current-candidate-gate
           path: candidate-gate/CANDIDATE-GATE.json
           if-no-files-found: error
 
