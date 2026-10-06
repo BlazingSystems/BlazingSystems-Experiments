@@ -247,7 +247,7 @@ jobs:
           rm -rf "$RESCUE_ROOT"
           git worktree add --detach "$RESCUE_ROOT" bf2992977fe8504d21b107df02826032c31d3a62
           RESCUE="$RESCUE_ROOT/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
-          sed -i 's/versionCode 50200/versionCode 50301/' "$RESCUE/build.gradle"
+          sed -i 's/versionCode 50200/versionCode 50291/' "$RESCUE/build.gradle"
           sed -i "s/versionName \"0.5.2\"/versionName \"0.5.2-rescue-for-$VERSION\"/" "$RESCUE/build.gradle"
           printf 'sdk.dir=/tmp/android-sdk-27\n' > "$RESCUE/local.properties"
           (
