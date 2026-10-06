@@ -105,7 +105,7 @@ esac
 
 cat > "$OUT/BUILD-MANIFEST.txt" <<EOF
 Edition: BlazePwifi Rental Standalone
-Edition version: 0.5.2-rental.2-rc.4
+Edition version: 0.5.2-rental.2-rc.5
 OpenWrt version: $VER
 Target: $TARGET
 OpenWrt target: $SUB
@@ -113,7 +113,7 @@ Profile: $PROFILE
 Full BlazePwifi payload present: yes
 Hotspot core activated by image first boot: no
 Rental management route: /rental/
-Android server base: http://LocalIP
+Android server base: https://LocalIP
 Remote coin protocol port: 4455
 Provisioning metadata source: $PROVISIONING_META
 Provisioning ready: $(awk -F= '$1=="READY"{print $2;exit}' "$PROVISIONING_META" 2>/dev/null || true)

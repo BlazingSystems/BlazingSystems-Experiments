@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.4
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.5
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -6,7 +6,7 @@ After installation:
 
 - existing router/basic UI stays where the device already provides it;
 - BlazePwifi Rental management is added at `https://LocalIP/rental/`;
-- BlazeRental phones use `http://LocalIP`;
+- BlazeRental phones use `https://LocalIP`;
 - authenticated remote ESP coinslot interfaces use `http://LocalIP:4455/cgi-bin/vendo`.
 
 ## R281 / EasyMode path
@@ -43,7 +43,7 @@ Password: admin
 Existing admin accounts are preserved. The normal password-change action still requires a stronger password.
 
 
-## 0.5.2-rental.2-rc.4 UI hotfix
+## 0.5.2-rental.2-rc.5 UI hotfix
 
 Rental mutations now submit CSRF through both the custom header and form body, with one authenticated token refresh/retry on mismatch. This specifically fixes QR enrollment creation on R281/uHTTPd paths where custom CGI headers may not be reliable.
 
@@ -65,3 +65,8 @@ Standard Enrollment and Device Provisioning are independent contracts. Device Pr
 The provisioning metadata includes `GMS_DPC_APPROVED`. When it is `0`, the server/API/UI require an explicit acknowledgement and label the custom-DPC QR for AOSP/non-GMS or explicitly supported test devices only. Google-certified devices may block a non-approved custom DPC during Setup Wizard.
 
 The Setup Wizard package checksum is canonical padded Base64URL SHA-256 and is cross-checked against the exact published APK.
+
+
+## Pinned HTTPS onboarding
+
+RC5 binds OpenWrt-generated Standard Enrollment and Device Provisioning QR payloads to this server's HTTPS origin and SHA-256 certificate fingerprint. Device Owner provisioning fails closed if HTTPS or the pin is unavailable.

@@ -103,7 +103,7 @@ function Prompt-Password {
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Plink = Join-Path $Here "plink.exe"
 $Pscp = Join-Path $Here "pscp.exe"
-$BundleName = "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.4.tar.gz"
+$BundleName = "BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.5.tar.gz"
 $Bundle = Get-ChildItem -Path $Here -Filter $BundleName -ErrorAction SilentlyContinue | Select-Object -First 1
 
 if (!(Test-Path $Plink) -or !(Test-Path $Pscp)) {
@@ -244,7 +244,7 @@ try {
     # the archive's single top-level bundle directory.
     $remoteTemplate = @'
 set -e
-ARCHIVE=/tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.4.tar.gz
+ARCHIVE=/tmp/BlazePwifi-Rental-Standalone-OpenWrt-v0.5.2-rental.2-rc.5.tar.gz
 UNPACK=/tmp/blazepwifi-rental-unpack
 rm -rf "$UNPACK"
 mkdir -p "$UNPACK"
@@ -278,9 +278,9 @@ __BLAZE_INSTALL_ENTRY__
     Write-Host ""
     Write-Host "Installation complete." -ForegroundColor Green
     Write-Host "Rental console: https://$HostName/rental/" -ForegroundColor Green
-    Write-Host "Android server: http://$HostName" -ForegroundColor Green
+    Write-Host "Android server: https://$HostName" -ForegroundColor Green
 
-    Show-Info "BlazePwifi Rental Standalone was installed.`r`n`r`nRental console:`r`nhttps://$HostName/rental/`r`n`r`nAndroid server:`r`nhttp://$HostName`r`n`r`nFresh-install Rental login is admin / admin. Change it later in Rental settings."
+    Show-Info "BlazePwifi Rental Standalone was installed.`r`n`r`nRental console:`r`nhttps://$HostName/rental/`r`n`r`nAndroid server:`r`nhttps://$HostName`r`n`r`nFresh-install Rental login is admin / admin. Change it later in Rental settings."
     try { Start-Process "https://$HostName/rental/" } catch {}
 }
 finally {

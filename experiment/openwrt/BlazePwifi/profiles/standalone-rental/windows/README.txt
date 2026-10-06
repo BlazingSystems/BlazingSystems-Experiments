@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental.2-rc.4
+Version: v0.5.2-rental.2-rc.5
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -15,7 +15,7 @@ Normal Rental Standalone installation does not intentionally modify network, wir
 
 After installation:
   Rental console: https://ROUTER-IP/rental/
-  Android server: http://ROUTER-IP
+  Android server: https://ROUTER-IP
 
 The SSH password is written only to a temporary local file for plink/pscp and is overwritten/deleted at the end of the run.
 
@@ -38,7 +38,7 @@ PASSWORD RESET:
   No manual file upload to the router is required.
 
 
-HOTFIX 0.5.2-rental.2-rc.4:
+HOTFIX 0.5.2-rental.2-rc.5:
 - Fixes CSRF validation failures on mutating Rental admin actions such as QR enrollment.
 - Sends CSRF in both HTTP header and POST body.
 - Refreshes the authenticated session and retries once if a CSRF token becomes stale.
@@ -56,3 +56,9 @@ DEVICE PROVISIONING RC4:
   Google-certified Android may block a custom DPC that is not Android Enterprise approved.
   RC4 metadata declares that state and the Rental UI requires an explicit warning acknowledgement.
   Use the custom-DPC test path only on AOSP/non-GMS or an explicitly supported test device unless approval is declared.
+
+
+RC5 SECURITY:
+  OpenWrt-generated Standard Enrollment and Device Provisioning use the
+  router HTTPS endpoint and pin the local uHTTPd certificate in BlazeRental.
+  Device Provisioning refuses HTTP or a missing/invalid certificate pin.

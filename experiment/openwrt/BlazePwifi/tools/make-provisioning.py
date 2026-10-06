@@ -8,13 +8,18 @@ p.add_argument("--server-url",required=True)
 p.add_argument("--enrollment-token",required=True)
 p.add_argument("--device-name",default="Rental phone")
 p.add_argument("--version-code",required=True,type=int)
+p.add_argument("--server-cert-sha256",required=True,
+               help="64-hex SHA-256 fingerprint of the Rental Server TLS certificate")
 p.add_argument("--out",required=True)
 a=p.parse_args()
 
 if not a.apk_url.startswith("https://") or re.search(r"\s", a.apk_url):
     raise SystemExit("--apk-url must be a whitespace-free HTTPS URL")
-if not (a.server_url.startswith("http://") or a.server_url.startswith("https://")) or re.search(r"\s", a.server_url):
-    raise SystemExit("--server-url must be a whitespace-free HTTP(S) URL")
+if not a.server_url.startswith("https://") or re.search(r"\s", a.server_url):
+    raise SystemExit("--server-url must be a whitespace-free HTTPS URL")
+pin=a.server_cert_sha256.replace(":","").strip().lower()
+if not re.fullmatch(r"[0-9a-f]{64}", pin):
+    raise SystemExit("--server-cert-sha256 must be a 64-hex SHA-256 fingerprint")
 if a.version_code < 1:
     raise SystemExit("--version-code must be positive")
 if not re.fullmatch(r"[A-Fa-f0-9]+\.[A-Fa-f0-9]+", a.enrollment_token):
@@ -39,7 +44,8 @@ data={
    "blaze_schema":"blazerental.provisioning.v1",
    "server_url":a.server_url,
    "enrollment_token":a.enrollment_token,
-   "device_name":a.device_name
+   "device_name":a.device_name,
+   "server_cert_sha256":pin
  }
 }
 pathlib.Path(a.out).write_text(json.dumps(data,indent=2)+"\n",encoding="utf-8")

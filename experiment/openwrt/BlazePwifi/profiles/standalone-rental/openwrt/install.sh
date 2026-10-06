@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental.2-rc.4"
+PROFILE_VERSION="0.5.2-rental.2-rc.5"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -281,7 +281,7 @@ echo
 echo "BlazePwifi Rental Standalone $PROFILE_VERSION installed."
 echo "Target:            $TARGET ($BOARD / $MODEL)"
 echo "Rental console:    https://$LAN_IP/rental/"
-echo "Android server:    http://$LAN_IP"
+echo "Android server:    https://$LAN_IP"
 echo "Android API:       http://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
 PROV_READY="$(awk -F= '$1=="READY"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"

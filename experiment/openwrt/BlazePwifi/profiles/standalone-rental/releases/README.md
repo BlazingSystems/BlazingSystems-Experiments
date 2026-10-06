@@ -2,6 +2,11 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.5
+
+RC5 adds pinned HTTPS onboarding and the validated retry-safe/signed enrollment transaction while preserving RC4's Standard Enrollment / Device Provisioning separation, administrator-only Device Provisioning, exact APK checksum binding, and custom-DPC/GMS warning gates.
+
+
 ### v0.5.2-rental.2-rc.4
 
 RC4 keeps the separated Standard Enrollment / Device Provisioning architecture, requires administrator role for Device Provisioning QR generation, and fixes canonical padded Base64URL checksum parsing in the immutable release assembler.
