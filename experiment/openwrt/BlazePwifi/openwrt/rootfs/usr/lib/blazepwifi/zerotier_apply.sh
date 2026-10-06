@@ -260,14 +260,72 @@ bp_zt_restore_snapshot() {
   bp_remote_admin_sync || return 1
 }
 
+bp_zt_clear_owned_routes() {
+  zt_i=1
+  while [ "$zt_i" -le 32 ]; do
+    uci -q delete "network.blazezt_route_$zt_i" || true
+    zt_i=$((zt_i+1))
+  done
+}
+
+bp_zt_validate_management_routes() {
+  zt_ipv4_cidr="$1"; zt_source_ip="$2"
+  zt_allowlist="$(bp_remote_get source_allowlist)"
+  zt_management="$(bp_remote_get management 0)"
+  [ "$zt_management" = 0 ] && return 0
+  [ -n "$zt_allowlist" ] || return 2
+
+  zt_ip_plain="$(printf '%s' "$zt_ipv4_cidr" | cut -d/ -f1)"
+  bp_remote_ipv4_host "$zt_ip_plain" || return 2
+
+  for zt_local in $(bp_remote_connected_routes); do
+    bp_remote_ipv4_cidr_valid "$zt_local" || continue
+    if bp_remote_ipv4_overlap "$zt_ip_plain/32" "$zt_local"; then return 3; fi
+  done
+
+  for zt_cidr in $(bp_remote_split_cidrs "$zt_allowlist"); do
+    bp_remote_ipv4_cidr_valid "$zt_cidr" || return 2
+    zt_prefix="$(printf '%s' "$zt_cidr" | cut -d/ -f2)"
+    [ "$zt_prefix" -ge 8 ] 2>/dev/null || return 2
+    [ "$zt_cidr" != "0.0.0.0/0" ] || return 2
+
+    for zt_local in $(bp_remote_connected_routes); do
+      bp_remote_ipv4_cidr_valid "$zt_local" || continue
+      if bp_remote_ipv4_overlap "$zt_cidr" "$zt_local"; then return 3; fi
+    done
+    if bp_remote_ipv4_host "$zt_source_ip" && bp_remote_ipv4_overlap "$zt_cidr" "$zt_source_ip/32"; then
+      return 4
+    fi
+  done
+  return 0
+}
+
 bp_zt_write_network_firewall() {
-  device="$1"; management="$(bp_remote_get management 0)"; allowlist="$(bp_remote_get source_allowlist)"
-  admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
+  zt_device="$1"; zt_ipv4_cidr="$2"; zt_source_ip="$3"
+  zt_management="$(bp_remote_get management 0)"; zt_allowlist="$(bp_remote_get source_allowlist)"
+  zt_admin_port="$(bp_cfg admin_port)"; [ -n "$zt_admin_port" ] || zt_admin_port=8443
+
+  bp_zt_validate_management_routes "$zt_ipv4_cidr" "$zt_source_ip" || return $?
+  zt_ip_plain="$(printf '%s' "$zt_ipv4_cidr" | cut -d/ -f1)"
 
   uci -q delete "network.$BP_ZT_NET_IF" || true
+  bp_zt_clear_owned_routes
   uci set "network.$BP_ZT_NET_IF=interface"
-  uci set "network.$BP_ZT_NET_IF.proto=none"
-  uci set "network.$BP_ZT_NET_IF.device=$device"
+  uci set "network.$BP_ZT_NET_IF.proto=static"
+  uci set "network.$BP_ZT_NET_IF.device=$zt_device"
+  uci set "network.$BP_ZT_NET_IF.ipaddr=$zt_ip_plain"
+  uci set "network.$BP_ZT_NET_IF.netmask=255.255.255.255"
+
+  if [ "$zt_management" = 1 ]; then
+    zt_i=1
+    for zt_cidr in $(bp_remote_split_cidrs "$zt_allowlist"); do
+      uci set "network.blazezt_route_$zt_i=route"
+      uci set "network.blazezt_route_$zt_i.interface=$BP_ZT_NET_IF"
+      uci set "network.blazezt_route_$zt_i.target=$zt_cidr"
+      uci set "network.blazezt_route_$zt_i.gateway=0.0.0.0"
+      zt_i=$((zt_i+1))
+    done
+  fi
 
   uci -q delete "firewall.$BP_ZT_FW_ZONE" || true
   uci -q delete "firewall.$BP_ZT_FW_ADMIN" || true
@@ -278,20 +336,26 @@ bp_zt_write_network_firewall() {
   uci set "firewall.$BP_ZT_FW_ZONE.forward=REJECT"
   uci add_list "firewall.$BP_ZT_FW_ZONE.network=$BP_ZT_NET_IF"
 
-  if [ "$management" = 1 ]; then
-    [ -n "$allowlist" ] || return 2
+  if [ "$zt_management" = 1 ]; then
     uci set "firewall.$BP_ZT_FW_ADMIN=rule"
     uci set "firewall.$BP_ZT_FW_ADMIN.name=Allow-BlazePwifi-ZeroTier-Admin"
     uci set "firewall.$BP_ZT_FW_ADMIN.src=$BP_ZT_FW_ZONE"
     uci set "firewall.$BP_ZT_FW_ADMIN.proto=tcp"
-    uci set "firewall.$BP_ZT_FW_ADMIN.dest_port=$admin_port"
+    uci set "firewall.$BP_ZT_FW_ADMIN.dest_port=$zt_admin_port"
     uci set "firewall.$BP_ZT_FW_ADMIN.target=ACCEPT"
-    for cidr in $(bp_remote_split_cidrs "$allowlist"); do
-      uci add_list "firewall.$BP_ZT_FW_ADMIN.src_ip=$cidr"
+    for zt_cidr in $(bp_remote_split_cidrs "$zt_allowlist"); do
+      uci add_list "firewall.$BP_ZT_FW_ADMIN.src_ip=$zt_cidr"
     done
   fi
   uci commit network
   uci commit firewall
+  return 0
+}
+
+bp_zt_interface_health() {
+  zt_device="$1"; zt_ipv4_cidr="$2"
+  zt_ip_plain="$(printf '%s' "$zt_ipv4_cidr" | cut -d/ -f1)"
+  ip -4 addr show dev "$zt_device" 2>/dev/null | grep -Eq "inet[[:space:]]+$zt_ip_plain/32([[:space:]]|$)"
 }
 
 bp_zt_activate() {
@@ -314,15 +378,16 @@ bp_zt_activate() {
   bp_zt_snapshot_create "$id" || { bp_remote_unlock; return 16; }
   bp_remote_unlock
 
-  if ! bp_zt_write_network_firewall "$device"; then bp_zt_restore_snapshot "$id"; return 17; fi
+  if ! bp_zt_write_network_firewall "$device" "$ipv4" "$source_ip"; then bp_zt_restore_snapshot "$id"; return 17; fi
   if ! bp_remote_network_reload; then bp_zt_restore_snapshot "$id"; return 18; fi
   if ! bp_remote_firewall_reload; then bp_zt_restore_snapshot "$id"; return 19; fi
+  if ! bp_zt_interface_health "$device" "$ipv4"; then bp_zt_restore_snapshot "$id"; return 19; fi
   if ! bp_remote_route_health "$source_ip" "$before_source" "$before_default"; then bp_zt_restore_snapshot "$id"; return 20; fi
 
   listener=""
   if [ "$(bp_remote_get management 0)" = 1 ]; then
     admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
-    listener="$ipv4:$admin_port"
+    listener="$(printf '%s' "$ipv4" | cut -d/ -f1):$admin_port"
   fi
   network_id="$(bp_zt_get network_id)"; node_id="$(bp_zt_get node_id)"; layout="$(bp_zt_get layout)"
   bp_zt_write active "$network_id" "$node_id" "$device" "$ipv4" "$listener" "$(bp_now)" "" "$layout" 0
@@ -346,6 +411,7 @@ bp_zt_disable() {
 
   bp_remote_admin_stop || true
   uci -q delete "network.$BP_ZT_NET_IF" || true
+  bp_zt_clear_owned_routes
   uci -q delete "firewall.$BP_ZT_FW_ZONE" || true
   uci -q delete "firewall.$BP_ZT_FW_ADMIN" || true
   uci commit network
