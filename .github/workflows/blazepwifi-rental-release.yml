@@ -131,10 +131,10 @@ jobs:
           )
           APK="$(find "$CUR/build/outputs/apk/aosp/debug" -type f -name '*.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
-          /tmp/android-sdk-27/build-tools/27.0.3/aapt dump badging "$APK" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50202' versionName='0.5.2-rental.2'"
+          /tmp/android-sdk-27/build-tools/27.0.3/aapt dump badging "$APK" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50202' versionName='0.5.2-rental.2-rc.1'"
           /tmp/android-sdk-27/build-tools/27.0.3/apksigner verify "$APK"
-          cp "$APK" "$OUT/BlazeRental-v0.5.2-rental.2-TEST.apk"
-          sha256sum "$OUT/BlazeRental-v0.5.2-rental.2-TEST.apk" > "$OUT/BlazeRental-v0.5.2-rental.2-TEST.apk.sha256"
+          cp "$APK" "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk"
+          sha256sum "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk" > "$OUT/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: BlazePwifi-Rental-Android-052rental2rc1
@@ -160,7 +160,7 @@ jobs:
           cp -a experiment/openwrt/BlazePwifi/openwrt/rootfs/. "$OUT/rootfs/"
           cp "$PROFILE/README.md" "$OUT/RELEASE-README.md"
 
-          APK="$(find android-artifact -type f -name 'BlazeRental-v0.5.2-rental.2-TEST.apk' -print -quit)"
+          APK="$(find android-artifact -type f -name 'BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
           APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
           APK_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode().rstrip("="))' "$APK")"
@@ -168,10 +168,10 @@ jobs:
           test "${#APK_CHECKSUM}" -eq 43
           printf '%s\n' \
             'READY=1' \
-            "APK_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/BlazeRental-v0.5.2-rental.2-TEST.apk" \
+            "APK_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk" \
             "APK_CHECKSUM=${APK_CHECKSUM}" \
             "APK_SHA256=${APK_SHA256}" \
-            'APK_VERSION=0.5.2-rental.2' \
+            'APK_VERSION=0.5.2-rental.2-rc.1' \
             'APK_VERSION_CODE=50202' \
             'APK_CHANNEL=test' \
             'PRODUCTION_READY=0' \
@@ -412,9 +412,9 @@ jobs:
           test -n "$BIOS" -a -s "$BIOS" -a -n "$EFI" -a -s "$EFI"
           cp "$BIOS" "$EFI" release-out/
 
-          APK="$(find artifacts/android -type f -name 'BlazeRental-v0.5.2-rental.2-TEST.apk' -print -quit)"
+          APK="$(find artifacts/android -type f -name 'BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk' -print -quit)"
           test -n "$APK" -a -s "$APK"
-          cp "$APK" release-out/BlazeRental-v0.5.2-rental.2-TEST.apk
+          cp "$APK" release-out/BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk
           cp experiment/openwrt/BlazePwifi/releases/0.5.2-rental.2-rc.1/README.md release-out/README.md
 
           jq -n --arg release "$VERSION" --arg commit "$GITHUB_SHA" '{
@@ -444,7 +444,7 @@ jobs:
               dpc_component:"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver",
               apk_channel:"test",
               production_ready:false,
-              apk_asset:"BlazeRental-v0.5.2-rental.2-TEST.apk",
+              apk_asset:"BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk",
               version_code:50202,
               android_12_integrated_provisioning:true,
               physical_setup_wizard_validation_pending:true
@@ -496,7 +496,7 @@ jobs:
             BlazePwifi-Rental-Standalone-EW1200G-Pro-v1.1-sysupgrade.bin \
             BlazePwifi-Rental-Standalone-x86_64-BIOS.img.gz \
             BlazePwifi-Rental-Standalone-x86_64-UEFI.img.gz \
-            BlazeRental-v0.5.2-rental.2-TEST.apk \
+            BlazeRental-v0.5.2-rental.2-rc.1-TEST.apk \
             RELEASE-MANIFEST.json SHA256SUMS
           do
             printf '%s' "$JSON" | jq -e --arg n "$required" '.assets[] | select(.name==$n)' >/dev/null \

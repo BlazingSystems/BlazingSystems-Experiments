@@ -117,6 +117,6 @@ grep -q 'RentalLeaseStore.isEnrolled' "$SRC/BlazeProvisioningComplianceActivity.
 grep -q 'Device Provisioning QR' "$SRC/QrEnrollmentScannerActivity.java"
 grep -q 'blazerental.enrollment.v1' "$SRC/QrEnrollmentScannerActivity.java"
 grep -q 'versionCode 50202' "$ANDROID/build.gradle"
-grep -q 'versionName "0.5.2-rental.2"' "$ANDROID/build.gradle"
+grep -q 'versionName "0.5.2-rental.2-rc.1"' "$ANDROID/build.gradle"
 
 echo "Standalone Rental v0.5.2-rental.2-rc.1 provisioning split checks passed"
