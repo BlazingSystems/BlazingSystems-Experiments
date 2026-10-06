@@ -144,6 +144,22 @@
 
   <section id="page-members" class="section"><div class="page-head"><div><h2>Pisonet Members</h2><p>Central member accounts and authoritative banked time for BlazePisonet SoftTimer stations.</p></div><div class="toolbar"><span id="memberRevision" class="badge">Central revision —</span><button class="btn" onclick="BlazeMembers.load()">Refresh</button></div></div>
     <div class="notice"><b>Authority model:</b> when SoftTimer is integrated with BlazePwifi, member account state and banked time are owned here. SoftTimer keeps only a revisioned local cache and fails closed on offline balance mutations.</div>
+    <div class="card" style="margin-top:16px"><div class="card-body"><div class="card-title">Member metadata migration</div>
+      <p class="muted">Export/import account metadata and banked time without exporting password salts, hashes or verifiers. New imported members are created disabled and require an administrator password reset before they can be enabled.</p>
+      <div class="toolbar">
+        <button class="btn" onclick="BlazeMembers.exportMetadata()">Export metadata</button>
+        <input id="memberImportFile" class="field" type="file" accept=".blazemembers,text/plain" style="max-width:340px">
+        <button class="btn" onclick="BlazeMembers.previewImport()">Preview import</button>
+      </div>
+      <div class="form-grid" style="margin-top:12px">
+        <label><span class="field-label">Collision policy</span><select id="memberImportPolicy" class="field"><option value="abort">Abort on any collision</option><option value="skip">Create new only; skip collisions</option><option value="update">Metadata-only update existing members</option></select></label>
+        <label><span class="field-label">Admin password to apply</span><input id="memberImportPassword" class="field" type="password" autocomplete="current-password" placeholder="Fresh re-authentication required"></label>
+      </div>
+      <div class="toolbar" style="margin-top:12px"><button id="memberImportApply" class="btn primary" onclick="BlazeMembers.applyImport()" disabled>Apply reviewed import</button></div>
+      <div id="memberImportSummary" class="small muted" style="margin-top:10px">Choose a Blaze Member Metadata v1 file and preview it before applying.</div>
+      <pre id="memberImportPreview" class="console-output" style="max-height:260px">No import preview loaded.</pre>
+      <div class="notice warn" style="margin-top:12px"><b>Collision safety:</b> imports never replace password verifier material. “Metadata-only update” changes only label, enabled state and banked balance on existing central members. New members remain disabled until a new password is set here.</div>
+    </div></div>
     <div class="grid two" style="margin-top:16px">
       <div class="card"><div class="card-body"><div class="card-title">Create member</div>
         <div class="form-grid">
