@@ -177,11 +177,11 @@ with sync_playwright() as p:
 
     page.click('button:has-text("Provision factory-reset phone")')
     page.wait_for_function(
-        "'Device Owner provisioning' in document.getElementById('qrNotice').textContent")
+        "document.getElementById('qrNotice').textContent.includes('Device Owner provisioning')")
     page.wait_for_function(
-        "'APK 0.5.2 (50200)' in document.getElementById('qrMeta').textContent")
+        "document.getElementById('qrMeta').textContent.includes('APK 0.5.2 (50200)')")
     page.wait_for_function(
-        "'fedcba9876543210' in document.getElementById('qrToken').textContent")
+        "document.getElementById('qrToken').textContent.includes('fedcba9876543210')")
     page.wait_for_selector("#qrBox svg")
     assert "Device Owner provisioning" in page.locator("#qrNotice").inner_text()
     assert "APK 0.5.2 (50200)" in page.locator("#qrMeta").inner_text()
@@ -226,7 +226,7 @@ with sync_playwright() as p:
 
     portal_state["credit"]=100
     page.evaluate("refresh()")
-    page.wait_for_function("'₱1.00 inserted' in document.getElementById('coinValue').textContent")
+    page.wait_for_function("document.getElementById('coinValue').textContent.includes('₱1.00 inserted')")
     assert "vendo-01" in page.locator("#coinValue").inner_text()
 
     page.click('button:has-text("Done inserting coins")')
