@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.2** on `blazepwifi-v0.5.3-dev2-console-ops`. Exact green candidate `41b0ae05c76062759e825f2f40872642f9222fec`, workflow run `37494928043` — PASS.  
+**Active development:** **v0.5.3-dev.2** on `blazepwifi-v0.5.3-dev2-console-ops`. Exact green branch head `e917171d2a3875fd54183d552c02f8afcdb7862f`, branch workflow `37500821733` — PASS. Reconciled PR #18 merge tree `dee385974b7142afa4e8a56fc47d611f62a10ccf`, PR workflow `37500829258` — PASS.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
@@ -49,7 +49,9 @@ The post-v0.5.2 hardening work is implemented and artifact-validated. This is a 
   - Worldwide Remote Access profiles support Disabled/WireGuard/ZeroTier staging with separate Monitoring/Management/Remote-Terminal permissions and no private-key field.
   - Remote live network/firewall activation remains intentionally safety-locked until a separate apply/rollback network-survival matrix is green.
   - Dynamic shell security test and Playwright user-flow audit both passed.
-- Exact dev.2 validation run `37494928043` passed all required Android, browser, ESP8266/ESP32, Ruijie, Orange Pi, x86 QEMU, update-bundle and final candidate gates.
+- Exact dev.2 branch workflow `37500821733` passed all required Android, browser, ESP8266/ESP32, Ruijie, Orange Pi, x86 QEMU, update-bundle and final candidate gates.
+- PR #18 reconciles dev.2 with the four newer unrelated BlazePisonet SoftTimer commits on `main`. Synthetic merge tree `dee385974b7142afa4e8a56fc47d611f62a10ccf` passed workflow `37500829258`, including browser runtime, x86 QEMU, Android Device Owner emulator and final candidate gate.
+- During PR validation a real UI race was found and fixed: an unconditional delayed startup `loadRemote()` could reset the selected remote mode while the operator was editing. The fixed console no longer preloads editable remote config in the background, suppresses stale async responses, and renders the authoritative save response immediately.
 - Android Device Owner emulator explicitly passed `0.5.3-dev.2` using `candidate/android/BlazeRental-0.5.3-dev.2-ci.apk`.
 - No v0.5.3 production tag/release has been created.
 - No production signing key was rotated or exposed.
