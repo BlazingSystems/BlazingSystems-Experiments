@@ -1,17 +1,22 @@
-# OpenWrt Rental Standalone
+# OpenWrt Rental Standalone — rc.2
 
-Use `install.sh --target=auto` after extracting the release bundle.
+The installer is intentionally **network-neutral**. It does not change the router's WAN, LAN, Wi-Fi, cellular, repeater or firewall UCI packages.
 
-Recognized target hints: `r281`, `ew1200g-pro`, `generic`, and `auto` (default).
+After installation:
 
-The installer supports OpenWrt 24.10.x and 25.12.x and detects `opkg` vs `apk`.
+- existing router/basic UI stays at whatever routes the device already uses;
+- BlazePwifi Rental management is added at `https://LocalIP/rental/`;
+- BlazeRental phones use `http://LocalIP` as their server URL;
+- authenticated remote ESP coinslot interfaces use `http://LocalIP:4455/cgi-bin/vendo`.
 
-It copies the complete BlazePwifi rootfs payload but does **not** run the full BlazePwifi uci-defaults script and does **not** start the hotspot core. A separate rental-only document root is created so normal browsing does not expose hotspot/media/general management consoles.
-
-To convert the installed software to full BlazePwifi later:
+The complete BlazePwifi v0.5 payload is installed, but the hotspot core is disabled. Conversion to full BlazePwifi is explicit:
 
 ```sh
 /usr/sbin/blazepwifi-rental-upgrade --full
 ```
 
-Backups are written under `/root/blazepwifi-rental-standalone-backups/`.
+Only that conversion step is allowed to activate BlazePwifi firewall/hotspot ownership.
+
+Supported installer target hints are `r281`, `ew1200g-pro`, `generic`, and `auto` (default). OpenWrt 24.10.x and 25.12.x are accepted by the RC installer.
+
+The preferred release path is the Windows one-click installer package; manual tarball installation remains supported.
