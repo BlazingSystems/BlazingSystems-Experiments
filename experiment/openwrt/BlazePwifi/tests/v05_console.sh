@@ -85,6 +85,7 @@ grep -Fq 'bp_remote_wg_link_precreate' "$REMOTE_APPLY"
 [ "$(grep -Fc 'bp_remote_snapshot_create()' "$REMOTE_APPLY")" -eq 1 ]
 [ "$(grep -Fc 'bp_remote_wireguard_apply()' "$REMOTE_APPLY")" -eq 1 ]
 [ "$(grep -Fc 'bp_remote_wireguard_disable()' "$REMOTE_APPLY")" -eq 1 ]
+[ "$(tail -n 1 "$REMOTE_APPLY")" = '# End of BlazePwifi remote apply engine.' ]
 ! grep -Fq 'BP_REMOTE_UHTTPD_CONFIG' "$REMOTE_APPLY"
 ! grep -Fq 'uhttpd.blazepwifi_admin' "$REMOTE_APPLY"
 grep -Fq 'START=60' "$ROOT/openwrt/rootfs/etc/init.d/blazepwifi-remote-guard"
