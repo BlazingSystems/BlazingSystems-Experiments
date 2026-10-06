@@ -99,6 +99,9 @@ Required behavior:
 6. Lost/retried requests must not duplicate banked time, restored time or transfers.
 7. In dev.3, if BlazePwifi is unreachable, **central member authentication and all balance mutations fail closed**. Cached metadata may still be displayed, but it cannot authorize/spend banked time. A future explicit encrypted/offline-spend lease design may relax this only with collision-safe reservations.
 8. When connectivity returns, the newest authoritative BlazePwifi revision replaces stale cached balance state.
+9. BANK/RESTORE operations use a durable pending-event journal on SoftTimer. While an event is unresolved the local countdown is frozen, the station remains locked and new coin input is rejected.
+10. BlazePwifi binds committed replay to the original controller ID + member + operation kind + event ID. SoftTimer can therefore recover an already-committed event after a crash without persisting the member password.
+11. If BlazePwifi never received the original event, the pending event remains unresolved until the member re-enters the password; the retry must reuse the same event ID.
 
 ### Management Console requirements
 
@@ -139,7 +142,7 @@ Viewer role may read non-secret member status. Operator may create/edit ordinary
 - browser Management Console member-flow test;
 - SoftTimer build with warnings-as-errors;
 - SoftTimer online sync / nonce-proof authentication / offline fail-closed authentication-and-balance test;
-- duplicate bank/restore/transfer event test;
+- duplicate bank/restore/transfer event test, including controller-bound crash replay without a stored plaintext password;
 - full existing BlazePwifi regression matrix, including Android, ESP, Ruijie, Orange Pi and x86/QEMU gates;
 - no production v0.5.3 tag/signing action from this development branch.
 
