@@ -36,8 +36,26 @@ DSEC="$(printf '%s' "$OUT" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
 [ "${#DID}" -eq 24 ]
 [ "${#DSEC}" -eq 48 ]
 
+# Simulate a crash after the durable enrollment claim but before the device
+# row survives. Retrying with the same nonce must recreate the exact identity.
+awk -F '\t' -v d="$DID" '$1!=d {print}' "$BP_RENTAL_DEVICES" > "$T/devices.tmp"
+mv "$T/devices.tmp" "$BP_RENTAL_DEVICES"
+[ -z "$(bp_rental_device_line "$DID")" ]
+
 OUT2="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" | REQUEST_METHOD=POST sh "$CGI")"
-echo "$OUT2" | grep -q 'invalid or used'
+echo "$OUT2" | grep -q '"ok":true'
+echo "$OUT2" | grep -q '"reused":true'
+DID2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
+DSEC2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
+[ "$DID2" = "$DID" ] && [ "$DSEC2" = "$DSEC" ]
+[ "$(printf '%s' "$(bp_rental_device_line "$DID")" | cut -f2)" = "$DSEC" ]
+
+# A different request nonce cannot recover or mint credentials from the
+# already-claimed one-time token.
+NB=def456789
+SIGB="$(bp_rental_hmac "$TOKEN" "enroll|$NB|$TOKEN")"
+OUTB="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$NB" "$SIGB" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUTB" | grep -q 'enrollment already claimed'
 
 bp_rental_policy_ensure "$DID"
 bp_rental_admin_password_set "$DID" 'admin-strong-123'
@@ -55,6 +73,12 @@ echo "$OUT" | grep -q '"admin_salt":"[0-9a-f]'
 echo "$OUT" | grep -q '"policy_sig":"[0-9a-f]'
 echo "$OUT" | grep -q '"coin_window_expires_ms":0'
 echo "$OUT" | grep -q '"coin_window_sig":"[0-9a-f]'
+
+# The first authenticated request using the permanent device secret retires
+# the retry record. The original QR token is invalid from this point onward.
+[ -z "$(bp_rental_enroll_lookup "$EID")" ]
+OUT_AFTER_STATUS="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUT_AFTER_STATUS" | grep -q 'enrollment invalid or used'
 
 # Opening a rental coin window is authenticated, server-timed and recoverable
 # through status. The returned reservation state has its own HMAC.
