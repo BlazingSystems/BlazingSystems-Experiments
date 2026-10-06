@@ -68,7 +68,7 @@
         android:fullBackupOnly="true"
         android:fullBackupContent="@xml/backupscheme"
         android:hardwareAccelerated="true"
-        android:icon="@drawable/ic_launcher_blaze"
+        android:icon="@drawable/blaze_lcm_brand"
         android:label="BlazeRental"
         android:theme="@style/LauncherTheme"
         android:largeHeap="@bool/config_largeHeap"
