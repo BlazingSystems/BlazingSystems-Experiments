@@ -2,7 +2,7 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 WF="$ROOT/../../../.github/workflows/blazepwifi-build.yml"
-case "$(cat "$ROOT/VERSION")" in 0.4.0|0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4) ;; *) exit 1;; esac
+case "$(cat "$ROOT/VERSION")" in 0.4.0|0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4|0.5.3-dev.5) ;; *) exit 1;; esac
 test -f "$ROOT/releases/0.4.0/README.md"
 test -f "$ROOT/releases/0.4.0/ASSETS.md"
 test -f "$ROOT/releases/0.4.0/manifest.json"
