@@ -118,16 +118,16 @@ Minimum console actions:
 - inspect revision / last update / source;
 - view recent member events;
 - transfer banked time between members;
-- export/import member metadata without plaintext passwords.
+- export/import member metadata without plaintext passwords (**follow-up after dev.3; not implemented in the current dev.3 branch**).
 
 Viewer role may read non-secret member status. Operator may create/edit ordinary member state and banked time within policy. Password reset, destructive delete/revoke and bulk import require Admin plus CSRF; high-risk bulk operations should require fresh re-authentication.
 
 ### Compatibility / migration
 
 - Existing v0.3.0 SoftTimer local members must not be silently destroyed.
-- When central member management is first enabled, the operator must be offered an explicit migration/import path.
-- Username collisions must be shown for operator resolution; do not silently overwrite a BlazePwifi member.
-- Local hashes that cannot be verified by BlazePwifi should require a password reset rather than attempting reversible conversion.
+- dev.3 preserves existing local SoftTimer members but does **not** automatically migrate them.
+- A later explicit local→central migration/import workflow must show username collisions for operator resolution and must never silently overwrite a BlazePwifi member.
+- Local hashes that cannot be imported safely must require a password reset rather than attempting reversible conversion.
 - SoftTimer remains able to operate in **Local Members** mode when BlazePwifi member authority is disabled.
 
 ### Scope guard
@@ -139,7 +139,7 @@ Viewer role may read non-secret member status. Operator may create/edit ordinary
 - static shell validation for the member library/API;
 - member CRUD/revision/idempotency tests;
 - password-verifier non-disclosure test;
-- browser Management Console member-flow test;
+- browser Management Console member-flow test for current CRUD/balance/audit actions;
 - SoftTimer build with warnings-as-errors;
 - SoftTimer online sync / nonce-proof authentication / offline fail-closed authentication-and-balance test;
 - duplicate bank/restore/transfer event test, including controller-bound crash replay without a stored plaintext password;
