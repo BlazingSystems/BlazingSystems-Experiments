@@ -166,8 +166,8 @@ jobs:
           RESCUE_SHA="$(sha256sum "$OUT/BlazeRental-v0.5.1-rescue-for-v0.5.2.apk" | awk '{print $1}')"
           jq -n             --arg release "0.5.2"             --arg candidate_sha "$CANDIDATE_SHA"             --arg build_run_id "$BUILD_RUN_ID"             --arg signed_sha256 "$SIGNED_SHA"             --arg rescue_signed_sha256 "$RESCUE_SHA"             --arg signing_fingerprint "$FP"             '{release:$release,candidate_sha:$candidate_sha,build_run_id:$build_run_id,signed_sha256:$signed_sha256,rollback_rescue:"0.5.1-rescue-for-0.5.2",rollback_rescue_signed_sha256:$rescue_signed_sha256,certificate_lineage:"BlazeRental-production-lineage2",fresh_device_provisioning:true,upgrade_from_old_v04_lineage:false,signing_fingerprint:$signing_fingerprint,recovery:"AES-256-GCM dual RSA-OAEP-SHA256 owner recovery"}'             > "$OUT/SIGNING-MANIFEST.json"
 
-          (cd "$OUT" && sha256sum * > SHA256SUMS)
           rm -f "$OUT/BlazeRental-aligned.apk" "$OUT/BlazeRental-rescue-aligned.apk"
+          (cd "$OUT" && sha256sum * > SHA256SUMS)
           rm -f "$RUNNER_TEMP/BlazeRental-v0.5.2-lineage2-signing-backup.tar.gz"
           rm -rf "$SECRET"
 
