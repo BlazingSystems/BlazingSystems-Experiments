@@ -15,7 +15,7 @@ public class BlazeRentalUpdateReceiver extends BroadcastReceiver {
             return;
         }
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            Intent confirm = (Intent) intent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirm != null) {
                 confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(confirm);
