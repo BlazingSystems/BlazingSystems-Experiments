@@ -67,6 +67,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
       - name: BlazePwifi v0.5.3 development identity validation
         run: sh experiment/openwrt/BlazePwifi/tests/v053_development.sh
+      - name: BlazePwifi v0.5.3 console operations security
+        run: sh experiment/openwrt/BlazePwifi/tests/v053_console_ops.sh
       - name: BlazePwifi v0.4 build matrix validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation

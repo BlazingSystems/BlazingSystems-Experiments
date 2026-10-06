@@ -1,7 +1,7 @@
 #!/bin/sh
 # Validated, capability-neutral BlazePwifi configuration layer.
 
-BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos rental_seconds_per_pulse event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms default_speed_limit_kbps update_source_url update_stability_seconds update_retention update_max_mb"
+BP_CONFIG_KEYS="capability_tier lan_if management_if hotspot_if controller_if rental_if portal_port vendo_port admin_port coin_window pulse_value_centavos rental_seconds_per_pulse event_history pause_max_seconds walled_refresh_seconds durable_sync firewall_zone management_vlan hotspot_vlan controller_vlan rental_vlan gpio_chip coin_line relay_line led_line coin_active_low relay_active_low led_active_low coin_debounce_ms pulse_group_ms default_speed_limit_kbps update_source_url update_stability_seconds update_retention update_max_mb advanced_terminal_enabled terminal_ttl_seconds terminal_idle_seconds terminal_command_timeout_seconds terminal_output_max_bytes"
 
 bp_config_key_allowed() {
 	key="$1"
@@ -34,7 +34,7 @@ bp_config_validate() {
 		event_history) bp_config_uint_range "$value" 8 512 ;;
 		pause_max_seconds) bp_config_uint_range "$value" 0 31536000 ;;
 		walled_refresh_seconds) bp_config_uint_range "$value" 30 86400 ;;
-		durable_sync|coin_active_low|relay_active_low|led_active_low) case "$value" in 0|1) return 0;; *) return 1;; esac ;;
+		durable_sync|coin_active_low|relay_active_low|led_active_low|advanced_terminal_enabled) case "$value" in 0|1) return 0;; *) return 1;; esac ;;
 		management_vlan|hotspot_vlan|controller_vlan|rental_vlan) bp_config_uint_range "$value" 0 4094 ;;
 		coin_line|relay_line|led_line) bp_config_uint_range "$value" 0 4095 ;;
 		coin_debounce_ms) bp_config_uint_range "$value" 1 2000 ;;
@@ -45,6 +45,10 @@ bp_config_validate() {
 		update_stability_seconds) bp_config_uint_range "$value" 60 604800 ;;
 		update_retention) bp_config_uint_range "$value" 1 10 ;;
 		update_max_mb) bp_config_uint_range "$value" 8 512 ;;
+		terminal_ttl_seconds) bp_config_uint_range "$value" 60 1800 ;;
+		terminal_idle_seconds) bp_config_uint_range "$value" 15 900 ;;
+		terminal_command_timeout_seconds) bp_config_uint_range "$value" 2 60 ;;
+		terminal_output_max_bytes) bp_config_uint_range "$value" 1024 65536 ;;
 		*) return 1 ;;
 	esac
 }

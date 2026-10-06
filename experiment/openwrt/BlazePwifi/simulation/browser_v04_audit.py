@@ -17,7 +17,21 @@ port = server.server_address[1]
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 
-def mock_admin(action):
+mock_console_state={
+    "terminal_enabled":False,
+    "terminal_open":False,
+    "remote_config":{
+        "mode":"disabled","monitoring":1,"management":0,"terminal":0,
+        "node_name":"BlazePwifi","site_label":"","source_allowlist":"",
+        "heartbeat_seconds":30,"offline_seconds":120,
+        "wg_endpoint":"","wg_port":51820,"wg_address":"","wg_peer_public_key":"",
+        "wg_allowed_ips":"","wg_keepalive":25,"wg_dns":"","wg_mtu":1420,
+        "zt_network_id":""
+    }
+}
+
+def mock_admin(action, params=None):
+    params=params or {}
     if action == "status":
         return {"ok": True, "active_sessions": 3, "online_vendos": 1,
                 "mem_available_kb": 131072, "load1": "0.11",
@@ -47,6 +61,58 @@ def mock_admin(action):
         return {"ok": True, "value": "600"}
     if action == "config_set":
         return {"ok": True}
+    if action == "remote_status":
+        cfg=mock_console_state["remote_config"]
+        return {"ok":True,"recommended":"wireguard","remote":{
+            "mode":cfg["mode"],"ready":cfg["mode"]!="disabled",
+            "apply_supported":False,"activation_state":"staged",
+            "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"unavailable"
+        }}
+    if action == "remote_config_get":
+        return {"ok":True,"config":dict(mock_console_state["remote_config"])}
+    if action == "remote_config_set":
+        cfg=mock_console_state["remote_config"]
+        for key in list(cfg):
+            if key in params:
+                raw=params[key][0]
+                if key in ("monitoring","management","terminal","heartbeat_seconds","offline_seconds",
+                           "wg_port","wg_keepalive","wg_mtu"):
+                    try: cfg[key]=int(raw)
+                    except Exception: cfg[key]=raw
+                else:
+                    cfg[key]=raw
+        return {"ok":True,"apply_supported":False,"remote":{
+            "mode":cfg["mode"],"ready":cfg["mode"]!="disabled","activation_state":"staged",
+            "monitoring":cfg["monitoring"],"management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"unavailable"
+        }}
+    if action == "terminal_status":
+        return {"ok":True,"enabled":mock_console_state["terminal_enabled"],
+                "active_sessions":1 if mock_console_state["terminal_open"] else 0,
+                "ttl_seconds":300,"idle_seconds":60,"command_timeout_seconds":12,
+                "output_max_bytes":16000}
+    if action == "terminal_set_enabled":
+        enabled=params.get("enabled",["0"])[0]=="1"
+        mock_console_state["terminal_enabled"]=enabled
+        if not enabled: mock_console_state["terminal_open"]=False
+        return {"ok":True,"enabled":enabled}
+    if action == "terminal_open":
+        if not mock_console_state["terminal_enabled"]:
+            return {"ok":False,"error":"Advanced Terminal is disabled"}
+        mock_console_state["terminal_open"]=True
+        return {"ok":True,"terminal_token":"audit-terminal-token","ttl_seconds":300,"idle_seconds":60}
+    if action == "terminal_exec":
+        if not mock_console_state["terminal_open"] or params.get("terminal_token",[""])[0]!="audit-terminal-token":
+            return {"ok":False,"error":"terminal session expired or invalid"}
+        return {"ok":True,"exit_code":0,"output":"console-ok"}
+    if action == "terminal_close":
+        mock_console_state["terminal_open"]=False
+        return {"ok":True}
+    if action == "tool_run":
+        return {"ok":True,"tool":params.get("tool",["ping"])[0],"exit_code":0,"output":"safe-tool-ok"}
     if action in ("rental_device_qr", "rental_binding_qr"):
         return {"ok": True, "qr_type": "binding",
                 "enrollment_token": "0123456789abcdef.abcdef0123456789",
@@ -144,7 +210,7 @@ with sync_playwright() as p:
                     "csrf_header": req.headers.get("x-blaze-csrf","")
                 })
             route.fulfill(status=200, content_type="application/json",
-                          body=json.dumps(mock_admin(action)))
+                          body=json.dumps(mock_admin(action, params)))
             return
         if url.endswith("/cgi-bin/api"):
             body=req.post_data or ""
@@ -201,6 +267,51 @@ with sync_playwright() as p:
     system_text = page.locator("#page-system").inner_text()
     assert ("TailAdmin" in system_text
             or ("System & Security" in system_text and "Security posture" in system_text))
+
+    # dev.2 Remote Access control plane: authenticated profile save, staged-only apply.
+    page.click('[data-page="remote"]')
+    page.wait_for_selector("#page-remote.active")
+    page.wait_for_function("document.getElementById('remoteConfigState').textContent.includes('safety-locked')")
+    page.select_option("#remoteMode","wireguard")
+    page.fill("#remoteNodeName","AuditNode")
+    page.fill("#remoteSiteLabel","Audit Site")
+    page.fill("#wgEndpoint","vpn.example.test")
+    page.fill("#wgAddress","10.20.0.2/32")
+    page.fill("#wgPeerKey","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+    page.fill("#wgAllowedIps","10.20.0.0/24")
+    page.check("#remoteManagement")
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Validate & save profile")')
+    for _ in range(50):
+        page.wait_for_timeout(100)
+        if any(x["action"]=="remote_config_set" for x in admin_mutations):
+            break
+    assert any(x["action"]=="remote_config_set" for x in admin_mutations), admin_mutations
+    assert mock_console_state["remote_config"]["mode"]=="wireguard", mock_console_state["remote_config"]
+    page.wait_for_function("document.getElementById('remoteModeState').textContent === 'wireguard'")
+    assert "live transport apply remains safety-locked" in page.locator("#remoteConfigState").inner_text().lower()
+
+    # dev.2 Advanced Terminal: enable -> fresh re-auth -> in-memory session -> bounded command -> close.
+    page.click('[data-page="tools"]')
+    page.wait_for_selector("#page-tools.active")
+    page.wait_for_function("document.getElementById('terminalState').textContent.includes('Disabled')")
+    page.fill("#terminalPassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Enable")')
+    page.wait_for_function("document.getElementById('terminalState').textContent.includes('Enabled')")
+    page.fill("#terminalPassword","browser-password")
+    page.click('button:has-text("Open session")')
+    page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('session opened')")
+    page.fill("#terminalCommand","printf console-ok")
+    page.click('button:has-text("Run bounded command")')
+    page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('console-ok')")
+    page.click('button:has-text("Close session")')
+    page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('closed')")
+
+    sensitive_actions={"remote_config_set","terminal_set_enabled","terminal_open","terminal_exec","terminal_close"}
+    sensitive=[x for x in admin_mutations if x["action"] in sensitive_actions]
+    assert sensitive_actions.issubset({x["action"] for x in sensitive})
+    assert all(x["csrf_body"]=="browser-audit-csrf" and x["csrf_header"]=="browser-audit-csrf" for x in sensitive)
 
     # v0.5 moved voucher creation into its dedicated console module.
     page.click('[data-page="vouchers"]')
@@ -260,6 +371,8 @@ result={
         "controller_page_rendered":True,
         "system_page_rendered":True,
         "voucher_action_rendered":True,
+        "remote_profile_saved":True,
+        "advanced_terminal_session":True,
         "console_errors":False
     }
 }

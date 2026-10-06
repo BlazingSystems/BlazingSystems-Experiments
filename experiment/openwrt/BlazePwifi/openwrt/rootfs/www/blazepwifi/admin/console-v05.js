@@ -1,6 +1,7 @@
 (function(){
 'use strict';
 const q=s=>document.querySelector(s), C=()=>window.BlazeCore;
+let terminalToken='',remoteLoadGeneration=0;
 function fmtTemp(v){const n=+v||0;return n?((n>1000?n/1000:n).toFixed(1)+' °C'):'Not reported'}
 async function loadSystem(){
   const x=await C().api('system_info');
@@ -28,12 +29,75 @@ async function loadStorage(){
     const p=v.split('|'); return (p[3]||'?')+'  device '+(p[0]||'?')+'  used '+(p[2]||'?')+'/'+(p[1]||'?')+' KB';
   }).join('\n');
 }
-async function loadRemote(){
-  const x=await C().api('remote_status');
-  if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
+function setRemoteEditable(enabled){
+  ['#remoteMode','#remoteNodeName','#remoteSiteLabel','#remoteAllowlist','#remoteHeartbeat','#remoteOffline',
+   '#remoteMonitoring','#remoteManagement','#remoteTerminal','#wgEndpoint','#wgPort','#wgAddress',
+   '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword']
+    .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
+}
+function renderRemoteStatus(r){
+  r=r||{};
   const wg=q('#wgState'),zt=q('#ztState');
-  if(wg){wg.textContent=x.wireguard||'Unavailable';wg.className='badge '+(String(x.wireguard).indexOf('online:')===0?'good':'');}
-  if(zt){zt.textContent=x.zerotier||'Unavailable';zt.className='badge '+(String(x.zerotier).indexOf('ONLINE')>=0?'good':'');}
+  if(wg){wg.textContent=r.wireguard||'Unavailable';wg.className='metric-value small '+(String(r.wireguard).indexOf('online:')===0?'good':'');}
+  if(zt){zt.textContent=r.zerotier||'Unavailable';zt.className='metric-value small '+(String(r.zerotier).indexOf('ONLINE')>=0?'good':'');}
+  const mode=q('#remoteModeState');if(mode)mode.textContent=r.mode||'disabled';
+  const ready=q('#remoteReadyState');if(ready)ready.textContent=r.mode==='disabled'?'Remote access off':(r.ready?'Profile complete · activation staged':'Profile incomplete');
+  const node=q('#remoteNodeState');if(node)node.textContent=r.node_name||'BlazePwifi';
+  const site=q('#remoteSiteState');if(site)site.textContent=r.site_label||'No site label';
+}
+async function loadRemote(){
+  const generation=++remoteLoadGeneration;
+  const x=await C().api('remote_status');
+  if(generation!==remoteLoadGeneration)return;
+  if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
+  renderRemoteStatus(x.remote||{});
+
+  const cfg=await C().api('remote_config_get');
+  if(generation!==remoteLoadGeneration)return;
+  const state=q('#remoteConfigState');
+  if(!cfg.ok){
+    setRemoteEditable(false);
+    if(state)state.textContent='Admin role required to view or edit the remote profile.';
+    return;
+  }
+  setRemoteEditable(true);
+  const v=cfg.config||{};
+  const set=(id,val)=>{const n=q(id);if(n)n.value=val==null?'':val};
+  set('#remoteMode',v.mode||'disabled');set('#remoteNodeName',v.node_name||'BlazePwifi');
+  set('#remoteSiteLabel',v.site_label||'');set('#remoteAllowlist',v.source_allowlist||'');
+  set('#remoteHeartbeat',v.heartbeat_seconds||30);set('#remoteOffline',v.offline_seconds||120);
+  set('#wgEndpoint',v.wg_endpoint||'');set('#wgPort',v.wg_port||51820);set('#wgAddress',v.wg_address||'');
+  set('#wgKeepalive',v.wg_keepalive==null?25:v.wg_keepalive);set('#wgPeerKey',v.wg_peer_public_key||'');
+  set('#wgAllowedIps',v.wg_allowed_ips||'');set('#wgDns',v.wg_dns||'');set('#wgMtu',v.wg_mtu||1420);
+  set('#ztNetworkId',v.zt_network_id||'');
+  const check=(id,val)=>{const n=q(id);if(n)n.checked=String(val)==='1'||val===true};
+  check('#remoteMonitoring',v.monitoring);check('#remoteManagement',v.management);check('#remoteTerminal',v.terminal);
+  if(state)state.textContent='Validated profile storage is active. Live transport apply remains safety-locked in this development build.';
+}
+async function saveRemote(){
+  // Invalidate any in-flight page-load refresh before committing a new profile.
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to save the remote profile.',true);return}
+  const checked=id=>q(id)&&q(id).checked?'1':'0';
+  const value=id=>q(id)?q(id).value.trim():'';
+  const data={
+    password,
+    mode:value('#remoteMode'),monitoring:checked('#remoteMonitoring'),management:checked('#remoteManagement'),terminal:checked('#remoteTerminal'),
+    node_name:value('#remoteNodeName'),site_label:value('#remoteSiteLabel'),source_allowlist:value('#remoteAllowlist'),
+    heartbeat_seconds:value('#remoteHeartbeat'),offline_seconds:value('#remoteOffline'),
+    wg_endpoint:value('#wgEndpoint'),wg_port:value('#wgPort'),wg_address:value('#wgAddress'),wg_peer_public_key:value('#wgPeerKey'),
+    wg_allowed_ips:value('#wgAllowedIps'),wg_keepalive:value('#wgKeepalive'),wg_dns:value('#wgDns'),wg_mtu:value('#wgMtu'),
+    zt_network_id:value('#ztNetworkId')
+  };
+  const x=await C().api('remote_config_set',data);
+  if(pass)pass.value='';
+  if(!x.ok){C().toast(x.error||'Remote profile validation failed',true);return}
+  // The save response is authoritative. Render it immediately so a delayed
+  // follow-up status request cannot leave the operator looking at stale state.
+  renderRemoteStatus(x.remote||{});
+  C().toast('Remote profile validated and stored. Live transport activation remains safety-locked.');
+  await loadRemote();
 }
 async function runTool(){
   const o=q('#toolOutput'),tool=q('#toolName').value,target=q('#toolTarget').value.trim();
@@ -41,6 +105,63 @@ async function runTool(){
   const x=await C().api('tool_run',{tool,target});
   o.textContent=x.ok?((x.output||'(no output)')+'\n\nExit code: '+x.exit_code):(x.error||'Tool failed');
   if(!x.ok)C().toast(x.error||'Tool failed',true);
+}
+async function loadTerminal(){
+  const state=q('#terminalState'),limits=q('#terminalLimits');
+  const x=await C().api('terminal_status');
+  if(!x.ok){
+    terminalToken='';
+    if(state){state.textContent='Admin role required';state.className='badge'}
+    if(limits)limits.textContent='Advanced Terminal is available only to administrators.';
+    return;
+  }
+  if(state){state.textContent=x.enabled?'Enabled':'Disabled';state.className='badge '+(x.enabled?'good':'')}
+  if(limits)limits.textContent='Active sessions '+x.active_sessions+' · TTL '+x.ttl_seconds+'s · idle '+x.idle_seconds+'s · command timeout '+x.command_timeout_seconds+'s · output cap '+x.output_max_bytes+' bytes';
+  if(!x.enabled)terminalToken='';
+}
+async function setTerminalEnabled(enabled){
+  const pass=q('#terminalPassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required.',true);return}
+  if(enabled&&!confirm('Enable Advanced Terminal? Commands run as the router administrator and are audit logged.'))return;
+  const x=await C().api('terminal_set_enabled',{enabled:enabled?'1':'0',password});
+  if(pass)pass.value='';
+  if(!x.ok){C().toast(x.error||'Unable to change terminal state',true);return}
+  if(!enabled)terminalToken='';
+  C().toast(enabled?'Advanced Terminal enabled.':'Advanced Terminal disabled and all terminal sessions closed.');
+  await loadTerminal();
+}
+async function openTerminal(){
+  const pass=q('#terminalPassword'),password=(pass&&pass.value)||'',out=q('#terminalOutput');
+  if(!password){C().toast('Admin password is required to open a terminal session.',true);return}
+  const x=await C().api('terminal_open',{password});
+  if(pass)pass.value='';
+  if(!x.ok){terminalToken='';if(out)out.textContent=x.error||'Unable to open terminal';C().toast(x.error||'Unable to open terminal',true);return}
+  terminalToken=x.terminal_token||'';
+  if(out)out.textContent='Terminal session opened. Token remains only in page memory. TTL '+x.ttl_seconds+'s · idle '+x.idle_seconds+'s.';
+  await loadTerminal();
+}
+async function runTerminal(){
+  const out=q('#terminalOutput'),command=q('#terminalCommand').value.trim();
+  if(!terminalToken){C().toast('Open a re-authenticated terminal session first.',true);return}
+  if(!command){C().toast('Enter a command.',true);return}
+  if(out)out.textContent='Running bounded command…';
+  const x=await C().api('terminal_exec',{terminal_token:terminalToken,command});
+  if(!x.ok){
+    if(/expired|invalid|disabled/i.test(String(x.error||'')))terminalToken='';
+    if(out)out.textContent=x.error||'Terminal command failed';
+    C().toast(x.error||'Terminal command failed',true);
+    await loadTerminal();
+    return;
+  }
+  if(out)out.textContent=(x.output||'(no output)')+'\n\nExit code: '+x.exit_code;
+}
+async function closeTerminal(){
+  const out=q('#terminalOutput');
+  if(!terminalToken){if(out)out.textContent='No terminal session is open.';return}
+  const token=terminalToken;terminalToken='';
+  const x=await C().api('terminal_close',{terminal_token:token});
+  if(out)out.textContent=x.ok?'Terminal session closed.':(x.error||'Terminal session closed locally; server close failed.');
+  await loadTerminal();
 }
 async function loadUpdate(){
   const x=await C().api('update_status');
@@ -81,8 +202,12 @@ function onPage(name){
   if(name==='storage')loadStorage();
   if(name==='updates')loadUpdate();
   if(name==='remote')loadRemote();
+  if(name==='tools')loadTerminal();
   if(name==='lan')loadLan();
 }
-window.BlazeConsole={loadSystem,loadStorage,loadRemote,runTool,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
-setTimeout(()=>{loadSystem();loadRemote();},300);
+window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
+// Do not preload editable Remote Access configuration in the background.
+ // It is loaded on page entry/explicit refresh so a delayed startup request
+ // cannot overwrite operator edits.
+setTimeout(()=>{loadSystem();},300);
 })();
