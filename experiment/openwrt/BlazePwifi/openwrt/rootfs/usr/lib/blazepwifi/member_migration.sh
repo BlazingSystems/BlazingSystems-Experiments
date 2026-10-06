@@ -51,8 +51,13 @@ bp_member_migration_export() {
   printf 'BLAZE_MEMBER_METADATA_V1\n'
   printf 'exported_at\t%s\n' "$now"
   printf 'global_revision\t%s\n' "$rev"
-  while IFS="$(printf '\t')" read -r user label enabled scheme salt hash rounds banked revision updated source; do
-    [ -n "$user" ] || continue
+  while IFS= read -r line || [ -n "$line" ]; do
+    user="$(printf '%s' "$line" | cut -f1)"; [ -n "$user" ] || continue
+    label="$(printf '%s' "$line" | cut -f2)"
+    enabled="$(printf '%s' "$line" | cut -f3)"
+    banked="$(printf '%s' "$line" | cut -f8)"
+    updated="$(printf '%s' "$line" | cut -f10)"
+    source="$(printf '%s' "$line" | cut -f11)"
     printf 'member\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$user" "${enabled:-0}" "${banked:-0}" "${updated:-0}" \
       "$(bp_member_migration_b64_encode "$label")" "$(bp_member_migration_b64_encode "$source")"
