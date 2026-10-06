@@ -83,10 +83,55 @@
     <div class="card"><div class="card-body"><div class="card-title">Modes</div><p class="muted">VLAN, second Ethernet and USB-Ethernet are shown only when the target reports the required capability. Tagged, untagged and hybrid assignments remain operator controlled.</p></div></div></div>
   </section>
 
-  <section id="page-remote" class="section"><div class="page-head"><div><h2>Worldwide Remote Access</h2><p>Securely manage this BlazePwifi from anywhere without exposing admin directly to public WAN.</p></div><button class="btn" onclick="BlazeConsole.loadRemote()">Refresh</button></div>
-    <div class="grid two"><div class="card"><div class="card-body"><div class="card-title">WireGuard · Recommended</div><p class="muted">Preferred owner-controlled VPN. Configure endpoint, tunnel address, routes, keys and keepalive for your hub/VPS/router.</p><div id="wgState" class="badge">—</div></div></div>
-    <div class="card"><div class="card-body"><div class="card-title">ZeroTier · Easy mesh</div><p class="muted">Alternative for simple NAT/CGNAT traversal and multi-site mesh access.</p><div id="ztState" class="badge">—</div></div></div></div>
-    <div class="notice">Remote access is disabled until you configure a transport. Monitoring, Management and Advanced Terminal permissions remain separate.</div>
+  <section id="page-remote" class="section"><div class="page-head"><div><h2>Worldwide Remote Access</h2><p>Owner-controlled remote management without exposing the admin page directly to public WAN.</p></div><button class="btn" onclick="BlazeConsole.loadRemote()">Refresh</button></div>
+    <div class="grid metrics">
+      <div class="card"><div class="card-body"><div class="metric-label">Configured mode</div><div id="remoteModeState" class="metric-value">—</div><div id="remoteReadyState" class="metric-sub">—</div></div></div>
+      <div class="card"><div class="card-body"><div class="metric-label">WireGuard</div><div id="wgState" class="metric-value small">—</div><div class="metric-sub">Recommended</div></div></div>
+      <div class="card"><div class="card-body"><div class="metric-label">ZeroTier</div><div id="ztState" class="metric-value small">—</div><div class="metric-sub">Easy mesh</div></div></div>
+      <div class="card"><div class="card-body"><div class="metric-label">Node</div><div id="remoteNodeState" class="metric-value small">—</div><div id="remoteSiteState" class="metric-sub">—</div></div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px"><div class="card-body"><div class="card-title">Remote access profile</div>
+      <p class="muted">Monitoring, management and terminal permissions are independent. No private WireGuard key is accepted or displayed by this form.</p>
+      <div class="form-grid">
+        <label><span class="field-label">Mode</span><select id="remoteMode" class="field"><option value="disabled">Disabled</option><option value="wireguard">WireGuard · Recommended</option><option value="zerotier">ZeroTier · Easy mesh</option></select></label>
+        <label><span class="field-label">Node name</span><input id="remoteNodeName" class="field" value="BlazePwifi" maxlength="64"></label>
+        <label><span class="field-label">Site label</span><input id="remoteSiteLabel" class="field" maxlength="96" placeholder="Shop / branch / location label"></label>
+        <label class="span2"><span class="field-label">Allowed remote source CIDRs</span><input id="remoteAllowlist" class="field mono" placeholder="10.20.0.0/24, fd00:1234::/64"></label>
+        <label><span class="field-label">Heartbeat seconds</span><input id="remoteHeartbeat" class="field" type="number" min="10" max="3600" value="30"></label>
+        <label><span class="field-label">Offline threshold seconds</span><input id="remoteOffline" class="field" type="number" min="30" max="86400" value="120"></label>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <label><input id="remoteMonitoring" type="checkbox" checked> Monitoring</label>
+        <label><input id="remoteManagement" type="checkbox"> Management</label>
+        <label><input id="remoteTerminal" type="checkbox"> Remote Terminal</label>
+      </div>
+    </div></div>
+
+    <div class="grid two" style="margin-top:16px">
+      <div class="card"><div class="card-body"><div class="card-title">WireGuard profile</div>
+        <div class="form-grid">
+          <label><span class="field-label">Hub endpoint / FQDN</span><input id="wgEndpoint" class="field" placeholder="vpn.example.com"></label>
+          <label><span class="field-label">UDP port</span><input id="wgPort" class="field" type="number" min="1" max="65535" value="51820"></label>
+          <label><span class="field-label">Tunnel address</span><input id="wgAddress" class="field mono" placeholder="10.20.0.2/32"></label>
+          <label><span class="field-label">Persistent keepalive</span><input id="wgKeepalive" class="field" type="number" min="0" max="3600" value="25"></label>
+          <label class="span2"><span class="field-label">Hub public key</span><input id="wgPeerKey" class="field mono" placeholder="WireGuard peer public key"></label>
+          <label class="span2"><span class="field-label">Allowed IPs / management routes</span><input id="wgAllowedIps" class="field mono" placeholder="10.20.0.0/24"></label>
+          <label><span class="field-label">DNS</span><input id="wgDns" class="field" placeholder="Optional"></label>
+          <label><span class="field-label">MTU</span><input id="wgMtu" class="field" type="number" min="576" max="9000" value="1420"></label>
+        </div>
+      </div></div>
+      <div class="card"><div class="card-body"><div class="card-title">ZeroTier profile</div>
+        <label><span class="field-label">Network ID</span><input id="ztNetworkId" class="field mono" maxlength="16" placeholder="16 hexadecimal characters"></label>
+        <p class="muted" style="margin-top:10px">The node still requires authorization in your ZeroTier network before it can be used for management.</p>
+      </div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px"><div class="card-body">
+      <div class="form-grid"><label><span class="field-label">Admin password to save</span><input id="remotePassword" class="field" type="password" autocomplete="current-password" placeholder="Re-authentication required"></label><div style="align-self:end"><button class="btn primary" onclick="BlazeConsole.saveRemote()">Validate & save profile</button></div></div>
+      <div id="remoteConfigState" class="small muted" style="margin-top:10px">Admin role is required to edit the profile.</div>
+    </div></div>
+    <div class="notice warn"><b>Development safety gate:</b> this profile is validated and stored, but live WireGuard/ZeroTier network/firewall activation is intentionally not applied yet. The transport apply/rollback path must pass its own network-survival tests before it is enabled.</div>
   </section>
 
   <section id="page-vouchers" class="section"><div class="page-head"><div><h2>Vouchers & Rates</h2><p>Create vouchers and manage rate packages.</p></div></div>
@@ -156,9 +201,18 @@
     <div class="notice warn"><b>Safety model:</b> the previous stable files remain available while the new candidate proves healthy. Failed immediate health checks roll back automatically; boot health failures also trigger rollback. Full firmware flashing remains available only for base-OS/kernel/partition changes that cannot be delivered safely as an overlay update.</div>
   </section>
 
-  <section id="page-tools" class="section"><div class="page-head"><div><h2>Tools & Terminal</h2><p>Safe allowlisted diagnostics. Advanced raw terminal remains a separately gated owner feature.</p></div></div>
-    <div class="card"><div class="card-body"><div class="form-grid"><label><span class="field-label">Target</span><input id="toolTarget" class="field" value="1.1.1.1"></label><label><span class="field-label">Safe command</span><select id="toolName" class="field"><option value="ping">Ping</option><option value="traceroute">Traceroute</option><option value="dns">DNS lookup</option><option value="speedtest">Speed test</option><option value="routes">Routes</option><option value="interfaces">Interfaces</option><option value="wifi">Wi-Fi status</option><option value="storage">Storage</option><option value="uptime">Uptime</option></select></label></div><div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="BlazeConsole.runTool()">Run safe command</button></div><pre id="toolOutput" class="console-output">Select a tool.</pre></div></div>
-    <div class="notice warn"><b>Advanced Terminal</b> is intentionally off by default and must require owner re-authentication, short session lifetime, audit logging and rate/concurrency limits.</div>
+  <section id="page-tools" class="section"><div class="page-head"><div><h2>Tools & Terminal</h2><p>Allowlisted diagnostics by default; bounded Advanced Terminal for re-authenticated administrators only.</p></div><button class="btn" onclick="BlazeConsole.loadTerminal()">Refresh terminal</button></div>
+    <div class="card"><div class="card-body"><div class="card-title">Safe Commands</div><div class="form-grid"><label><span class="field-label">Target</span><input id="toolTarget" class="field" value="1.1.1.1" placeholder="Host, IP, or host:port"></label><label><span class="field-label">Safe command</span><select id="toolName" class="field"><option value="ping">Ping</option><option value="jitter">Latency / jitter sample</option><option value="traceroute">Traceroute</option><option value="dns">DNS lookup</option><option value="port">TCP port check (host:port)</option><option value="wan">WAN status</option><option value="ntp">Clock / NTP status</option><option value="routes">Routes</option><option value="interfaces">Interfaces</option><option value="neighbors">Local neighbor table</option><option value="wifi">Wi-Fi status</option><option value="controllers">Coin controllers</option><option value="storage">Storage</option><option value="services">Services</option><option value="logs">Recent system logs</option><option value="uptime">Uptime</option><option value="speedtest">Speed test</option></select></label></div><div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="BlazeConsole.runTool()">Run safe command</button></div><pre id="toolOutput" class="console-output">Select a tool.</pre></div></div>
+
+    <div class="card" style="margin-top:16px"><div class="card-body"><div class="card-title">Advanced Terminal</div>
+      <div class="switch-row"><span>State</span><span id="terminalState" class="badge">Loading…</span></div>
+      <div id="terminalLimits" class="small muted" style="margin-top:8px">—</div>
+      <div class="form-grid" style="margin-top:12px"><label><span class="field-label">Admin password</span><input id="terminalPassword" class="field" type="password" autocomplete="current-password" placeholder="Required to enable/open"></label><div style="align-self:end" class="toolbar"><button class="btn" onclick="BlazeConsole.setTerminalEnabled(true)">Enable</button><button class="btn danger" onclick="BlazeConsole.setTerminalEnabled(false)">Disable</button><button class="btn primary" onclick="BlazeConsole.openTerminal()">Open session</button></div></div>
+      <div class="form-grid" style="margin-top:12px"><label class="span2"><span class="field-label">Command</span><input id="terminalCommand" class="field mono" maxlength="512" placeholder="Example: logread | tail -n 40"></label></div>
+      <div class="toolbar" style="margin-top:10px"><button class="btn primary" onclick="BlazeConsole.runTerminal()">Run bounded command</button><button class="btn" onclick="BlazeConsole.closeTerminal()">Close session</button></div>
+      <pre id="terminalOutput" class="console-output">Advanced Terminal is disabled by default. Session tokens are held only in this page memory.</pre>
+    </div></div>
+    <div class="notice warn"><b>Guardrails:</b> admin role, fresh password re-authentication, CSRF/session/IP binding, one active session per admin, short TTL/idle timeout, bounded command runtime/output, no background jobs, audit logging, and blocked appliance lifecycle commands. Captive-portal users have no route to this CGI.</div>
   </section>
 
   <section id="page-alerts" class="section"><div class="page-head"><div><h2>Alerts & Logs</h2><p>WAN, controller, rental, backup, storage, security and system events.</p></div></div><div class="card"><div class="card-body"><p class="muted">Alert severity, retention and notifications are capability-aware and bounded so logs cannot exhaust small targets.</p></div></div></section>
