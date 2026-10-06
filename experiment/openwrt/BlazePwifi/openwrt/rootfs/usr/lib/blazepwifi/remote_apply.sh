@@ -166,7 +166,9 @@ bp_remote_ipv4_contains() {
 }
 
 bp_remote_ipv4_host() {
-  printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}
+  printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\\.){3}[0-9]{1,3}$' || return 1
+  bp_remote_ipv4_cidr_valid "$1/32"
+}
 
 bp_remote_split_cidrs() {
   printf '%s' "$1" | tr ', ' '\n\n' | awk 'NF'
