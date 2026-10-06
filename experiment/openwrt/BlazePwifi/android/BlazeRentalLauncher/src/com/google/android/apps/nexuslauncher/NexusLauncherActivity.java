@@ -14,6 +14,7 @@ import com.android.launcher3.util.ComponentKeyMapper;
 import com.android.launcher3.util.ViewOnDrawExecutor;
 import com.blazesystems.blazerental.ManagedPolicyController;
 import com.blazesystems.blazerental.LauncherAccessController;
+import com.blazesystems.blazerental.BlazeRentalUpdateManager;
 import com.google.android.libraries.gsa.launcherclient.LauncherClient;
 
 import java.util.List;
@@ -23,6 +24,7 @@ public class NexusLauncherActivity extends Launcher {
     private NexusLauncher mLauncher;
     private boolean mIsReload;
     private String mThemeHints;
+    private boolean mUpdateHealthScheduled;
 
     public NexusLauncherActivity() {
         mLauncher = new NexusLauncher(this);
@@ -97,6 +99,19 @@ public class NexusLauncherActivity extends Launcher {
         // model binding. Make the fail-closed rental landing the final bound
         // state for unpaid devices.
         enforceRentalLanding(0);
+        scheduleUpdateHealthPromotion();
+    }
+
+    private void scheduleUpdateHealthPromotion() {
+        if (mUpdateHealthScheduled || getWorkspace() == null
+                || !BlazeRentalUpdateManager.isPending(this)) return;
+        mUpdateHealthScheduled = true;
+        getWorkspace().postDelayed(new Runnable() {
+            @Override public void run() {
+                BlazeRentalUpdateManager.markLaunchHealthy(NexusLauncherActivity.this);
+                mUpdateHealthScheduled = false;
+            }
+        }, 30000L);
     }
 
     @Override
