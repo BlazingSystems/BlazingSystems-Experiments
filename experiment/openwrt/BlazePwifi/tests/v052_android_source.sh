@@ -17,7 +17,7 @@ case "$(cat "$ROOT/VERSION")" in
     grep -Fq 'versionName "0.5.2"' "$GRADLE"
     ;;
   0.5.3-dev.1)
-    grep -Fq 'versionCode 50300' "$GRADLE"
+    grep -Fq 'versionCode 50290' "$GRADLE"
     grep -Fq 'versionName "0.5.3-dev.1"' "$GRADLE"
     ;;
   *) exit 1 ;;
