@@ -784,7 +784,30 @@ bp_remote_zt_uci_show() {
   uci -q show zerotier 2>/dev/null || true
 }
 
+bp_remote_zt_prune_untouched_sample() {
+  earth_type="$(uci -q get zerotier.earth 2>/dev/null || true)"
+  [ "$earth_type" = network ] || return 0
+  global_enabled="$(uci -q get zerotier.global.enabled 2>/dev/null || true)"
+  global_secret="$(uci -q get zerotier.global.secret 2>/dev/null || true)"
+  [ "${global_enabled:-0}" = 0 ] && [ -z "$global_secret" ] || return 0
+
+  networks="$(bp_remote_zt_uci_show | awk -F= '$2=="network"{print $1}')"
+  [ "$(printf '%s\n' "$networks" | awk 'NF{n++} END{print n+0}')" -eq 1 ] || return 0
+  [ "$networks" = zerotier.earth ] || return 0
+  [ "$(uci -q get zerotier.earth.id 2>/dev/null || true)" = 8056c2e21c000001 ] || return 0
+  [ "$(uci -q get zerotier.earth.allow_managed 2>/dev/null || true)" = 1 ] || return 0
+  [ "$(uci -q get zerotier.earth.allow_global 2>/dev/null || true)" = 0 ] || return 0
+  [ "$(uci -q get zerotier.earth.allow_default 2>/dev/null || true)" = 0 ] || return 0
+  [ "$(uci -q get zerotier.earth.allow_dns 2>/dev/null || true)" = 0 ] || return 0
+
+  uci -q delete zerotier.earth || return 1
+  uci commit zerotier || return 1
+  chmod 600 "$BP_REMOTE_ZT_CONFIG" 2>/dev/null || true
+  return 0
+}
+
 bp_remote_zt_config_compatible() {
+  bp_remote_zt_prune_untouched_sample || return 4
   zt_show="$(bp_remote_zt_uci_show)"
   printf '%s\n' "$zt_show" | grep -Eq '\.join=' && return 2
   for zt_section in $(printf '%s\n' "$zt_show" | awk -F= '$2=="network"{print $1}'); do
