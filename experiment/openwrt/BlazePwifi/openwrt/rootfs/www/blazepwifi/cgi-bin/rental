@@ -86,11 +86,15 @@ EOF
     # Once the device proves possession of its permanent secret, the temporary
     # QR enrollment redemption no longer needs to remain retryable.
     bp_lock || bp_fail "enrollment cleanup busy"
-    bp_rental_enroll_consume_device "$did" || {
-      bp_unlock
-      bp_fail "enrollment cleanup failed"
-    }
-    bp_durable_sync
+    if bp_rental_enroll_consume_device "$did"; then
+      bp_durable_sync
+    else
+      cleanup_rc=$?
+      [ "$cleanup_rc" -eq 3 ] || {
+        bp_unlock
+        bp_fail "enrollment cleanup failed"
+      }
+    fi
     bp_unlock
 
     inventory="$(bp_param inventory)"
