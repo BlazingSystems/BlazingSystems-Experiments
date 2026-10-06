@@ -2,9 +2,50 @@
 
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
-**Development state:** BlazePwifi v0.5.1 is published and fully build-validated as a prerelease from exact candidate `65f87d775793a1fdc09a9522cf752349f68c3b41`. Transactional no-reflash updates and rollback are included. Android production signing remains blocked only by unavailable exact locked v0.4 signing material.
+**Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
+**Active development:** **v0.5.3-dev.1** on `blazepwifi-v0.5.3-development`. Exact green candidate `ee427f67d8f33d965c84fd675f80e78653a7c91d`, workflow run `37486090360` — PASS.  
+**Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
-## Active v0.5.1 maintenance target
+## Current v0.5.3 development status
+
+The post-v0.5.2 hardening work is implemented and artifact-validated. This is a **development line**, not a production v0.5.3 release.
+
+- Development identity: `0.5.3-dev.1`.
+- Android development versionCode: `50290`.
+- Reserved development range: `50290–50298`.
+- Frozen v0.5.2 rollback rescue versionCode: `50299`.
+- Reserved final v0.5.3 production versionCode: `50300`.
+- Full-console CSRF mutations now send both form-body and header tokens, use same-origin/no-store requests, refresh stale sessions and retry a CSRF mismatch once.
+- Rental setup now has two explicit QR paths:
+  - **Binding QR** for an already-installed BlazeRental APK;
+  - **Device Owner Provisioning QR** for factory-reset Android Setup Wizard.
+- Device Owner provisioning binds to the published signed APK checksum and pins the local BlazePwifi TLS certificate for secure enrollment against the default self-signed admin certificate.
+- One-time enrollment is retry-safe across a lost response: the same persisted request nonce returns the same permanent identity, a different nonce is rejected, and the enrollment response is HMAC-authenticated before BlazeRental commits identity.
+- BlazeRental and the PisoWiFi captive portal now have separate server-authoritative:
+  - purchased/session countdown;
+  - Insert Coin reservation countdown.
+- Rental coin progress is server-accounted and signed: accepted pulse count and centavo value are displayed, duplicate Vendo events do not add credit twice, repeated open requests reuse the same active reservation, and Done/expiry releases the target.
+- BlazeRental runtime UI now visibly renders `BLAZERENTAL`, `00:00:00`, `TIME FINISHED` and `INSERT COIN` in the unpaid Device Owner state.
+- Exact green validation run `37486090360` passed:
+  - static/security/config/integration/stress validation;
+  - Android current + frozen-v0.5.2 rescue APK builds;
+  - Android Device Owner emulator;
+  - browser QR/CSRF/session-timer/coin-window runtime audit;
+  - ESP8266 and ESP32 build/simulation;
+  - Ruijie build/simulation;
+  - x86_64 build + QEMU simulation;
+  - required Orange Pi build/simulation targets;
+  - transactional update bundle;
+  - final candidate gate.
+- Runtime Android audit artifact: `BlazePwifi-v0.5-android-simulation`.
+- Current Android build artifact: `BlazePwifi-android-current`.
+- Current update artifact: `BlazePwifi-current-update`.
+- Current candidate-gate artifact: `BlazePwifi-current-candidate-gate`.
+- No v0.5.3 production tag/release has been created.
+- No production signing key was rotated or exposed.
+- Frozen v0.5.2 release/tag and dedicated signing/recovery workflows remain unchanged.
+
+## Historical v0.5.1 maintenance target
 
 The owner requested a maintenance release that eliminates full-system reflashing for ordinary feature/revision upgrades and adds safe rollback for BlazePwifi and BlazeRental.
 
