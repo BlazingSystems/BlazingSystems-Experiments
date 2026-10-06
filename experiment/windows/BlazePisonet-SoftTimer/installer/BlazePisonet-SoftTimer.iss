@@ -91,9 +91,17 @@ end;
 procedure CreateLogonTask(const TaskName, Description, ExePath: string);
 var
   Service, RootFolder, Definition, Trigger, Action, Principal: Variant;
-  UserName: string;
+  UserName, DomainName, AccountName: string;
 begin
-  UserName := ExpandConstant('{username}');
+  UserName := GetEnv('USERNAME');
+  DomainName := GetEnv('USERDOMAIN');
+  if UserName = '' then
+    UserName := ExpandConstant('{username}');
+  if DomainName <> '' then
+    AccountName := DomainName + '\\' + UserName
+  else
+    AccountName := UserName;
+  Log('Creating logon task for account: ' + AccountName);
   Service := CreateOleObject('Schedule.Service');
   Service.Connect();
   RootFolder := Service.GetFolder('\');
@@ -113,20 +121,20 @@ begin
   Definition.Settings.MultipleInstances := 2;
 
   Principal := Definition.Principal;
-  Principal.UserId := UserName;
+  Principal.UserId := AccountName;
   Principal.LogonType := 3;
   Principal.RunLevel := 1;
 
   Trigger := Definition.Triggers.Create(9);
   Trigger.Enabled := True;
-  Trigger.UserId := UserName;
+  Trigger.UserId := AccountName;
 
   Action := Definition.Actions.Create(0);
   Action.Path := ExePath;
   Action.WorkingDirectory := ExtractFileDir(ExePath);
 
-  RootFolder.RegisterTaskDefinition(TaskName, Definition, 6, UserName, '', 3, '');
-  Log('Created interactive highest-privilege logon task: ' + TaskName + ' for ' + UserName);
+  RootFolder.RegisterTaskDefinition(TaskName, Definition, 6, Null, Null, 3, Null);
+  Log('Created interactive highest-privilege logon task: ' + TaskName + ' for ' + AccountName);
 end;
 
 procedure ConfigureSystem;
@@ -149,7 +157,7 @@ begin
       'Keeps BlazePisonet SoftTimer available after an unexpected process exit.',
       WatchdogExe);
   except
-    Log('Could not create one or more SoftTimer startup tasks.');
+    Log('Could not create one or more SoftTimer startup tasks: ' + GetExceptionMessage);
   end;
 
   RunHidden(ExpandConstant('{sys}\netsh.exe'),
