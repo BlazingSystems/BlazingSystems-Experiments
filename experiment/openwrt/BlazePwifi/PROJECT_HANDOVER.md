@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-06  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.3** on `blazepwifi-v0.5.3-dev3-wireguard-apply`. Exact green branch candidate `c60645729e6fbd9b9af6db8b11af13c3b58b7ae3`, workflow `37516557416` — PASS.  
+**Active development:** **v0.5.3-dev.3 reconciled integration** on `blazepwifi-v0.5.3-dev3-members-reconciled`, based on current `main` `d3a3ff2e21514c8ea72a235301fa515c702f5eba`. It preserves the green transactional WireGuard/remote-management dev.3 work and adds centralized BlazePisonet SoftTimer member authority. This combined branch must pass the full matrix before merge and remains development-only, not a production v0.5.3 release.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
