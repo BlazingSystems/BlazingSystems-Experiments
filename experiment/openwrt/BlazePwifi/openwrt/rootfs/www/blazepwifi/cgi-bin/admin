@@ -9,6 +9,7 @@
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 . "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
 . "${BP_REMOTE_APPLY_LIB:-/usr/lib/blazepwifi/remote_apply.sh}"
+. "${BP_ZEROTIER_APPLY_LIB:-/usr/lib/blazepwifi/zerotier_apply.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -456,6 +457,88 @@ EOF
     bp_auth_audit remote_config_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(bp_remote_get mode disabled)"
     remote="$(bp_remote_status_json)"
     bp_json "$(printf '{"ok":true,"remote":%s,"apply_supported":false}' "$remote")"
+    ;;
+  remote_zerotier_prepare)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_zt_prepare
+    rc=$?
+    case "$rc" in
+      0) ;;
+      10) bp_fail "ZeroTier mode is not selected" ;;
+      11) bp_fail "ZeroTier is not installed or unavailable on this target" ;;
+      12) bp_fail "invalid ZeroTier network ID" ;;
+      13) bp_fail "ZeroTier service could not be restarted" ;;
+      *) bp_fail "ZeroTier prepare/join failed safely" ;;
+    esac
+    bp_auth_audit remote_zerotier_prepare "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(bp_zt_get state staged)"
+    zt="$(bp_zt_status_json)"
+    bp_json "$(printf '{"ok":true,"zerotier":%s}' "$zt")"
+    ;;
+  remote_zerotier_activate)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_zt_activate "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      10) bp_fail "ZeroTier mode is not selected" ;;
+      11) bp_fail "ZeroTier live activation is unavailable on this target" ;;
+      12) bp_fail "ZeroTier runtime status is unavailable" ;;
+      13) bp_fail "ZeroTier is not ready; authorize the node and wait for a managed IPv4 address/device" ;;
+      14) bp_fail "activate ZeroTier from a local/non-ZeroTier management path" ;;
+      15) bp_fail "default route unavailable; refusing ZeroTier activation" ;;
+      16) bp_fail "unable to create ZeroTier rollback snapshot" ;;
+      17) bp_fail "invalid ZeroTier management/firewall policy" ;;
+      18|19|20|21) bp_fail "ZeroTier activation failed safety checks and was rolled back" ;;
+      *) bp_fail "ZeroTier activation failed safely" ;;
+    esac
+    bp_auth_audit remote_zerotier_activate "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "active"
+    zt="$(bp_zt_status_json)"
+    bp_json "$(printf '{"ok":true,"zerotier":%s}' "$zt")"
+    ;;
+  remote_zerotier_disable)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_zt_disable "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      14) bp_fail "disable ZeroTier management from a local/non-ZeroTier path" ;;
+      15) bp_fail "default route unavailable; refusing ZeroTier disable" ;;
+      16|18|19|20) bp_fail "ZeroTier disable failed safety checks and previous network was restored" ;;
+      *) bp_fail "ZeroTier disable failed safely" ;;
+    esac
+    bp_auth_audit remote_zerotier_disable "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "staged"
+    zt="$(bp_zt_status_json)"
+    bp_json "$(printf '{"ok":true,"zerotier":%s}' "$zt")"
     ;;
   remote_wireguard_key)
     require_role admin
