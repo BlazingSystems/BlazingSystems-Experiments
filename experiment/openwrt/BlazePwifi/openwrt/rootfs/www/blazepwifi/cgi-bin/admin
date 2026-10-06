@@ -4,7 +4,7 @@
 . "${BP_CONFIG_LIB:-/usr/lib/blazepwifi/config.sh}"
 . "${BP_RENTAL_LIB:-/usr/lib/blazepwifi/rental.sh}"
 . "${BP_RENTAL_POLICY_LIB:-/usr/lib/blazepwifi/rental_policy.sh}"
-. "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
+[ ! -r "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}" ] || . "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 bp_init_dirs
@@ -131,6 +131,7 @@ case "$action" in
     ;;
   rental_update_get)
     require_role viewer
+    command -v bp_rental_update_init >/dev/null 2>&1 || bp_fail "rental update subsystem unavailable"
     bp_rental_update_init
     body="$(bp_rental_update_json)"
     bp_json "$(printf '{"ok":true,"update":%s}' "$body")"
@@ -138,6 +139,7 @@ case "$action" in
   rental_update_set)
     require_role admin
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    command -v bp_rental_update_set >/dev/null 2>&1 || bp_fail "rental update subsystem unavailable"
     [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     version="$(bp_param version)"; code="$(bp_param version_code)"
     url="$(bp_param apk_url)"; sha="$(bp_param apk_sha256)"
