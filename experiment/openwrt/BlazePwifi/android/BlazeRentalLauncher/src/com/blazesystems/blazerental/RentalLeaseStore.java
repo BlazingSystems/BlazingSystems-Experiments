@@ -50,7 +50,12 @@ public final class RentalLeaseStore {
     }
 
     public static void recordLease(Context context, long serverNowMs, long leaseUntilMs) {
+        long previousLeaseUntil = prefs(context).getLong("lease_until_ms", 0L);
         long duration = Math.max(0L, leaseUntilMs - serverNowMs);
+        if (duration <= 0L || (previousLeaseUntil > 0L
+                && leaseUntilMs > previousLeaseUntil + 1000L)) {
+            BlazeAlarmPlayer.stop(context);
+        }
         prefs(context).edit()
                 .putLong("lease_duration_ms", duration)
                 .putLong("lease_sync_elapsed", SystemClock.elapsedRealtime())
@@ -76,6 +81,10 @@ public final class RentalLeaseStore {
 
     public static long remainingMs(Context context) {
         return rentalState(context).remainingMs(SystemClock.elapsedRealtime());
+    }
+
+    public static long leaseUntilMs(Context context) {
+        return prefs(context).getLong("lease_until_ms", 0L);
     }
 
     public static void invalidateLeaseAfterBoot(Context context) {
@@ -139,6 +148,7 @@ public final class RentalLeaseStore {
     }
 
     public static void prepareTransfer(Context context) {
+        BlazeAlarmPlayer.stop(context);
         prefs(context).edit()
                 .putBoolean("setup_complete", false)
                 .remove("server")
