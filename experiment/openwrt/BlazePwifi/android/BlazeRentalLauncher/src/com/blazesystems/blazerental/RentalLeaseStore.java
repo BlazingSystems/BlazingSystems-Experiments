@@ -21,23 +21,36 @@ public final class RentalLeaseStore {
 
     public static void acceptProvisioningExtras(Context context, PersistableBundle extras) {
         if (extras == null) return;
-        prefs(context).edit()
-                .putString("server", safe(extras.getString("server_url")))
-                .putString("enrollment", safe(extras.getString("enrollment_token")))
-                .putString("device_name", safe(extras.getString("device_name")))
-                .apply();
+        saveEnrollment(context,
+                extras.getString("server_url"),
+                extras.getString("enrollment_token"),
+                extras.getString("device_name"),
+                extras.getString("server_cert_sha256"));
     }
 
     public static void saveManualEnrollment(Context context, String server, String token, String name) {
+        saveManualEnrollment(context, server, token, name, "");
+    }
+
+    public static void saveManualEnrollment(Context context, String server, String token,
+                                            String name, String certPin) {
+        saveEnrollment(context, server, token, name, certPin);
+    }
+
+    private static void saveEnrollment(Context context, String server, String token,
+                                       String name, String certPin) {
         prefs(context).edit()
                 .putString("server", safe(server))
                 .putString("enrollment", safe(token))
                 .putString("device_name", safe(name))
+                .putString("server_cert_sha256", normalizePin(certPin))
                 .putBoolean("setup_complete", false)
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
                 .remove("lease_sync_elapsed")
+                .remove("server_time_ms")
+                .remove("lease_until_ms")
                 .apply();
         AndroidRentalPolicyRepository.clear(context);
     }
@@ -46,6 +59,7 @@ public final class RentalLeaseStore {
         prefs(context).edit()
                 .putString("device_id", safe(id))
                 .putString("device_secret", safe(secret))
+                .remove("enrollment")
                 .apply();
     }
 
@@ -153,6 +167,7 @@ public final class RentalLeaseStore {
                 .putBoolean("setup_complete", false)
                 .remove("server")
                 .remove("enrollment")
+                .remove("server_cert_sha256")
                 .remove("device_id")
                 .remove("device_secret")
                 .remove("lease_duration_ms")
@@ -229,6 +244,9 @@ public final class RentalLeaseStore {
     }
 
     public static String server(Context c) { return prefs(c).getString("server", ""); }
+    public static String serverCertSha256(Context c) {
+        return normalizePin(prefs(c).getString("server_cert_sha256", ""));
+    }
     public static String enrollment(Context c) { return prefs(c).getString("enrollment", ""); }
     public static String deviceId(Context c) { return prefs(c).getString("device_id", ""); }
     public static String deviceSecret(Context c) { return prefs(c).getString("device_secret", ""); }
@@ -236,4 +254,14 @@ public final class RentalLeaseStore {
     public static boolean isEnrolled(Context c) { return deviceSecret(c).length() > 0; }
 
     private static String safe(String value) { return value == null ? "" : value.trim(); }
+
+    private static String normalizePin(String value) {
+        String pin = safe(value).replace(":", "").toLowerCase();
+        if (pin.length() != 64) return "";
+        for (int i = 0; i < pin.length(); i++) {
+            char ch = pin.charAt(i);
+            if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f'))) return "";
+        }
+        return pin;
+    }
 }
