@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.3-dev.2 — development
+
+- Added a hardened Advanced Terminal to the Full BlazePwifi Management Console. It is disabled by default and requires admin role, fresh password re-authentication, CSRF, current admin-session/IP binding, short TTL/idle expiry, one active session per admin, one command at a time, bounded runtime/output and audit logging.
+- Advanced Terminal session tokens remain only in browser memory and are discarded on close/disable/error/reload; they are never written to localStorage/sessionStorage or shown in the DOM.
+- Background/detached commands and high-risk appliance lifecycle/storage commands such as reboot, sysupgrade, firstboot/jffs2reset, mtd and fw_setenv are blocked from Advanced Terminal so those operations can remain behind dedicated guarded controls.
+- Terminal command audit records executable name plus command SHA-256 instead of full command text to reduce accidental secret persistence in audit logs.
+- Expanded Safe Tools with WAN status, NTP/clock status, latency/jitter sampling, TCP port checks, local neighbors, controller status, services and recent system logs while preserving the allowlisted diagnostic model.
+- Added a validated Worldwide Remote Access profile for Disabled, WireGuard and ZeroTier modes with separate Monitoring, Management and Remote Terminal permissions, node/site identity, source CIDR allowlist, heartbeat/offline thresholds and transport-specific public configuration.
+- Remote profiles never accept or expose a WireGuard private key. Saving a profile requires admin re-authentication and is serialized/crash-safe.
+- Live WireGuard/ZeroTier network/firewall activation remains intentionally safety-locked in dev.2. The profile can be validated/staged, but transport apply/rollback must pass a separate network-survival matrix before activation is enabled.
+- Browser runtime audit now exercises remote-profile save, password re-authentication, terminal enable/open/execute/close, dual CSRF transport and confirms no console errors.
+- Added dynamic console-operations security tests for password re-authentication, session binding, close/disable behavior, blocked commands, command concurrency, remote-profile validation and absence of private-key storage.
+- Development identity advanced to `0.5.3-dev.2` / Android versionCode `50291`; frozen v0.5.2 production/recovery workflows remain untouched.
+
 ## 0.5.3-dev.1 — development
 
 - Full BlazePwifi admin mutations now send CSRF through both the custom header and form body, use same-origin/no-store requests, refresh stale sessions and retry a CSRF mismatch once.
