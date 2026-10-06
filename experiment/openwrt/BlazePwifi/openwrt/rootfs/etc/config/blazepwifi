@@ -43,6 +43,11 @@ config core 'main'
 	option update_stability_seconds '600'
 	option update_retention '3'
 	option update_max_mb '64'
+	option advanced_terminal_enabled '0'
+	option terminal_ttl_seconds '300'
+	option terminal_idle_seconds '60'
+	option terminal_command_timeout_seconds '12'
+	option terminal_output_max_bytes '16000'
 	# Secrets are generated during first installation/provisioning.
 	# Optional examples:
 	# list walled_domain 'payments.example.com'

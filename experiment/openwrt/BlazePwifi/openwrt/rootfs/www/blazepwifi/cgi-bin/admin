@@ -7,6 +7,7 @@
 [ ! -r "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}" ] || . "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
+. "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
 bp_init_dirs
 admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
 [ "${SERVER_PORT:-}" = "$admin_port" ] || bp_fail "admin API requires HTTPS"
@@ -406,16 +407,112 @@ EOF
     ;;
   remote_status)
     require_role viewer
-    wg_state="unavailable"; zt_state="unavailable"
-    if command -v wg >/dev/null 2>&1; then
-      ifaces="$(wg show interfaces 2>/dev/null || true)"
-      [ -n "$ifaces" ] && wg_state="online:$ifaces" || wg_state="installed"
-    fi
-    if command -v zerotier-cli >/dev/null 2>&1; then
-      zt="$(zerotier-cli info 2>/dev/null | head -n1 || true)"
-      [ -n "$zt" ] && zt_state="$zt" || zt_state="installed"
-    fi
-    bp_json "$(printf '{"ok":true,"recommended":"wireguard","wireguard":"%s","zerotier":"%s"}' "$(bp_json_escape "$wg_state")" "$(bp_json_escape "$zt_state")")"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"recommended":"wireguard","remote":%s}' "$remote")"
+    ;;
+  remote_config_get)
+    require_role admin
+    config="$(bp_remote_config_json)"
+    bp_json "$(printf '{"ok":true,"config":%s}' "$config")"
+    ;;
+  remote_config_set)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_remote_save \
+      "$(bp_param mode)" "$(bp_param monitoring)" "$(bp_param management)" "$(bp_param terminal)" \
+      "$(bp_param node_name)" "$(bp_param site_label)" "$(bp_param source_allowlist)" \
+      "$(bp_param heartbeat_seconds)" "$(bp_param offline_seconds)" "$(bp_param wg_endpoint)" \
+      "$(bp_param wg_port)" "$(bp_param wg_address)" "$(bp_param wg_peer_public_key)" \
+      "$(bp_param wg_allowed_ips)" "$(bp_param wg_keepalive)" "$(bp_param wg_dns)" \
+      "$(bp_param wg_mtu)" "$(bp_param zt_network_id)"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      3) bp_fail "selected remote mode is incomplete" ;;
+      *) bp_fail "invalid remote access configuration" ;;
+    esac
+    bp_auth_audit remote_config_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(bp_remote_get mode disabled)"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"remote":%s,"apply_supported":false}' "$remote")"
+    ;;
+  terminal_status)
+    require_role admin
+    if bp_terminal_enabled; then enabled=true; else enabled=false; fi
+    active="$(bp_terminal_active_count)"
+    ttl="$(bp_terminal_cfg_uint terminal_ttl_seconds 300 60 1800)"
+    idle="$(bp_terminal_cfg_uint terminal_idle_seconds 60 15 900)"
+    timeout_seconds="$(bp_terminal_cfg_uint terminal_command_timeout_seconds 12 2 60)"
+    output_max="$(bp_terminal_cfg_uint terminal_output_max_bytes 16000 1024 65536)"
+    bp_json "$(printf '{"ok":true,"enabled":%s,"active_sessions":%s,"ttl_seconds":%s,"idle_seconds":%s,"command_timeout_seconds":%s,"output_max_bytes":%s}' "$enabled" "$active" "$ttl" "$idle" "$timeout_seconds" "$output_max")"
+    ;;
+  terminal_set_enabled)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    enabled="$(bp_param enabled)"
+    case "$enabled" in 0|1) ;; *) bp_fail "invalid terminal state";; esac
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_config_set advanced_terminal_enabled "$enabled" || bp_fail "unable to update terminal state"
+    [ "$enabled" = 1 ] || bp_terminal_close_all
+    bp_auth_audit terminal_enabled "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$enabled"
+    bp_json "$(printf '{"ok":true,"enabled":%s}' "$([ "$enabled" = 1 ] && printf true || printf false)")"
+    ;;
+  terminal_open)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    password="$(bp_param password)"
+    token="$(bp_terminal_open "$password")"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      10) bp_fail "Advanced Terminal is disabled" ;;
+      11) bp_fail "admin role required" ;;
+      12) bp_fail "password change required" ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "terminal re-authentication failed" ;;
+    esac
+    ttl="$(bp_terminal_cfg_uint terminal_ttl_seconds 300 60 1800)"
+    idle="$(bp_terminal_cfg_uint terminal_idle_seconds 60 15 900)"
+    bp_json "$(printf '{"ok":true,"terminal_token":"%s","ttl_seconds":%s,"idle_seconds":%s}' "$(bp_json_escape "$token")" "$ttl" "$idle")"
+    ;;
+  terminal_exec)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    token="$(bp_param terminal_token)"; command_text="$(bp_param command)"
+    bp_terminal_exec "$token" "$command_text"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "command blocked; use a dedicated guarded control for this operation" ;;
+      4) bp_fail "terminal session expired or invalid" ;;
+      5) bp_fail "another terminal command is already running" ;;
+      127) bp_fail "bounded timeout utility unavailable on this target" ;;
+      *) bp_fail "invalid terminal command" ;;
+    esac
+    bp_json "$(printf '{"ok":true,"exit_code":%s,"output":"%s"}' "${BP_TERMINAL_RC:-1}" "$(bp_json_escape "${BP_TERMINAL_OUTPUT:-}")")"
+    ;;
+  terminal_close)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    token="$(bp_param terminal_token)"
+    bp_terminal_close "$token" || bp_fail "unable to close terminal session"
+    bp_json '{"ok":true}'
     ;;
   tool_run)
     require_role operator
@@ -446,6 +543,41 @@ EOF
         ;;
       storage) output="$(df -h 2>&1 | head -c 12000)" || rc=$? ;;
       uptime) output="$(uptime 2>&1 | head -c 12000)" || rc=$? ;;
+      wan)
+        output="$({ ip route show default 2>/dev/null; if command -v ubus >/dev/null 2>&1; then ubus call network.interface.wan status 2>/dev/null || true; fi; } | head -c 12000)" || rc=$?
+        ;;
+      ntp)
+        output="$({ date -u 2>/dev/null; if command -v ubus >/dev/null 2>&1; then ubus call system info 2>/dev/null || true; fi; if command -v logread >/dev/null 2>&1; then logread 2>/dev/null | grep -iE 'ntp|timesync|clock' | tail -n 30; fi; } | head -c 12000)" || rc=$?
+        ;;
+      jitter)
+        [ -n "$target" ] || target="1.1.1.1"
+        output="$(ping -c 10 -W 2 "$target" 2>&1 | head -c 12000)" || rc=$?
+        ;;
+      port)
+        [ -n "$target" ] || bp_fail "port check target must be host:port"
+        host="${target%:*}"; port="${target##*:}"
+        [ "$host" != "$target" ] && [ -n "$host" ] || bp_fail "port check target must be host:port"
+        case "$port" in ''|*[!0-9]*) bp_fail "invalid port";; esac
+        [ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null || bp_fail "invalid port"
+        if command -v nc >/dev/null 2>&1; then
+          port_tmp="$BP_RUN/.port-check.$(bp_tmp_suffix)"
+          nc -z -w 3 "$host" "$port" >"$port_tmp" 2>&1
+          rc=$?
+          output="$(cat "$port_tmp" 2>/dev/null; printf 'Port check completed for %s:%s\n' "$host" "$port")"
+          rm -f "$port_tmp"
+        else output="nc is not installed on this target"; rc=127; fi
+        output="$(printf '%s' "$output" | head -c 12000)"
+        ;;
+      neighbors) output="$(ip neigh show 2>&1 | head -c 12000)" || rc=$? ;;
+      logs)
+        if command -v logread >/dev/null 2>&1; then output="$(logread 2>&1 | tail -n 120 | head -c 12000)" || rc=$?; else output="logread is unavailable"; rc=127; fi
+        ;;
+      services)
+        if command -v ubus >/dev/null 2>&1; then output="$(ubus call service list 2>&1 | head -c 12000)" || rc=$?; else output="$(ps 2>&1 | head -c 12000)" || rc=$?; fi
+        ;;
+      controllers)
+        output="$(awk -F '\t' -v n="$now" 'NF>=2 {age=n-$2; printf "%s  age=%ss  ip=%s\n",$1,age,$3}' "$BP_VENDOS" 2>/dev/null | head -c 12000)" || rc=$?
+        ;;
       speedtest)
         if command -v speedtest >/dev/null 2>&1; then output="$(timeout 45 speedtest 2>&1 | head -c 12000)" || rc=$?;
         elif command -v librespeed-cli >/dev/null 2>&1; then output="$(timeout 45 librespeed-cli 2>&1 | head -c 12000)" || rc=$?;

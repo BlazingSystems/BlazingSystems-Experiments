@@ -5,9 +5,17 @@ WF="$ROOT/../../../.github/workflows/blazepwifi-build.yml"
 GRADLE="$ROOT/android/BlazeRentalLauncher/build.gradle"
 ADMIN="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/BlazeAdminActivity.java"
 
-[ "$(cat "$ROOT/VERSION")" = "0.5.3-dev.1" ]
-grep -Fq 'versionCode 50290' "$GRADLE"
-grep -Fq 'versionName "0.5.3-dev.1"' "$GRADLE"
+case "$(cat "$ROOT/VERSION")" in
+  0.5.3-dev.1)
+    grep -Fq 'versionCode 50290' "$GRADLE"
+    grep -Fq 'versionName "0.5.3-dev.1"' "$GRADLE"
+    ;;
+  0.5.3-dev.2)
+    grep -Fq 'versionCode 50291' "$GRADLE"
+    grep -Fq 'versionName "0.5.3-dev.2"' "$GRADLE"
+    ;;
+  *) exit 1 ;;
+esac
 grep -Fq 'appVersionName()' "$ADMIN"
 
 # Current development artifacts must never masquerade as the frozen v0.5.2 release.
