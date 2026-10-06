@@ -65,6 +65,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v052_android_source.sh
       - name: Post-v0.5.2 CSRF, QR and coin-window hardening
         run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
+      - name: BlazePwifi v0.5.3 development identity validation
+        run: sh experiment/openwrt/BlazePwifi/tests/v053_development.sh
       - name: BlazePwifi v0.4 build matrix validation
         run: sh experiment/openwrt/BlazePwifi/tests/v04_build_matrix.sh
       - name: Portal validation
