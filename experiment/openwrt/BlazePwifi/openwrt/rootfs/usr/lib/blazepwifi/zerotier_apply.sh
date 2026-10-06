@@ -249,7 +249,7 @@ bp_zt_source_on_device() {
 bp_zt_snapshot_create() {
   id="$1"; snap="$BP_REMOTE_APPLY_ROOT/snapshots/$id"
   mkdir -p "$snap"; chmod 700 "$snap"
-  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "ztruntime:$BP_ZT_RUNTIME"; do
+  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "ztruntime:$BP_ZT_RUNTIME" "ztprofile:$BP_ZT_APPLIED_PROFILE"; do
     name="${pair%%:*}"; file="${pair#*:}"
     if [ -f "$file" ]; then
       cp -p "$file" "$snap/$name" || return 1
@@ -267,6 +267,7 @@ bp_zt_restore_snapshot() {
   bp_remote_config_restore_file "$snap" network "$BP_REMOTE_NETWORK_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" firewall "$BP_REMOTE_FIREWALL_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" ztruntime "$BP_ZT_RUNTIME" || return 1
+  bp_remote_config_restore_file "$snap" ztprofile "$BP_ZT_APPLIED_PROFILE" || return 1
   bp_remote_network_reload || return 1
   bp_remote_firewall_reload || return 1
   bp_remote_admin_sync || return 1
