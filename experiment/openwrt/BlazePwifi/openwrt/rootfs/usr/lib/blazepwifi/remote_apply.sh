@@ -344,7 +344,7 @@ bp_remote_snapshot_create() {
   snap="$BP_REMOTE_APPLY_ROOT/snapshots/$id"
   mkdir -p "$snap"
   chmod 700 "$snap"
-  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "runtime:$BP_REMOTE_RUNTIME"; do
+  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "runtime:$BP_REMOTE_RUNTIME" "zerotier:$BP_REMOTE_ZT_CONFIG" "zt_runtime:$BP_REMOTE_ZT_RUNTIME"; do
     name="${pair%%:*}"; file="${pair#*:}"
     if [ -f "$file" ]; then
       cp -p "$file" "$snap/$name" || return 1
@@ -434,36 +434,56 @@ bp_remote_admin_sync() {
 }
 
 bp_remote_restore_snapshot() {
-  id="$1"
+  id="$1"; transport="${2:-$(bp_remote_pending_transport)}"
   snap="$BP_REMOTE_APPLY_ROOT/snapshots/$id"
   [ -d "$snap" ] || return 1
   bp_remote_admin_stop || true
+
+  [ "$transport" != zerotier ] || bp_remote_zt_service_stop || true
   bp_remote_config_restore_file "$snap" network "$BP_REMOTE_NETWORK_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" firewall "$BP_REMOTE_FIREWALL_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" runtime "$BP_REMOTE_RUNTIME" || return 1
+  bp_remote_config_restore_file "$snap" zerotier "$BP_REMOTE_ZT_CONFIG" || return 1
+  bp_remote_config_restore_file "$snap" zt_runtime "$BP_REMOTE_ZT_RUNTIME" || return 1
+
   bp_remote_ifdown || true
   bp_remote_wg_link_delete || true
   restored_state="$(bp_remote_runtime_get state staged)"
-  case "$restored_state" in
-    active|active_staged_changes)
-      bp_remote_wg_link_precreate || return 1
-      ;;
-  esac
-  bp_remote_network_reload || return 1
-  case "$restored_state" in
-    active|active_staged_changes) bp_remote_ifup || return 1 ;;
-  esac
+  restored_zt="$(bp_remote_zt_runtime_get active 0)"
+
+  if [ "$restored_zt" = 1 ]; then
+    bp_remote_zt_service_restart || return 1
+  else
+    bp_remote_zt_service_stop || true
+    case "$restored_state" in
+      active|active_staged_changes)
+        bp_remote_wg_link_precreate || return 1
+        ;;
+    esac
+    bp_remote_network_reload || return 1
+    case "$restored_state" in
+      active|active_staged_changes) bp_remote_ifup || return 1 ;;
+    esac
+  fi
+
   bp_remote_firewall_reload || return 1
   bp_remote_admin_sync || return 1
 }
 
 bp_remote_pending_write() {
-  id="$1"; profile_sha="$2"; source_ip="$3"; source_sig="$4"; default_sig="$5"
+  id="$1"; profile_sha="$2"; source_ip="$3"; source_sig="$4"; default_sig="$5"; transport="${6:-wireguard}"
+  case "$transport" in wireguard|zerotier) ;; *) return 1;; esac
   tmp="$BP_STATE/.remote-pending.$(bp_tmp_suffix)"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$(bp_now)" "$profile_sha" "$source_ip" "$source_sig" "$default_sig" > "$tmp"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$(bp_now)" "$profile_sha" "$source_ip" "$source_sig" "$default_sig" "$transport" > "$tmp"
   chmod 600 "$tmp"
   mv "$tmp" "$BP_REMOTE_PENDING"
   bp_durable_sync
+}
+
+bp_remote_pending_transport() {
+  line="$(bp_remote_pending_read 2>/dev/null || true)"
+  transport="$(printf '%s' "$line" | cut -f7)"
+  case "$transport" in wireguard|zerotier) printf '%s' "$transport" ;; *) printf 'wireguard' ;; esac
 }
 
 bp_remote_pending_read() {
@@ -501,7 +521,8 @@ bp_remote_rollback_pending() {
   line="$(bp_remote_pending_read 2>/dev/null || true)"
   pending_id="$(printf '%s' "$line" | cut -f1)"
   [ "$pending_id" = "$id" ] || { bp_remote_unlock; return 0; }
-  if bp_remote_restore_snapshot "$id"; then
+  transport="$(bp_remote_pending_transport)"
+  if bp_remote_restore_snapshot "$id" "$transport"; then
     bp_remote_pending_clear
     restored_state="$(bp_remote_runtime_get state staged)"
     restored_id="$(bp_remote_runtime_get apply_id)"
@@ -660,7 +681,7 @@ bp_remote_wireguard_apply() {
   id="$(date +%Y%m%d%H%M%S)-$(bp_tmp_suffix)"
   bp_remote_lock || return 23
   bp_remote_snapshot_create "$id" || { bp_remote_unlock; return 23; }
-  bp_remote_pending_write "$id" "$profile_sha" "$source_ip" "$source_sig" "$default_sig" || { bp_remote_unlock; return 23; }
+  bp_remote_pending_write "$id" "$profile_sha" "$source_ip" "$source_sig" "$default_sig" wireguard || { bp_remote_unlock; return 23; }
   bp_remote_runtime_write applying "$id" "$profile_sha" 0 "" "$(bp_remote_runtime_get wg_listener)" "$public" 0
   bp_remote_unlock
   bp_remote_guard_spawn "$id"
