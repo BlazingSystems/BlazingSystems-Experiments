@@ -25,16 +25,21 @@ import javax.net.ssl.X509TrustManager;
 public final class LeaseClient {
     private static volatile long coinWindowDeadlineElapsedMs;
     private static volatile String coinWindowVendo = "";
+    private static volatile int coinWindowReceivedPulses;
+    private static volatile int coinWindowReceivedCents;
 
     private LeaseClient() {}
 
-    private static void recordCoinWindow(long serverNowMs, long expiresMs, String vendo) {
+    private static void recordCoinWindow(long serverNowMs, long expiresMs, String vendo,
+                                         int receivedPulses, int receivedCents) {
         if (serverNowMs <= 0L || expiresMs <= serverNowMs) {
             clearCoinWindow();
             return;
         }
         long duration = Math.min(10L * 60L * 1000L, expiresMs - serverNowMs);
         coinWindowVendo = vendo == null ? "" : vendo;
+        coinWindowReceivedPulses = Math.max(0, receivedPulses);
+        coinWindowReceivedCents = Math.max(0, receivedCents);
         coinWindowDeadlineElapsedMs = SystemClock.elapsedRealtime() + duration;
     }
 
@@ -53,9 +58,19 @@ public final class LeaseClient {
         return coinWindowRemainingMs() > 0L ? coinWindowVendo : "";
     }
 
+    public static int coinWindowReceivedPulses() {
+        return coinWindowRemainingMs() > 0L ? coinWindowReceivedPulses : 0;
+    }
+
+    public static int coinWindowReceivedCents() {
+        return coinWindowRemainingMs() > 0L ? coinWindowReceivedCents : 0;
+    }
+
     public static void clearCoinWindow() {
         coinWindowDeadlineElapsedMs = 0L;
         coinWindowVendo = "";
+        coinWindowReceivedPulses = 0;
+        coinWindowReceivedCents = 0;
     }
 
     public static boolean sync(Context context) {
@@ -104,14 +119,18 @@ public final class LeaseClient {
             } else {
                 long coinExpires = response.optLong("coin_window_expires_ms", 0L);
                 String coinVendo = response.optString("coin_window_vendo", "");
+                int receivedPulses = response.optInt("coin_received_pulses", 0);
+                int receivedCents = response.optInt("coin_received_cents", 0);
                 String coinSignature = response.optString("coin_window_sig", "");
                 String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|"
-                        + coinExpires + "|" + coinVendo;
+                        + coinExpires + "|" + coinVendo + "|" + receivedPulses + "|"
+                        + receivedCents;
                 if (coinSignature.length() == 0
                         || !coinSignature.equals(Hmac.sha256Hex(newSecret, coinCanonical))) {
                     return false;
                 }
-                recordCoinWindow(serverNow, coinExpires, coinVendo);
+                recordCoinWindow(serverNow, coinExpires, coinVendo,
+                        receivedPulses, receivedCents);
             }
 
             if (!enrolling) {
@@ -235,15 +254,17 @@ public final class LeaseClient {
             long serverNow = response.optLong("server_time_ms", 0L);
             long expires = response.optLong("expires_ms", 0L);
             String vendo = response.optString("vendo", "selected controller");
+            int receivedPulses = response.optInt("received_pulses", 0);
+            int receivedCents = response.optInt("received_cents", 0);
             String coinSignature = response.optString("coin_window_sig", "");
             String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|"
-                    + expires + "|" + vendo;
+                    + expires + "|" + vendo + "|" + receivedPulses + "|" + receivedCents;
             if (serverNow <= 0L || expires <= serverNow || coinSignature.length() == 0
                     || !coinSignature.equals(Hmac.sha256Hex(secret, coinCanonical))) {
                 clearCoinWindow();
                 return "Invalid coin-window response.";
             }
-            recordCoinWindow(serverNow, expires, vendo);
+            recordCoinWindow(serverNow, expires, vendo, receivedPulses, receivedCents);
             return "Insert coin at " + vendo + ".";
         } catch (Exception ignored) {
             return "Unable to start coin slot.";
@@ -270,13 +291,21 @@ public final class LeaseClient {
                 return response.optString("error", "Unable to close coin slot.");
             }
             long serverNow = response.optLong("server_time_ms", 0L);
+            int receivedPulses = response.optInt("received_pulses", 0);
+            int receivedCents = response.optInt("received_cents", 0);
             String coinSignature = response.optString("coin_window_sig", "");
-            String coinCanonical = "coin_window|" + deviceId + "|" + serverNow + "|0|";
+            String coinCanonical = "coin_window|" + deviceId + "|" + serverNow
+                    + "|0||" + receivedPulses + "|" + receivedCents;
             if (serverNow <= 0L || coinSignature.length() == 0
                     || !coinSignature.equals(Hmac.sha256Hex(secret, coinCanonical))) {
                 return "Invalid coin-window response.";
             }
             clearCoinWindow();
+            if (receivedPulses > 0) {
+                return "Coin window closed • " + receivedPulses + " pulse"
+                        + (receivedPulses == 1 ? "" : "s") + " • "
+                        + formatCentavos(receivedCents);
+            }
             return "Coin window closed.";
         } catch (Exception ignored) {
             return "Unable to close coin slot.";
@@ -372,6 +401,11 @@ public final class LeaseClient {
 
     static String enc(String value) throws Exception {
         return URLEncoder.encode(value == null ? "" : value, "UTF-8");
+    }
+
+    public static String formatCentavos(int cents) {
+        int safe = Math.max(0, cents);
+        return "₱" + (safe / 100) + "." + (safe % 100 < 10 ? "0" : "") + (safe % 100);
     }
 
     private static String read(InputStream input) throws Exception {
