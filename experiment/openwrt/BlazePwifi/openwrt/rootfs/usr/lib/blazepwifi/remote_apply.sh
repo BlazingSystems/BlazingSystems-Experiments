@@ -1098,8 +1098,20 @@ bp_remote_runtime_status_json() {
   handshake="$(bp_remote_runtime_get last_handshake 0)"
   applied_at="$(bp_remote_runtime_get applied_at 0)"
   last_error="$(bp_remote_runtime_get last_error)"
+  zt_active="$(bp_remote_zt_runtime_get active 0)"
+  zt_network="$(bp_remote_zt_runtime_get network_id)"
+  zt_node="$(bp_remote_zt_runtime_get node_id)"
+  zt_if="$(bp_remote_zt_runtime_get interface)"
+  zt_addr="$(bp_remote_zt_runtime_get address)"
+  zt_status="$(bp_remote_zt_runtime_get status staged)"
+  if [ "$zt_active" = 1 ]; then
+    transport=zerotier
+  else
+    case "$state" in active|active_staged_changes|applying|disabling) transport=wireguard ;; *) transport=none ;; esac
+  fi
   if bp_remote_live_supported; then supported=true; else supported=false; fi
-  printf '{"activation_state":"%s","apply_supported":%s,"public_key":"%s","applied_at":%s,"last_handshake":%s,"last_error":"%s"}' \
-    "$(bp_json_escape "$state")" "$supported" "$(bp_json_escape "$public")" "${applied_at:-0}" "${handshake:-0}" "$(bp_json_escape "$last_error")"
+  printf '{"activation_state":"%s","transport":"%s","apply_supported":%s,"public_key":"%s","applied_at":%s,"last_handshake":%s,"last_error":"%s","zerotier":{"active":%s,"network_id":"%s","node_id":"%s","interface":"%s","address":"%s","status":"%s"}}' \
+    "$(bp_json_escape "$state")" "$(bp_json_escape "$transport")" "$supported" "$(bp_json_escape "$public")" "${applied_at:-0}" "${handshake:-0}" "$(bp_json_escape "$last_error")" \
+    "$zt_active" "$(bp_json_escape "$zt_network")" "$(bp_json_escape "$zt_node")" "$(bp_json_escape "$zt_if")" "$(bp_json_escape "$zt_addr")" "$(bp_json_escape "$zt_status")"
 }
 # End of BlazePwifi remote apply engine.
