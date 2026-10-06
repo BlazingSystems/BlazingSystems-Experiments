@@ -33,7 +33,7 @@ bp_member_init
 
 bp_member_lock
 bp_member_create alice "Alice Member" 'alpha123' test >/dev/null
-bp_member_create bob "Bob Member" 'beta123' test >/dev/null
+bp_member_create bob "Bob Member" 'beta1234' test >/dev/null
 bp_member_unlock
 
 ALICE_LINE="$(bp_member_line alice)"
