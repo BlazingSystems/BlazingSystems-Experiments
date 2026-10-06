@@ -90,6 +90,7 @@
         <activity
             android:name="com.blazesystems.blazerental.BlazeProvisioningModeActivity"
             android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
@@ -101,6 +102,7 @@
         <activity
             android:name="com.blazesystems.blazerental.BlazeProvisioningComplianceActivity"
             android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:excludeFromRecents="true"
             android:screenOrientation="portrait">
             <intent-filter>

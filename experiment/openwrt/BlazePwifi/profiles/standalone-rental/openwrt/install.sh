@@ -89,6 +89,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-rental-standalone-backups/$STAMP"
 mkdir -p "$BACKUP/cgi"
 for p in /etc/config/uhttpd /etc/config/blazepwifi; do [ -f "$p" ] && cp -p "$p" "$BACKUP/" || true; done
+[ -f /usr/share/blazepwifi/rental-provisioning.env ] && cp -p /usr/share/blazepwifi/rental-provisioning.env "$BACKUP/" || true
 [ -d /etc/blazepwifi ] && cp -a /etc/blazepwifi "$BACKUP/etc-blazepwifi" || true
 [ -d /usr/lib/blazepwifi ] && cp -a /usr/lib/blazepwifi "$BACKUP/usr-lib-blazepwifi" || true
 [ -d "$WEB_ROOT/rental" ] && cp -a "$WEB_ROOT/rental" "$BACKUP/web-rental" || true
@@ -139,6 +140,23 @@ cp -p /www/blazepwifi/vendor/qrcode/qrcode.js "$WEB_ROOT/rental/vendor/qrcode.js
 cp -p /www/blazepwifi/vendor/qrcode/LICENSE "$WEB_ROOT/rental/vendor/qrcode-LICENSE"
 chmod 755 "$CGI_DIR/rental" "$CGI_DIR"/blaze-rental-*
 chmod 644 "$WEB_ROOT/rental/index.html" "$WEB_ROOT/rental/vendor/"*
+
+mkdir -p /usr/share/blazepwifi
+if [ -f "$SELF/rental-provisioning.env" ]; then
+  cp -p "$SELF/rental-provisioning.env" /usr/share/blazepwifi/rental-provisioning.env
+else
+  cat > /usr/share/blazepwifi/rental-provisioning.env <<'EOF'
+READY=0
+APK_URL=
+APK_CHECKSUM=
+APK_SHA256=
+APK_VERSION=
+APK_VERSION_CODE=
+APK_CHANNEL=
+PRODUCTION_READY=0
+EOF
+fi
+chmod 644 /usr/share/blazepwifi/rental-provisioning.env
 
 ensure(){ k="$1"; v="$2"; uci -q get "blazepwifi.main.$k" >/dev/null 2>&1 || uci set "blazepwifi.main.$k=$v"; }
 uci -q get blazepwifi.main >/dev/null 2>&1 || uci set blazepwifi.main='core'
@@ -265,6 +283,13 @@ echo "Rental console:    https://$LAN_IP/rental/"
 echo "Android server:    http://$LAN_IP"
 echo "Android API:       http://$LAN_IP/cgi-bin/rental"
 echo "Remote coin API:   http://$LAN_IP:4455/cgi-bin/vendo"
+PROV_READY="$(awk -F= '$1=="READY"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
+PROV_CHANNEL="$(awk -F= '$1=="APK_CHANNEL"{print $2;exit}' /usr/share/blazepwifi/rental-provisioning.env 2>/dev/null || true)"
+if [ "$PROV_READY" = 1 ]; then
+  echo "Device provisioning: available ($PROV_CHANNEL channel)"
+else
+  echo "Device provisioning: unavailable (exact APK metadata not installed)"
+fi
 echo "Full server core:  installed but DISABLED"
 echo "Full conversion:   /usr/sbin/blazepwifi-rental-upgrade --full"
 echo "Backup:            $BACKUP"
