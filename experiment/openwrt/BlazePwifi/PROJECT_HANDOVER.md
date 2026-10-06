@@ -115,6 +115,19 @@ Full firmware/sysupgrade remains reserved for base-system changes such as kernel
 - Canonical final release log:
   `docs/handover/2026-10-05-v050-release-published.md`
 
+## Current v0.5.2 candidate status — 2026-10-06
+
+- Exact candidate: `bf2992977fe8504d21b107df02826032c31d3a62`
+- Exact build run: `37443570618` — **PASS**
+- v0.5.2 LCM branding/alarm contracts: PASS.
+- Android normal + v0.5.1 rescue APK build: PASS.
+- Android Device Owner emulator: PASS.
+- Transactional v0.5.2 update bundle: PASS.
+- Browser, ESP, Ruijie, x86 and required Orange Pi simulations: PASS.
+- Final v0.5.2 candidate gate: PASS.
+- Release must be published from this exact candidate before production signing.
+- Initial signing run ID must be `0`; Android assets remain TEST/unsigned until the later new-lineage signing step.
+
 ## Current target
 
 BlazePwifi is being developed as a complete PisoWiFi + Android rental-device platform with a full management console, customizable captive portal system, coin/Vendo controllers, vouchers, sales, networking/WAN/LAN/VLAN management, backups, multimedia, BlazeGames management, and BlazeRental Launcher3 integration.
