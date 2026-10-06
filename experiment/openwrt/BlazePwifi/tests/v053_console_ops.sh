@@ -7,7 +7,15 @@ trap 'rm -rf "$TMP"' EXIT
 export BP_STATE="$TMP/state"
 export BP_RUN="$TMP/run"
 export REMOTE_ADDR="192.0.2.10"
-mkdir -p "$BP_STATE" "$BP_RUN"
+mkdir -p "$BP_STATE" "$BP_RUN" "$TMP/bin"
+
+# Match constrained OpenWrt targets where the optional openssl CLI may be absent.
+cat > "$TMP/bin/openssl" <<'OPENSSL'
+#!/bin/sh
+exit 1
+OPENSSL
+chmod +x "$TMP/bin/openssl"
+export PATH="$TMP/bin:$PATH"
 
 . "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 
