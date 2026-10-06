@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.SystemClock;
+import android.os.Build;
 import android.widget.Toast;
 
 public class RentalAlarmReceiver extends BroadcastReceiver {
@@ -46,8 +47,7 @@ public class RentalAlarmReceiver extends BroadcastReceiver {
         intent.putExtra(EXTRA_KIND, 0);
         PendingIntent pending = PendingIntent.getBroadcast(context, REQUEST_HEALTH, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + delay, pending);
+        setExactCompat(manager, SystemClock.elapsedRealtime() + delay, pending);
     }
 
     private static void scheduleWarning(Context context, AlarmManager manager,
@@ -80,8 +80,20 @@ public class RentalAlarmReceiver extends BroadcastReceiver {
         intent.putExtra(EXTRA_LEASE_ID, leaseId);
         PendingIntent pending = PendingIntent.getBroadcast(context, requestCode(kind), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+        setExactCompat(manager,
                 SystemClock.elapsedRealtime() + Math.max(1000L, delay), pending);
+    }
+
+    private static void setExactCompat(AlarmManager manager, long when,
+                                       PendingIntent pending) {
+        if (Build.VERSION.SDK_INT >= 23) {
+            manager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    when, pending);
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            manager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, when, pending);
+        } else {
+            manager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, when, pending);
+        }
     }
 
     private static void cancelWarning(Context context, AlarmManager manager, int kind) {
