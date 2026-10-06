@@ -425,10 +425,42 @@ public sealed class AppController : IDisposable
         if (_shutdownPrompted || !forcePolicy && !Config.AutoShutdownAtZero && !Config.IdleShutdownEnabled && !Config.UnusualInputShutdownEnabled) return;
         _shutdownPrompted = true;
         Storage.Log("Shutdown policy triggered: " + reason);
-        var result = MessageBox.Show(reason + $"\n\nThe computer will shut down in {Math.Max(15, Config.ShutdownGraceSeconds)} seconds unless cancelled.", "BlazePisonet SoftTimer", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2, MessageBoxOptions.ServiceNotification);
-        if (result == DialogResult.OK)
+        var grace = Math.Max(15, Config.ShutdownGraceSeconds);
+        try
         {
-            try { Process.Start(new ProcessStartInfo("shutdown.exe", $"/s /f /t {Math.Max(15, Config.ShutdownGraceSeconds)}") { UseShellExecute = false, CreateNoWindow = true }); } catch { }
+            Process.Start(new ProcessStartInfo("shutdown.exe", $"/s /f /t {grace}")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Storage.Log("Could not schedule Windows shutdown: " + ex.Message);
+            _shutdownPrompted = false;
+            return;
+        }
+
+        var result = MessageBox.Show(
+            reason + $"\n\nWindows will shut down in {grace} seconds. Press Cancel to abort the shutdown.",
+            "BlazePisonet SoftTimer",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2,
+            MessageBoxOptions.ServiceNotification);
+
+        if (result == DialogResult.Cancel)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("shutdown.exe", "/a")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                Storage.Log("Scheduled shutdown cancelled by user/admin.");
+            }
+            catch (Exception ex) { Storage.Log("Could not abort scheduled shutdown: " + ex.Message); }
         }
         _shutdownPrompted = false;
     }
