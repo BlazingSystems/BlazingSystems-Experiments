@@ -24,7 +24,7 @@ export BP_AUTH_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
 export BP_MEMBER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/member.sh"
 export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
 export BP_CONTROLLER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
-export SERVER_PORT=4455 REMOTE_ADDR=10.0.0.50 REQUEST_METHOD=POST
+export SERVER_PORT=4455 REMOTE_ADDR=10.0.0.50
 
 . "$BP_LIB"
 . "$BP_AUTH_LIB"
@@ -46,7 +46,7 @@ VENDO="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo"
 call_vendo() {
   action="$1"; nonce="$2"; pulses="$3"; target="$4"
   sig="$(printf '%s|%s|%s|%s|%s|%s|%s' vendokey "$action" softtimer-01 "$nonce" "$pulses" "$target" vendokey | sha256sum | awk '{print $1}')"
-  printf 'action=%s&id=softtimer-01&nonce=%s&pulses=%s&target=%s&sig=%s' "$action" "$nonce" "$pulses" "$target" "$sig" | sh "$VENDO"
+  printf 'action=%s&id=softtimer-01&nonce=%s&pulses=%s&target=%s&sig=%s' "$action" "$nonce" "$pulses" "$target" "$sig" | REQUEST_METHOD=POST sh "$VENDO"
 }
 proof_for() {
   hash="$1"; nonce="$2"
