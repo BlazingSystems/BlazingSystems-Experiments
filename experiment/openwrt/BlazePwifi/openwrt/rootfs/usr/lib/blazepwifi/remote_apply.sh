@@ -1,17 +1,22 @@
 #!/bin/sh
 # Transactional BlazePwifi remote-access activation.
-# dev.3 enables WireGuard live apply only. ZeroTier remains staged-only.
+# dev.5 supports WireGuard and modern-UCI ZeroTier live apply with rollback.
 
 BP_REMOTE_APPLY_ROOT=${BP_REMOTE_APPLY_ROOT:-$BP_STATE/remote-apply}
 BP_REMOTE_PENDING=${BP_REMOTE_PENDING:-$BP_STATE/remote-apply.pending}
 BP_REMOTE_RUNTIME=${BP_REMOTE_RUNTIME:-$BP_STATE/remote-runtime.tsv}
 BP_REMOTE_WG_KEY=${BP_REMOTE_WG_KEY:-$BP_STATE/remote-wireguard.key}
+BP_REMOTE_ZT_RUNTIME=${BP_REMOTE_ZT_RUNTIME:-$BP_STATE/remote-zerotier-runtime.tsv}
 BP_REMOTE_NETWORK_CONFIG=${BP_REMOTE_NETWORK_CONFIG:-/etc/config/network}
 BP_REMOTE_FIREWALL_CONFIG=${BP_REMOTE_FIREWALL_CONFIG:-/etc/config/firewall}
+BP_REMOTE_ZT_CONFIG=${BP_REMOTE_ZT_CONFIG:-/etc/config/zerotier}
 BP_REMOTE_WG_IF=${BP_REMOTE_WG_IF:-blazewg}
 BP_REMOTE_WG_PEER=${BP_REMOTE_WG_PEER:-blazewg_peer}
 BP_REMOTE_FW_ZONE=${BP_REMOTE_FW_ZONE:-blazewg}
 BP_REMOTE_FW_ADMIN=${BP_REMOTE_FW_ADMIN:-blazewg_admin}
+BP_REMOTE_ZT_SECTION=${BP_REMOTE_ZT_SECTION:-blazepwifi}
+BP_REMOTE_ZT_FW_ZONE=${BP_REMOTE_ZT_FW_ZONE:-blazezt}
+BP_REMOTE_ZT_FW_ADMIN=${BP_REMOTE_ZT_FW_ADMIN:-blazezt_admin}
 
 bp_remote_apply_init() {
   bp_init_dirs
@@ -30,6 +35,40 @@ last_handshake	0
 EOF
     chmod 600 "$BP_REMOTE_RUNTIME"
   fi
+  if [ ! -f "$BP_REMOTE_ZT_RUNTIME" ]; then
+    cat > "$BP_REMOTE_ZT_RUNTIME" <<'EOF'
+active	0
+network_id	
+node_id	
+interface	
+address	
+status	staged
+EOF
+    chmod 600 "$BP_REMOTE_ZT_RUNTIME"
+  fi
+}
+
+bp_remote_zt_runtime_get() {
+  key="$1"; fallback="${2:-}"
+  bp_remote_apply_init
+  value="$(awk -F '\t' -v k="$key" '$1==k {sub(/^[^\t]*\t/,""); print; exit}' "$BP_REMOTE_ZT_RUNTIME")"
+  [ -n "$value" ] && printf '%s' "$value" || printf '%s' "$fallback"
+}
+
+bp_remote_zt_runtime_write() {
+  active="$1"; network_id="$2"; node_id="$3"; interface="$4"; address="$5"; status="$6"
+  tmp="$BP_STATE/.remote-zerotier-runtime.$(bp_tmp_suffix)"
+  {
+    printf 'active\t%s\n' "$active"
+    printf 'network_id\t%s\n' "$network_id"
+    printf 'node_id\t%s\n' "$node_id"
+    printf 'interface\t%s\n' "$interface"
+    printf 'address\t%s\n' "$address"
+    printf 'status\t%s\n' "$status"
+  } > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$BP_REMOTE_ZT_RUNTIME"
+  bp_durable_sync
 }
 
 bp_remote_runtime_get() {
@@ -72,17 +111,34 @@ bp_remote_profile_hash() {
     printf 'wg_keepalive=%s\n' "$(bp_remote_get wg_keepalive 25)"
     printf 'wg_dns=%s\n' "$(bp_remote_get wg_dns)"
     printf 'wg_mtu=%s\n' "$(bp_remote_get wg_mtu 1420)"
+    printf 'zt_network_id=%s\n' "$(bp_remote_get zt_network_id)"
   } | bp_sha256
 }
 
-bp_remote_live_supported() {
-  [ "$(bp_remote_get mode disabled)" = wireguard ] || return 1
+bp_remote_wg_live_supported() {
   command -v uci >/dev/null 2>&1 || return 1
   command -v wg >/dev/null 2>&1 || return 1
   command -v ifup >/dev/null 2>&1 || return 1
   command -v ifdown >/dev/null 2>&1 || return 1
   command -v ip >/dev/null 2>&1 || return 1
   return 0
+}
+
+bp_remote_zt_live_supported() {
+  command -v uci >/dev/null 2>&1 || return 1
+  command -v zerotier-cli >/dev/null 2>&1 || return 1
+  command -v zerotier-idtool >/dev/null 2>&1 || return 1
+  command -v ip >/dev/null 2>&1 || return 1
+  [ -x /etc/init.d/zerotier ] || [ -n "${BP_REMOTE_ZT_SERVICE_HOOK:-}" ] || return 1
+  return 0
+}
+
+bp_remote_live_supported() {
+  case "$(bp_remote_get mode disabled)" in
+    wireguard) bp_remote_wg_live_supported ;;
+    zerotier) bp_remote_zt_live_supported ;;
+    *) return 1 ;;
+  esac
 }
 
 bp_remote_wg_private_key_ensure() {
