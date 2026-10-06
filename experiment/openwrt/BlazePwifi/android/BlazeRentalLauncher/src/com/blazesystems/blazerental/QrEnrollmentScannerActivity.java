@@ -129,17 +129,21 @@ public class QrEnrollmentScannerActivity extends Activity
         try {
             String server;
             String token;
+            String certPin = "";
             String name = "Rental phone";
             if (raw.trim().startsWith("{")) {
                 JSONObject json = new JSONObject(raw);
                 server = json.optString("server_url", "");
                 token = json.optString("enrollment_token", "");
+                certPin = json.optString("server_cert_sha256", "");
                 name = json.optString("device_name", name);
             } else {
                 Uri uri = Uri.parse(raw);
                 if (!"blazepwifi".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();
                 server = uri.getQueryParameter("server");
                 token = uri.getQueryParameter("token");
+                String suppliedPin = uri.getQueryParameter("pin");
+                if (suppliedPin != null) certPin = suppliedPin;
                 String supplied = uri.getQueryParameter("name");
                 if (supplied != null && supplied.length() > 0) name = supplied;
             }
@@ -147,7 +151,7 @@ public class QrEnrollmentScannerActivity extends Activity
                     || token == null || token.indexOf('.') <= 0) {
                 throw new IllegalArgumentException();
             }
-            RentalLeaseStore.saveManualEnrollment(this, server, token, name);
+            RentalLeaseStore.saveManualEnrollment(this, server, token, name, certPin);
             final Activity self = this;
             new Thread(new Runnable() {
                 @Override public void run() {
