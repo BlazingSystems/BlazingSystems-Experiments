@@ -74,6 +74,8 @@ EOF
 
     coin_expires_ms=0
     coin_vendo=""
+    coin_received_pulses=0
+    coin_received_cents=0
     for target_file in "$BP_TARGET_DIR"/*.tsv; do
       [ -f "$target_file" ] || continue
       IFS="$(printf '\t')" read -r target_device target_mac target_nonce target_expires target_vendo target_kind < "$target_file"
@@ -82,15 +84,21 @@ EOF
       if [ "${target_expires:-0}" -gt "$now" ] 2>/dev/null; then
         coin_expires_ms=$((target_expires*1000))
         coin_vendo="$target_vendo"
+        progress_file="$BP_TARGET_DIR/$target_vendo.progress"
+        [ -r "$progress_file" ] && coin_received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
+        case "$coin_received_pulses" in ''|*[!0-9]*) coin_received_pulses=0;; esac
+        unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+        case "$unit" in ''|*[!0-9]*) unit=100;; esac
+        coin_received_cents=$((unit*coin_received_pulses))
       fi
       break
     done
-    coin_canonical="coin_window|$did|$server_ms|$coin_expires_ms|$coin_vendo"
+    coin_canonical="coin_window|$did|$server_ms|$coin_expires_ms|$coin_vendo|$coin_received_pulses|$coin_received_cents"
     coin_sig="$(bp_rental_hmac "$secret" "$coin_canonical")" || bp_fail "rental crypto unavailable"
 
     if command -v bp_rental_update_json >/dev/null 2>&1; then update_meta="$(bp_rental_update_json)"; else update_meta='{"available":false}'; fi
 
-    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"coin_window_expires_ms":%s,"coin_window_vendo":"%s","coin_window_sig":"%s","policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"policy_sig":"%s","policy_sig_v2":"%s","policy_sig_v3":"%s","update":%s}'       "$did" "$server_ms" "$lease_ms" "$coin_expires_ms" "$(bp_json_escape "$coin_vendo")" "$coin_sig" "${rev:-1}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per"       "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}"       "$(bp_json_escape "$gesture_type")" "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$legacy_sig" "$v2sig" "$v3sig" "$update_meta")"
+    bp_json "$(printf '{"ok":true,"device_id":"%s","server_time_ms":%s,"lease_until_ms":%s,"coin_window_expires_ms":%s,"coin_window_vendo":"%s","coin_received_pulses":%s,"coin_received_cents":%s,"coin_window_sig":"%s","policy_revision":%s,"launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","admin_salt":"%s","admin_hash":"%s","admin_rounds":%s,"preferred_vendo":"%s","rental_seconds_per_pulse":%s,"timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"policy_sig":"%s","policy_sig_v2":"%s","policy_sig_v3":"%s","update":%s}'       "$did" "$server_ms" "$lease_ms" "$coin_expires_ms" "$(bp_json_escape "$coin_vendo")" "$coin_received_pulses" "$coin_received_cents" "$coin_sig" "${rev:-1}" "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"       "$(bp_json_escape "$salt")" "$(bp_json_escape "$hash")" "${rounds:-4096}" "$(bp_json_escape "$preferred")" "$per"       "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}" "$(bp_json_escape "$quick")" "${notifications:-1}"       "$(bp_json_escape "$gesture_type")" "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$legacy_sig" "$v2sig" "$v3sig" "$update_meta")"
     ;;
   policy_patch)
     did="$(bp_param device_id)"
@@ -175,13 +183,15 @@ EOF
     printf '%s\t-\t%s\t%s\t%s\trental\n' "$did" "$target_nonce" "$expires" "$vendo" > "$target_tmp"
     chmod 600 "$target_tmp"
     mv "$target_tmp" "$target_file"
+    printf '0\n' > "$BP_TARGET_DIR/$vendo.progress"
+    chmod 600 "$BP_TARGET_DIR/$vendo.progress"
     bp_durable_sync
     bp_unlock
     server_ms=$((now*1000))
     expires_ms=$((expires*1000))
-    coin_canonical="coin_window|$did|$server_ms|$expires_ms|$vendo"
+    coin_canonical="coin_window|$did|$server_ms|$expires_ms|$vendo|0|0"
     coin_sig="$(bp_rental_hmac "$secret" "$coin_canonical")" || bp_fail "rental crypto unavailable"
-    bp_json "$(printf '{"ok":true,"vendo":"%s","target_nonce":"%s","server_time_ms":%s,"expires_ms":%s,"coin_window_sig":"%s"}' "$(bp_json_escape "$vendo")" "$target_nonce" "$server_ms" "$expires_ms" "$coin_sig")"
+    bp_json "$(printf '{"ok":true,"vendo":"%s","target_nonce":"%s","server_time_ms":%s,"expires_ms":%s,"received_pulses":0,"received_cents":0,"coin_window_sig":"%s"}' "$(bp_json_escape "$vendo")" "$target_nonce" "$server_ms" "$expires_ms" "$coin_sig")"
     ;;
   coin_stop)
     did="$(bp_param device_id)"
@@ -193,20 +203,28 @@ EOF
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
     bp_lock || bp_fail "accounting busy"
     removed=0
+    received_pulses=0
+    received_cents=0
     for target_file in "$BP_TARGET_DIR"/*.tsv; do
       [ -f "$target_file" ] || continue
       IFS="$(printf '\t')" read -r target_device target_mac target_nonce target_expires target_vendo target_kind < "$target_file"
       [ "$target_device" = "$did" ] || continue
       [ "${target_kind:-hotspot}" = rental ] || continue
-      rm -f "$target_file"
+      progress_file="$BP_TARGET_DIR/$target_vendo.progress"
+      [ -r "$progress_file" ] && received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
+      case "$received_pulses" in ''|*[!0-9]*) received_pulses=0;; esac
+      unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+      case "$unit" in ''|*[!0-9]*) unit=100;; esac
+      received_cents=$((unit*received_pulses))
+      rm -f "$target_file" "$progress_file"
       removed=1
     done
     [ "$removed" = 1 ] && bp_durable_sync
     bp_unlock
     server_ms=$((now*1000))
-    coin_canonical="coin_window|$did|$server_ms|0|"
+    coin_canonical="coin_window|$did|$server_ms|0||$received_pulses|$received_cents"
     coin_sig="$(bp_rental_hmac "$secret" "$coin_canonical")" || bp_fail "rental crypto unavailable"
-    bp_json "$(printf '{"ok":true,"server_time_ms":%s,"expires_ms":0,"coin_window_sig":"%s"}' "$server_ms" "$coin_sig")"
+    bp_json "$(printf '{"ok":true,"server_time_ms":%s,"expires_ms":0,"received_pulses":%s,"received_cents":%s,"coin_window_sig":"%s"}' "$server_ms" "$received_pulses" "$received_cents" "$coin_sig")"
     ;;
   *) bp_fail "unknown rental action" ;;
 esac
