@@ -82,23 +82,33 @@ jobs:
           if (-not (Test-Path out/bundle/BlazePisonet.SoftTimer.exe)) { throw 'SoftTimer EXE missing' }
           if (-not (Test-Path out/bundle/BlazePisonet.SoftTimer.Watchdog.exe)) { throw 'Watchdog EXE missing' }
 
-      - name: Install Inno Setup compiler
+      - name: Install NSIS compiler
         shell: pwsh
         run: |
-          choco install innosetup --no-progress -y
+          choco install nsis --no-progress -y
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $iscc="${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          $candidates=@(
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "$env:ProgramFiles\NSIS\makensis.exe"
+          )
+          $makensis=$candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $makensis) { throw 'makensis.exe was not found after NSIS installation' }
+          "NSIS_EXE=$makensis" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build native Setup EXE
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $iscc="${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DAppVersion=$env:VERSION" "$env:PROJECT_DIR/installer/BlazePisonet-SoftTimer.iss"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force release | Out-Null
+          Push-Location "$env:PROJECT_DIR/installer"
+          try {
+            & "$env:NSIS_EXE" /V3 "BlazePisonet-SoftTimer.nsi"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
           $setup="release/BlazePisonet-SoftTimer-Setup-v$env:VERSION.exe"
-          if (-not (Test-Path $setup)) { throw "Native Setup EXE was not produced" }
+          if (-not (Test-Path $setup)) { throw 'Native Setup EXE was not produced' }
           Get-Item $setup | Format-Table Name,Length
 
       - name: Smoke-test Setup EXE install and uninstall
@@ -112,13 +122,8 @@ jobs:
           }
 
           $setup=(Resolve-Path "release/BlazePisonet-SoftTimer-Setup-v$env:VERSION.exe").Path
-          $setupLog=Join-Path $env:RUNNER_TEMP 'softtimer-setup.log'
-          $args=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/LOG=$setupLog")
-          $p=Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
-          if ($p.ExitCode -ne 0) {
-            if (Test-Path $setupLog) { Get-Content $setupLog -Tail 200 }
-            throw "Setup EXE failed with exit code $($p.ExitCode)"
-          }
+          $p=Start-Process -FilePath $setup -ArgumentList @('/S') -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Setup EXE failed with exit code $($p.ExitCode)" }
 
           $install=Join-Path $env:ProgramFiles 'BlazeSystems\BlazePisonet SoftTimer'
           $app=Join-Path $install 'BlazePisonet.SoftTimer.exe'
@@ -126,22 +131,18 @@ jobs:
           if (-not (Test-Path $app)) { throw 'Installed SoftTimer EXE missing' }
           if (-not (Test-Path $watchdog)) { throw 'Installed watchdog EXE missing' }
 
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) {
-            if (Test-Path $setupLog) { Get-Content $setupLog -Tail 250 }
-            throw 'SoftTimer startup task was not created'
-          }
-          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) {
-            if (Test-Path $setupLog) { Get-Content $setupLog -Tail 250 }
-            throw 'Watchdog startup task was not created'
-          }
+          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -ne 0) { throw 'SoftTimer startup task was not created' }
+          if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -ne 0) { throw 'Watchdog startup task was not created' }
 
-          $uninstaller=Get-ChildItem $install -Filter 'unins*.exe' | Select-Object -First 1
-          if (-not $uninstaller) { throw 'Native uninstaller EXE missing' }
-          $u=Start-Process -FilePath $uninstaller.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          $uninstaller=Join-Path $install 'Uninstall.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Native uninstaller EXE missing' }
+          $u=Start-Process -FilePath $uninstaller -ArgumentList @('/S') -Wait -PassThru
           if ($u.ExitCode -ne 0) { throw "Uninstaller failed with exit code $($u.ExitCode)" }
 
           if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer')) -eq 0) { throw 'SoftTimer startup task remained after uninstall' }
           if ((Invoke-Schtasks @('/Query','/TN','BlazePisonet SoftTimer Watchdog')) -eq 0) { throw 'Watchdog startup task remained after uninstall' }
+          if (Test-Path $app) { throw 'SoftTimer executable remained after uninstall' }
+          if (Test-Path $watchdog) { throw 'Watchdog executable remained after uninstall' }
 
       - name: Build portable EXE-only package and checksums
         shell: pwsh
