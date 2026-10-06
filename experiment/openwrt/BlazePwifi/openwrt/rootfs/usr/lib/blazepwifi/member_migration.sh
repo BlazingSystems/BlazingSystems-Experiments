@@ -231,7 +231,8 @@ bp_member_migration_import_new() {
   [ -z "$(bp_member_line "$user")" ] || return 3
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   source="$(bp_member_clean "import:$actor")"
-  bp_member_write "$user" "$label" 0 reset_required "" "" 0 "$banked" "$rev" "$now" "$source" || return 1
+  # Keep non-secret sentinel fields populated so legacy tab parsing retains all columns.
+  bp_member_write "$user" "$label" 0 reset_required "-" "-" 0 "$banked" "$rev" "$now" "$source" || return 1
   bp_member_event_record "import:$rev:$user" "$now" "$user" import_create "$banked" "$banked" "$source" \
     "password_reset_required:requested_enabled=$requested_enabled:source=$(bp_member_clean "$original_source")"
 }
