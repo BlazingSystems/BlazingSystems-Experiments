@@ -37,7 +37,7 @@ bp_member_migration_decode_text() {
   [ "$(wc -c < "$tmp" 2>/dev/null)" -le $((max+3)) ] || { rm -f "$tmp"; return 1; }
   prefix="$(head -c 3 "$tmp" 2>/dev/null)"
   [ "$prefix" = "v1:" ] || { rm -f "$tmp"; return 1; }
-  tail -c +4 "$tmp" > "$tmp.value" 2>/dev/null || { rm -f "$tmp" "$tmp.value"; return 1; }
+  dd if="$tmp" of="$tmp.value" bs=1 skip=3 2>/dev/null || { rm -f "$tmp" "$tmp.value"; return 1; }
   if LC_ALL=C grep -q '[[:cntrl:]]' "$tmp.value" 2>/dev/null; then
     rm -f "$tmp" "$tmp.value"; return 1
   fi
