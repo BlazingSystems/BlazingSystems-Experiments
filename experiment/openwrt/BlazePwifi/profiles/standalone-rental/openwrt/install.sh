@@ -101,8 +101,24 @@ if [ "$PREINSTALLED" -eq 0 ]; then
   EXISTING_CFG=0
   [ -f /etc/config/blazepwifi ] && { EXISTING_CFG=1; cp -p /etc/config/blazepwifi "$BACKUP/blazepwifi.original"; }
   cp -a "$ROOTFS/." /
-  rm -f /etc/uci-defaults/99-blazepwifi
+  # Preserve the full-server defaults under a dormant, non-uci-defaults path.
+  # Rental Standalone must never execute them automatically because they create
+  # BlazePwifi firewall/listener ownership. The explicit --full conversion runs
+  # this saved copy after operator confirmation.
+  if [ -f /etc/uci-defaults/99-blazepwifi ]; then
+    mkdir -p /usr/share/blazepwifi
+    cp -p /etc/uci-defaults/99-blazepwifi /usr/share/blazepwifi/full-uci-defaults.sh
+    chmod 755 /usr/share/blazepwifi/full-uci-defaults.sh
+    rm -f /etc/uci-defaults/99-blazepwifi
+  fi
   [ "$EXISTING_CFG" -eq 0 ] || cp -p "$BACKUP/blazepwifi.original" /etc/config/blazepwifi
+fi
+
+if [ -f /etc/uci-defaults/99-blazepwifi ]; then
+  mkdir -p /usr/share/blazepwifi
+  [ -f /usr/share/blazepwifi/full-uci-defaults.sh ] || cp -p /etc/uci-defaults/99-blazepwifi /usr/share/blazepwifi/full-uci-defaults.sh
+  chmod 755 /usr/share/blazepwifi/full-uci-defaults.sh
+  rm -f /etc/uci-defaults/99-blazepwifi
 fi
 
 chmod +x /etc/init.d/blazepwifi /usr/sbin/blazepwifi-core /usr/lib/blazepwifi/*.sh /www/blazepwifi/cgi-bin/* 2>/dev/null || true
