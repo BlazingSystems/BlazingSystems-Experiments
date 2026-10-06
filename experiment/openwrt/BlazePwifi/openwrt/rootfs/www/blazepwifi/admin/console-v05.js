@@ -206,5 +206,8 @@ function onPage(name){
   if(name==='lan')loadLan();
 }
 window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
-setTimeout(()=>{loadSystem();loadRemote();},300);
+// Do not preload editable Remote Access configuration in the background.
+ // It is loaded on page entry/explicit refresh so a delayed startup request
+ // cannot overwrite operator edits.
+setTimeout(()=>{loadSystem();},300);
 })();
