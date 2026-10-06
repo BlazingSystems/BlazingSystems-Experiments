@@ -254,7 +254,7 @@ EOF
   member_create)
     require_role operator
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
-    [ "\${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     user="$(bp_param username)"; label="$(bp_param label)"; password="$(bp_param password)"
     bp_member_lock || bp_fail "member state busy"
     revision="$(bp_member_create "$user" "$label" "$password" "admin:$BP_AUTH_USER")"
@@ -266,7 +266,7 @@ EOF
       3) bp_fail "member already exists" ;;
       *) bp_fail "member creation failed" ;;
     esac
-    bp_auth_audit member_create "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_auth_audit member_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
     ;;
   member_update)
@@ -285,7 +285,7 @@ EOF
       3) bp_fail "unknown member" ;;
       *) bp_fail "member update failed" ;;
     esac
-    bp_auth_audit member_update "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_auth_audit member_update "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
     ;;
   member_balance)
@@ -305,8 +305,8 @@ EOF
       *) bp_fail "member balance update failed" ;;
     esac
     applied="$(printf '%s' "$result" | cut -f1)"; revision="$(printf '%s' "$result" | cut -f2)"
-    bp_auth_audit member_balance "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$user:$mode:$seconds:$revision"
-    bp_json "$(printf '{"ok":true,"username":"%s","applied_seconds":%s,"revision":%s}' "$(bp_json_escape "$user")" "\${applied:-0}" "\${revision:-0}")"
+    bp_auth_audit member_balance "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$mode:$seconds:$revision"
+    bp_json "$(printf '{"ok":true,"username":"%s","applied_seconds":%s,"revision":%s}' "$(bp_json_escape "$user")" "${applied:-0}" "${revision:-0}")"
     ;;
   member_transfer)
     require_role operator
@@ -324,13 +324,13 @@ EOF
       *) bp_fail "member transfer failed" ;;
     esac
     applied="$(printf '%s' "$result" | cut -f1)"; revision="$(printf '%s' "$result" | cut -f2)"
-    bp_auth_audit member_transfer "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$from>$to:$seconds:$revision"
-    bp_json "$(printf '{"ok":true,"seconds":%s,"revision":%s}' "\${applied:-0}" "\${revision:-0}")"
+    bp_auth_audit member_transfer "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$from>$to:$seconds:$revision"
+    bp_json "$(printf '{"ok":true,"seconds":%s,"revision":%s}' "${applied:-0}" "${revision:-0}")"
     ;;
   member_password)
     require_role admin
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
-    [ "\${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     user="$(bp_param username)"; password="$(bp_param password)"
     bp_member_lock || bp_fail "member state busy"
     revision="$(bp_member_set_password "$user" "$password" "admin:$BP_AUTH_USER")"
@@ -342,13 +342,13 @@ EOF
       3) bp_fail "unknown member" ;;
       *) bp_fail "member password reset failed" ;;
     esac
-    bp_auth_audit member_password "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_auth_audit member_password "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
     ;;
   member_delete)
     require_role admin
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
-    [ "\${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
     user="$(bp_param username)"
     bp_member_lock || bp_fail "member state busy"
     revision="$(bp_member_delete "$user" "admin:$BP_AUTH_USER")"
@@ -360,7 +360,7 @@ EOF
       3) bp_fail "unknown member" ;;
       *) bp_fail "member deletion failed" ;;
     esac
-    bp_auth_audit member_delete "$BP_AUTH_USER" "\${REMOTE_ADDR:-unknown}" "$user:$revision"
+    bp_auth_audit member_delete "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
     ;;
   controller_list)
