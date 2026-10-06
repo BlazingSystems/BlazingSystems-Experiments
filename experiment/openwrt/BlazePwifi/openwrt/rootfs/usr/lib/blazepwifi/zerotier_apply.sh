@@ -4,6 +4,7 @@
 
 BP_ZT_RUNTIME=${BP_ZT_RUNTIME:-$BP_STATE/zerotier-runtime.tsv}
 BP_ZT_APPLIED_PROFILE=${BP_ZT_APPLIED_PROFILE:-$BP_STATE/zerotier-profile.sha}
+BP_ZT_PENDING=${BP_ZT_PENDING:-$BP_STATE/zerotier-apply.pending}
 BP_ZT_CONFIG=${BP_ZT_CONFIG:-/etc/config/zerotier}
 BP_ZT_INIT=${BP_ZT_INIT:-/etc/init.d/zerotier}
 BP_ZT_NET_IF=${BP_ZT_NET_IF:-blazezt}
@@ -244,6 +245,80 @@ bp_zt_source_on_device() {
   [ -n "$source_ip" ] && [ -n "$device" ] || return 1
   sig="$(bp_remote_route_signature "$source_ip" 2>/dev/null || true)"
   case "$sig" in *"dev=$device"*) return 0;; *) return 1;; esac
+}
+
+bp_zt_pending_write() {
+  zt_id="$1"; zt_operation="$2"
+  zt_tmp="$BP_STATE/.zerotier-pending.$(bp_tmp_suffix)"
+  printf '%s\t%s\t%s\n' "$zt_id" "$(bp_now)" "$zt_operation" > "$zt_tmp"
+  chmod 600 "$zt_tmp"
+  mv "$zt_tmp" "$BP_ZT_PENDING"
+  bp_durable_sync
+}
+
+bp_zt_pending_id() {
+  [ -r "$BP_ZT_PENDING" ] || return 1
+  cut -f1 "$BP_ZT_PENDING" | head -n1
+}
+
+bp_zt_pending_owned() {
+  [ "$(bp_zt_pending_id 2>/dev/null || true)" = "$1" ]
+}
+
+bp_zt_pending_clear() {
+  rm -f "$BP_ZT_PENDING"
+  bp_durable_sync
+}
+
+bp_zt_guard_spawn() {
+  zt_id="$1"
+  if [ -n "${BP_ZT_GUARD_HOOK:-}" ]; then
+    BP_ZT_GUARD_ID="$zt_id" sh -c "$BP_ZT_GUARD_HOOK"
+    return
+  fi
+  zt_seconds="${BP_ZT_GUARD_SECONDS:-90}"
+  (
+    sleep "$zt_seconds"
+    /usr/sbin/blazepwifi-remote-guard --zerotier "$zt_id"
+  ) >"$BP_RUN/zerotier-guard-$zt_id.log" 2>&1 </dev/null &
+}
+
+bp_zt_rollback_pending() {
+  zt_id="$1"; zt_reason="${2:-zerotier-rollback}"
+  bp_remote_lock || return 1
+  if ! bp_zt_pending_owned "$zt_id"; then
+    bp_remote_unlock
+    return 0
+  fi
+  if bp_zt_restore_snapshot "$zt_id"; then
+    bp_zt_pending_clear
+    zt_state="$(bp_zt_get state staged)"
+    zt_network="$(bp_zt_get network_id)"
+    zt_node="$(bp_zt_get node_id)"
+    zt_device="$(bp_zt_get device)"
+    zt_ipv4="$(bp_zt_get ipv4)"
+    zt_listener="$(bp_zt_get listener)"
+    zt_applied="$(bp_zt_get applied_at 0)"
+    zt_layout="$(bp_zt_get layout unknown)"
+    zt_reboot="$(bp_zt_get reboot_required 0)"
+    bp_zt_write "$zt_state" "$zt_network" "$zt_node" "$zt_device" "$zt_ipv4" "$zt_listener"       "$zt_applied" "$zt_reason" "$zt_layout" "$zt_reboot"
+    bp_remote_unlock
+    return 0
+  fi
+  bp_remote_unlock
+  return 1
+}
+
+bp_zt_guard() {
+  zt_id="$1"
+  bp_zt_pending_owned "$zt_id" || return 0
+  bp_zt_rollback_pending "$zt_id" zerotier-watchdog-timeout
+}
+
+bp_zt_guard_boot() {
+  zt_id="$(bp_zt_pending_id 2>/dev/null || true)"
+  [ -n "$zt_id" ] || return 0
+  bp_zt_rollback_pending "$zt_id" reboot-during-zerotier-transaction
 }
 
 bp_zt_snapshot_create() {
