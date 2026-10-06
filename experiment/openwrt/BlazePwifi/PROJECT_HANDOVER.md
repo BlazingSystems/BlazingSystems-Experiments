@@ -128,23 +128,39 @@ Full firmware/sysupgrade remains reserved for base-system changes such as kernel
 - Release must be published from this exact candidate before production signing.
 - Initial signing run ID must be `0`; Android assets remain TEST/unsigned until the later new-lineage signing step.
 
-## Current v0.5.2 release status — 2026-10-06
+## Current v0.5.2 production release status — 2026-10-06
 
-- GitHub Release: `v0.5.2` — **published prerelease**
+- GitHub Release: `v0.5.2` — **published production release**
 - Release ID: `404545281`
 - Exact release candidate: `bf2992977fe8504d21b107df02826032c31d3a62`
 - Exact build run: `37443570618` — **PASS**
-- Release workflow run: `37445141476` — **PASS**
+- Production signing run: `37448352082` — **PASS**
+- Signing artifact: `11404278200`
+- Production promotion/release run: `37448830953` — **PASS**
 - Release title: `BlazePwifi v0.5.2 — LCM Branding & Rental Time Alarms`
-- Release target remains exactly the green candidate; later workflow/docs commits did not retag it.
-- Initial publication intentionally used `signing_run_id=0` and remains prerelease before the new 0.5.2 production signing lineage is created.
-- Android assets currently include v0.5.2 TEST/unsigned APKs and v0.5.1 rescue TEST/unsigned APKs.
-- The LCM production PNG was verified both in source CI and inside the built APK.
+- Release target remains exactly the green candidate; signing/recovery/docs commits did not retag the application.
+- Release is no longer a prerelease.
+- Production BlazeRental certificate lineage: `BlazeRental-production-lineage2`
+- Permanent SHA-256 certificate fingerprint:
+  `1A:18:D5:8E:1F:95:55:96:89:10:20:71:F5:6C:93:E9:B9:D2:EA:6B:E4:0E:6F:20:70:06:C9:89:62:A1:6A:25`
+- Production `BlazeRental.apk` SHA-256:
+  `d0ad20bed00ea304db9bff45928542fed574070d416ed65b4fbf3d8ba23d7102`
+- Production rollback-rescue SHA-256:
+  `a1c8d759405842b85879c77e9525b1a6e9c4f6d62eb8bda9b0abc60fb899d513`
+- Recovery A and Recovery B both successfully decrypted the sealed signer backup and restored a P12 matching the permanent fingerprint.
+- Recovery A private key is retained in the owner's private ChatGPT Library under `/BlazePwifi Signing Recovery/`.
+- Recovery B is the independent owner/offline recovery copy.
+- GitHub stores only public recovery keys and AES-256-GCM encrypted signing material.
+- `SIGNING_RECOVERY.md` is the permanent recovery entry point.
+- The release includes signed main/rescue APKs, certificate/fingerprint, dual recovery assets, production Device Owner QR/provisioning assets, and correct release-level checksums.
+- The original signing artifact checksum file referenced two temporary aligned APKs deleted before upload; all retained files verified correctly. The workflow bookkeeping was corrected in commit `1fd5720a101a3d88bbe05e70158736983fbbad6e` and the published release recomputed a clean release-level `SHA256SUMS`.
+- The LCM production PNG is the clean 128×128 derivative of the user-supplied source and its Git blob is `19f1c2f843dca1f9f6e320ea0dbd94580f85e608`.
 - Near End default: 10 minutes / 5-second ring.
 - Urgent Add Credit default: 3 minutes / 10-second ring.
 - Time's Up default: 00:00 / 15-second ring.
 - Audible alarms use STREAM_ALARM, enforced non-zero minimum volume, optional DND override, and restore prior audio state after playback.
-- No older BlazeRental APK is to be newly production-signed.
+- Migration from the abandoned old v0.4 signer requires reprovision/factory reset. Once on v0.5.2 Lineage 2, all future production BlazeRental APKs must use this exact certificate.
+- No older standalone release is to be newly production-signed.
 
 ## Current target
 
