@@ -214,7 +214,9 @@ with sync_playwright() as p:
     page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="networkidle")
     page.wait_for_function("document.getElementById('time').textContent !== '—'")
     first_time=page.locator("#time").inner_text()
-    time.sleep(1.2)
+    page.wait_for_function(
+        "(start) => document.getElementById('time').textContent !== start",
+        arg=first_time, timeout=3500)
     second_time=page.locator("#time").inner_text()
     assert first_time != second_time, (first_time, second_time)
 
