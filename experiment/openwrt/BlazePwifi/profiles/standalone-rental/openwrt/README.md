@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental
+# OpenWrt Rental Standalone — v0.5.2-rental.1
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -41,3 +41,8 @@ Password: admin
 ```
 
 Existing admin accounts are preserved. The normal password-change action still requires a stronger password.
+
+
+## 0.5.2-rental.1 UI hotfix
+
+Rental mutations now submit CSRF through both the custom header and form body, with one authenticated token refresh/retry on mismatch. This specifically fixes QR enrollment creation on R281/uHTTPd paths where custom CGI headers may not be reliable.

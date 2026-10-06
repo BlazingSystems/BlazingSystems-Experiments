@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental
+Version: v0.5.2-rental.1
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -36,3 +36,9 @@ PASSWORD RESET:
     Username: admin
     Password: admin
   No manual file upload to the router is required.
+
+
+HOTFIX 0.5.2-rental.1:
+- Fixes CSRF validation failures on mutating Rental admin actions such as QR enrollment.
+- Sends CSRF in both HTTP header and POST body.
+- Refreshes the authenticated session and retries once if a CSRF token becomes stale.

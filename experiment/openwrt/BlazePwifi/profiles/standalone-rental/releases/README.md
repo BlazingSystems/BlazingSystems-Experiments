@@ -2,22 +2,18 @@
 
 ## Latest stable
 
-### v0.5.2-rental
+### v0.5.2-rental.1
 
-Finalized Standalone Rental release.
+Stable hotfix for Rental admin CSRF handling and QR enrollment creation.
 
-Default fresh-install login:
+- CSRF sent in header and POST body;
+- session CSRF refresh + one automatic retry;
+- explicit same-origin credentials and no-store requests;
+- QR renderer failures are visible;
+- default/reset credentials remain `admin / admin`.
 
-```text
-admin / admin
-```
+## Previous
 
-Windows packages include a one-click administrator reset BAT that works with both Standalone Rental and full BlazePwifi and always restores `admin / admin`.
-
-## Previous release candidates
-
+- v0.5.2-rental — initial stable release.
 - v0.5.2-rental-rc.2 — R281 auth/login/BusyBox fixes.
 - v0.5.2-rental-rc.1 — R281 BusyBox installer fix.
-- v0.5.0-rental-rc.3 — first-SSH host-key fix.
-- v0.5.0-rental-rc.2 — superseded.
-- v0.5.0-rental-rc.1 — superseded.

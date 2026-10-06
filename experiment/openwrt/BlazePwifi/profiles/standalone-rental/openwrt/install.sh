@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental"
+PROFILE_VERSION="0.5.2-rental.1"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0

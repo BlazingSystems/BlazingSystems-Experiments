@@ -66,4 +66,12 @@ grep -q 'PASS=admin' "$RESET_PS"
 grep -q 'BLAZE_RESET_OK' "$RESET_PS"
 grep -q 'admin-users.tsv' "$RESET_PS"
 
-echo "Standalone Rental v0.5.2-rental static checks passed"
+HTML="$ROOT/openwrt/rental-standalone.html"
+grep -q "data.csrf=csrf" "$HTML"
+grep -q "refreshCsrf" "$HTML"
+grep -q "credentials:'same-origin'" "$HTML"
+grep -q "cache:'no-store'" "$HTML"
+grep -q "csrf validation failed" "$HTML"
+grep -q "QR renderer error" "$HTML"
+
+echo "Standalone Rental v0.5.2-rental.1 static checks passed"

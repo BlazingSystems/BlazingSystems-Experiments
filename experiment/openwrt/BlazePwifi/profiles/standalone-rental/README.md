@@ -1,64 +1,33 @@
-# BlazePwifi Standalone Rental Server v0.5.2-rental
+# BlazePwifi Standalone Rental Server v0.5.2-rental.1
 
-**Final release**
+**Stable hotfix**
 
-Default fresh-install Rental credentials:
-
-```text
-Username: admin
-Password: admin
-```
-
-The default password can be changed later from the Rental admin console.
-
-## Windows OneClick
-
-For an existing OpenWrt router, extract the Windows package and double-click:
-
-```text
-Install-BlazePwifi-Rental.bat
-```
-
-The package also includes:
-
-```text
-Reset-BlazePwifi-Admin-Password.bat
-```
-
-The reset BAT works with **Standalone Rental and full BlazePwifi**. It connects over SSH and resets only to:
+Default fresh-install credentials remain:
 
 ```text
 Username: admin
 Password: admin
 ```
 
-No manual upload to the router is required.
+## CSRF / QR hotfix
 
-## R281 compatibility
+This release fixes R281/uHTTPd admin mutations that could return:
 
-The final release keeps all fixes proven during physical R281 testing:
+```text
+csrf validation failed
+```
 
-- dedicated `notion,r281` / EasyMode installer path;
-- BusyBox-safe archive extraction;
-- no GNU-only tar options;
-- BusyBox-compatible `flock -n` retry locking;
-- reliable CGI POST parsing through `CONTENT_LENGTH`;
-- verified portable `sha256i` default administrator record;
-- first-time SSH host-key confirmation in the Windows OneClick tools.
+The Rental UI now sends CSRF in both the custom header and the form body. If the token becomes stale after login/reset/reinstall, the UI refreshes the authenticated session and retries the mutation once automatically.
 
-Standalone installation does not take ownership of OpenWrt `network`, `wireless`, or `firewall`.
+QR enrollment creation uses that corrected path. QR rendering errors are now shown visibly while preserving the generated server URL and one-time token.
 
-## URLs
+## Windows tools
 
-- Rental admin: `https://LocalIP/rental/`
-- BlazeRental server: `http://LocalIP`
-- Rental API: `http://LocalIP/cgi-bin/rental`
-- Remote ESP coin API: `http://LocalIP:4455/cgi-bin/vendo`
+The Windows OneClick package includes:
 
-## ESP modes
+- `Install-BlazePwifi-Rental.bat`
+- `Reset-BlazePwifi-Admin-Password.bat`
 
-1. Rental Server
-2. Rental Server + one Local Coin Slot
-3. Remote Coin Slot Interface
+The password reset works with Standalone Rental and full BlazePwifi and restores only `admin / admin`.
 
-Rental-server modes can bind additional remote ESP coin interfaces.
+All v0.5.2 R281 BusyBox and network-preservation fixes remain included.
