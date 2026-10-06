@@ -18,6 +18,10 @@ case "$(cat "$ROOT/VERSION")" in
     grep -Fq 'versionCode 50292' "$GRADLE"
     grep -Fq 'versionName "0.5.3-dev.3"' "$GRADLE"
     ;;
+  0.5.3-dev.4)
+    grep -Fq 'versionCode 50293' "$GRADLE"
+    grep -Fq 'versionName "0.5.3-dev.4"' "$GRADLE"
+    ;;
   *) exit 1 ;;
 esac
 grep -Fq 'appVersionName()' "$ADMIN"
