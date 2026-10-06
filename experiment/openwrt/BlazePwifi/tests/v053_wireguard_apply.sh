@@ -115,6 +115,9 @@ expect_validate_rc() {
 bp_remote_ipv4_host 192.168.1.10
 ! bp_remote_ipv4_host 192.168.1
 ! bp_remote_ipv4_host 999.168.1.10
+cidr='10.20.0.0/24'
+bp_remote_ipv4_cidr_valid 192.168.1.0/24
+[ "$cidr" = '10.20.0.0/24' ] || { echo "IPv4 helper leaked caller cidr state" >&2; exit 1; }
 
 # Unsafe route contracts.
 save_wg 198.51.100.8 0.0.0.0/0 10.20.0.0/24
