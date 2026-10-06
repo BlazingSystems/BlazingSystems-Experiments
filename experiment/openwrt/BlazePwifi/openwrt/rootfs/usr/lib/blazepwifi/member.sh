@@ -153,7 +153,7 @@ bp_member_balance_change() {
   if [ -n "$event_id" ]; then
     prior="$(bp_member_event_line "$event_id")"
     if [ -n "$prior" ]; then
-      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f7)" "$(printf '%s' "$prior" | cut -f8)"
+      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
       return 0
     fi
   fi
@@ -191,7 +191,7 @@ bp_member_transfer() {
   if [ -n "$event_id" ]; then
     prior="$(bp_member_event_line "$event_id")"
     if [ -n "$prior" ]; then
-      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f7)" "$(printf '%s' "$prior" | cut -f8)"
+      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
       return 0
     fi
   fi
