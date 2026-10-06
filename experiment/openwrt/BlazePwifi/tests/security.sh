@@ -38,6 +38,7 @@ export BP_RENTAL_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
 export BP_RENTAL_POLICY_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_policy.sh"
 export BP_CONTROLLER_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/controller.sh"
 export BP_CONSOLE_OPS_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/console_ops.sh"
+export BP_REMOTE_APPLY_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/remote_apply.sh"
 export SERVER_PORT=8443 REMOTE_ADDR=10.0.0.9 BP_AUTH_NOW=2000000000
 
 AUTH="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/auth.sh"
