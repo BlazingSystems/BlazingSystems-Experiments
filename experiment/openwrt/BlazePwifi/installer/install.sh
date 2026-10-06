@@ -13,6 +13,17 @@ FREE_KB="$(df -k /overlay 2>/dev/null | awk 'NR==2{print $4}')"; [ -n "${FREE_KB
 echo "Installing runtime packages..."
 apk -U add uhttpd nftables px5g-mbedtls flock ip-full kmod-wireguard wireguard-tools >/dev/null
 
+ZEROTIER_AVAILABLE=0
+if [ "$FREE_KB" -ge 4096 ] 2>/dev/null; then
+  if apk -U add zerotier >/dev/null 2>&1; then
+    ZEROTIER_AVAILABLE=1
+  else
+    echo "NOTICE: ZeroTier optional package could not be installed; WireGuard remains available."
+  fi
+else
+  echo "NOTICE: ZeroTier live transport skipped on this low-space target; profile staging remains available."
+fi
+
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
 mkdir -p "$BACKUP"
@@ -192,3 +203,8 @@ echo "Vendo key: $VENDO"
 echo "Backup: $BACKUP"
 echo "A browser warning for the local self-signed admin certificate is expected."
 echo "Existing Vendo credentials are preserved during upgrades."
+if [ "$ZEROTIER_AVAILABLE" = 1 ]; then
+  echo "ZeroTier live transport: available"
+else
+  echo "ZeroTier live transport: unavailable on this target (WireGuard remains available)"
+fi
