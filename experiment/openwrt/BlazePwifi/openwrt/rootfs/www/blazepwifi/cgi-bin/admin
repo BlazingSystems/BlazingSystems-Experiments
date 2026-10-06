@@ -7,6 +7,7 @@
 [ ! -r "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}" ] || . "${BP_RENTAL_UPDATE_LIB:-/usr/lib/blazepwifi/rental_update.sh}"
 . "${BP_CONTROLLER_LIB:-/usr/lib/blazepwifi/controller.sh}"
 . "${BP_MEMBER_LIB:-/usr/lib/blazepwifi/member.sh}"
+. "${BP_MEMBER_MIGRATION_LIB:-/usr/lib/blazepwifi/member_migration.sh}"
 [ ! -r "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}" ] || . "${BP_UPDATE_LIB:-/usr/lib/blazepwifi/update.sh}"
 . "${BP_CONSOLE_OPS_LIB:-/usr/lib/blazepwifi/console_ops.sh}"
 . "${BP_REMOTE_APPLY_LIB:-/usr/lib/blazepwifi/remote_apply.sh}"
@@ -249,6 +250,74 @@ EOF
     bp_auth_audit rental_update_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$version:$code"
     body="$(bp_rental_update_json)"
     bp_json "$(printf '{"ok":true,"update":%s}' "$body")"
+    ;;
+  member_export)
+    require_role viewer
+    command -v base64 >/dev/null 2>&1 || bp_fail "base64 utility unavailable"
+    export_payload="$(bp_member_migration_export | base64 | tr -d '\r\n')"
+    bp_json "$(printf '{"ok":true,"format":"BLAZE_MEMBER_METADATA_V1","filename":"BlazePwifi-members-%s.blazemembers","revision":%s,"payload_b64":"%s"}' \
+      "$(date +%Y%m%d-%H%M%S)" "$(bp_member_global_revision)" "$(bp_json_escape "$export_payload")")"
+    ;;
+  member_import_preview)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    payload_b64="$(bp_param payload_b64)"
+    token="$(bp_member_migration_preview_create "$payload_b64")"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      3) bp_fail "admin session unavailable" ;;
+      4) bp_fail "member metadata file is invalid or too large" ;;
+      10) bp_fail "member metadata file format is invalid" ;;
+      11) bp_fail "member metadata contains an invalid field" ;;
+      12) bp_fail "member metadata contains duplicate usernames" ;;
+      13) bp_fail "member metadata contains too many members" ;;
+      *) bp_fail "unable to prepare member import preview" ;;
+    esac
+    items="$(bp_member_migration_preview_json "$token")" || bp_fail "unable to render import preview"
+    count="$(bp_member_migration_preview_meta "$token" count)"
+    creates="$(bp_member_migration_preview_meta "$token" creates)"
+    collisions="$(bp_member_migration_preview_meta "$token" collisions)"
+    requested_enabled="$(bp_member_migration_preview_meta "$token" requested_enabled)"
+    export_revision="$(bp_member_migration_preview_meta "$token" export_revision)"
+    expires="$(bp_member_migration_preview_meta "$token" expires)"
+    bp_auth_audit member_import_preview "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "count=$count collisions=$collisions"
+    bp_json "$(printf '{"ok":true,"preview_token":"%s","count":%s,"creates":%s,"collisions":%s,"requested_enabled":%s,"export_revision":%s,"expires":%s,"items":%s}' \
+      "$(bp_json_escape "$token")" "${count:-0}" "${creates:-0}" "${collisions:-0}" "${requested_enabled:-0}" "${export_revision:-0}" "${expires:-0}" "$items")"
+    ;;
+  member_import_apply)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    token="$(bp_param preview_token)"; policy="$(bp_param collision_policy)"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    result="$(bp_member_migration_apply "$token" "$policy" "admin:$BP_AUTH_USER")"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      1|2|3) bp_fail "import preview token expired or does not belong to this admin session" ;;
+      6) bp_fail "member state changed after preview; preview the file again" ;;
+      7) bp_fail "member import has username collisions; choose skip or metadata-only update" ;;
+      8) bp_fail "invalid collision policy" ;;
+      9|15) bp_fail "member state is busy or rollback failed" ;;
+      14) bp_fail "member import failed; all member state was rolled back" ;;
+      *) bp_fail "member import could not be applied" ;;
+    esac
+    created="$(printf '%s' "$result" | cut -f1)"
+    updated_count="$(printf '%s' "$result" | cut -f2)"
+    skipped="$(printf '%s' "$result" | cut -f3)"
+    revision="$(printf '%s' "$result" | cut -f4)"
+    bp_auth_audit member_import_apply "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "policy=$policy created=$created updated=$updated_count skipped=$skipped revision=$revision"
+    bp_json "$(printf '{"ok":true,"created":%s,"updated":%s,"skipped":%s,"revision":%s,"new_members_require_password_reset":true}' \
+      "${created:-0}" "${updated_count:-0}" "${skipped:-0}" "${revision:-0}")"
     ;;
   member_list)
     require_role viewer
