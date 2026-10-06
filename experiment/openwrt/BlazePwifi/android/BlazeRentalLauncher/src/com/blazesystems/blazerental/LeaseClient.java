@@ -107,13 +107,26 @@ public final class LeaseClient {
 
             String newSecret = response.optString("device_secret", deviceSecret);
             String deviceId = response.optString("device_id", RentalLeaseStore.deviceId(context));
-            if (deviceId.length() > 0 && newSecret.length() > 0) {
-                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
-            }
-
             long serverNow = response.optLong("server_time_ms", 0L);
             long leaseUntil = response.optLong("lease_until_ms", 0L);
             if (serverNow <= 0L || leaseUntil < serverNow) return false;
+
+            if (enrolling) {
+                if (!deviceId.matches("^[0-9a-f]{24}$")
+                        || !newSecret.matches("^[0-9a-f]{48}$")) {
+                    return false;
+                }
+                boolean reused = response.optBoolean("reused", false);
+                String enrollSignature = response.optString("enroll_sig", "");
+                String enrollCanonical = "enroll_response|" + nonce + "|" + deviceId + "|"
+                        + newSecret + "|" + serverNow + "|" + leaseUntil + "|" + reused;
+                if (enrollSignature.length() == 0
+                        || !enrollSignature.equals(Hmac.sha256Hex(authSecret, enrollCanonical))) {
+                    return false;
+                }
+                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
+            }
+
             RentalLeaseStore.recordLease(context, serverNow, leaseUntil);
             if (enrolling) {
                 clearCoinWindow();
