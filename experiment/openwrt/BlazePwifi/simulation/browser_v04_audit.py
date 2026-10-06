@@ -283,7 +283,7 @@ with sync_playwright() as p:
     page.fill("#remotePassword","browser-password")
     page.click('button:has-text("Validate & save profile")')
     page.wait_for_function("document.getElementById('remoteModeState').textContent === 'wireguard'")
-    assert "activation remains safety-locked" in page.locator("#remoteConfigState").inner_text().lower()
+    assert "live transport apply remains safety-locked" in page.locator("#remoteConfigState").inner_text().lower()
 
     # dev.2 Advanced Terminal: enable -> fresh re-auth -> in-memory session -> bounded command -> close.
     page.click('[data-page="tools"]')
