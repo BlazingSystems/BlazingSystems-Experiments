@@ -91,7 +91,22 @@ assert len(extras["server_cert_sha256"])==64
 assert extras["enrollment_token"].startswith("0123456789ab.")
 PY
 
-# Execute the real provisioning-metadata validator.
+# Execute the real provisioning-metadata validator. Missing metadata must
+# retain return code 1 so the admin status endpoint can distinguish
+# "not installed" from malformed metadata.
+BP_RENTAL_PROVISIONING_FILE="$TMP/rental-provisioning.tsv"
+export BP_RENTAL_PROVISIONING_FILE
+rm -f "$BP_RENTAL_PROVISIONING_FILE"
+if bp_admin_provisioning_read; then
+  echo "missing provisioning metadata unexpectedly accepted" >&2
+  exit 1
+else
+  missing_rc=$?
+fi
+[ "$missing_rc" -eq 1 ]
+! grep -Fq 'if ! bp_admin_provisioning_read; then' "$ADMIN"
+grep -Fq 'if bp_admin_provisioning_read; then' "$ADMIN"
+
 BP_RENTAL_PROVISIONING_FILE="$TMP/rental-provisioning.tsv"
 export BP_RENTAL_PROVISIONING_FILE
 TEST_SIGNER='abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd'

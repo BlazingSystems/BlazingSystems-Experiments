@@ -156,7 +156,9 @@ case "$action" in
     require_role viewer
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
     case "$server" in https://*) ;; *) bp_fail "Device Owner provisioning server URL must use HTTPS";; esac
-    if ! bp_admin_provisioning_read; then
+    if bp_admin_provisioning_read; then
+      :
+    else
       rc=$?
       [ "$rc" -eq 1 ] && {
         bp_json '{"ok":true,"ready":false,"production_ready":false,"error":"exact Device Owner provisioning APK metadata is not installed"}'

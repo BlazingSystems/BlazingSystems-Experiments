@@ -19,8 +19,9 @@ bp_rental_claim_v2() {
   [ "$auth_v" = 2 ] || return 0
   if bp_rental_replay_claim "$did" "$action" "$nonce" "$now"; then
     return 0
+  else
+    rc=$?
   fi
-  rc=$?
   [ "$rc" -eq 3 ] && bp_fail "request replay rejected"
   [ "$rc" -eq 2 ] && bp_fail "invalid v2 authentication nonce"
   bp_fail "request replay state busy"
