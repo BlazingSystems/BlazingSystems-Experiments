@@ -42,6 +42,34 @@ async function runTool(){
   o.textContent=x.ok?((x.output||'(no output)')+'\n\nExit code: '+x.exit_code):(x.error||'Tool failed');
   if(!x.ok)C().toast(x.error||'Tool failed',true);
 }
+async function loadUpdate(){
+  const x=await C().api('update_status');
+  if(!x.ok){C().toast(x.error||'Update status unavailable',true);return}
+  const s=x.state||{};
+  const set=(id,val,good)=>{const n=q(id);if(n){n.textContent=val||'—';n.className='badge '+(good?'good':'');}};
+  set('#updateCurrent',s.current,false);
+  set('#updateStable',s.stable,true);
+  set('#updatePending',s.pending||'None',false);
+  set('#updateRollback',s.rollback||'None',!!s.rollback_available);
+  const src=q('#updateSource'); if(src)src.textContent='Configured source: '+(x.source_url||'not configured');
+}
+async function installUpdate(){
+  const url=(q('#updateUrl').value||'').trim(),sha=(q('#updateSha').value||'').trim();
+  if(!/^https:\/\//i.test(url)){C().toast('HTTPS update URL required',true);return}
+  if(!/^[0-9a-f]{64}$/i.test(sha)){C().toast('Exact SHA-256 required',true);return}
+  if(!confirm('Install this verified update? BlazePwifi will preserve the current stable files for rollback.'))return;
+  const x=await C().api('update_apply_url',{url,sha256:sha});
+  if(!x.ok){C().toast(x.error||'Update failed',true);await loadUpdate();return}
+  C().toast('Update installed as a pending candidate. Previous stable version is preserved.');
+  await loadUpdate(); await loadSystem();
+}
+async function rollbackUpdate(){
+  if(!confirm('Roll back to the preserved previous stable BlazePwifi version?'))return;
+  const x=await C().api('update_rollback',{});
+  if(!x.ok){C().toast(x.error||'Rollback failed',true);await loadUpdate();return}
+  C().toast('Rollback complete.');
+  await loadUpdate(); await loadSystem();
+}
 async function loadLan(){
   const keys=['lan_if','management_if','hotspot_if','management_vlan','hotspot_vlan','controller_vlan','rental_vlan'];
   const vals=[];
@@ -51,9 +79,10 @@ async function loadLan(){
 function onPage(name){
   if(name==='system'||name==='wan')loadSystem();
   if(name==='storage')loadStorage();
+  if(name==='updates')loadUpdate();
   if(name==='remote')loadRemote();
   if(name==='lan')loadLan();
 }
-window.BlazeConsole={loadSystem,loadStorage,loadRemote,runTool,loadLan,onPage};
+window.BlazeConsole={loadSystem,loadStorage,loadRemote,runTool,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
 setTimeout(()=>{loadSystem();loadRemote();},300);
 })();
