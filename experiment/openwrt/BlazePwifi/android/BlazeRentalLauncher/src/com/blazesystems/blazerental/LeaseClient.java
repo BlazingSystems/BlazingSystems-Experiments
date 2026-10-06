@@ -82,6 +82,7 @@ public final class LeaseClient {
             boolean enrolling = deviceSecret.length() == 0;
             String nonce = enrolling
                     ? RentalLeaseStore.enrollmentRequestNonce(context) : Hmac.nonce();
+            if (nonce.length() == 0) return false;
             String action = enrolling ? "enroll" : "status";
             String authSecret = enrolling ? enrollment : deviceSecret;
             if (authSecret.length() == 0) return false;
@@ -124,7 +125,9 @@ public final class LeaseClient {
                         || !enrollSignature.equals(Hmac.sha256Hex(authSecret, enrollCanonical))) {
                     return false;
                 }
-                RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret);
+                if (!RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret)) {
+                    return false;
+                }
             }
 
             RentalLeaseStore.recordLease(context, serverNow, leaseUntil);
