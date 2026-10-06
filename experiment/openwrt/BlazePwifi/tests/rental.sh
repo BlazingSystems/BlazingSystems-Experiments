@@ -32,8 +32,29 @@ DSEC="$(printf '%s' "$OUT" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
 [ "${#DID}" -eq 24 ]
 [ "${#DSEC}" -eq 48 ]
 
+# A lost response must be retry-safe: the exact same authenticated request
+# nonce returns the same permanent identity rather than burning the one-time QR.
 OUT2="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" | REQUEST_METHOD=POST sh "$CGI")"
-echo "$OUT2" | grep -q 'invalid or used'
+echo "$OUT2" | grep -q '"ok":true'
+echo "$OUT2" | grep -q '"reused":true'
+DID2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_id":"\([^"]*\)".*/\1/p')"
+DSEC2="$(printf '%s' "$OUT2" | sed -n 's/.*"device_secret":"\([^"]*\)".*/\1/p')"
+[ "$DID2" = "$DID" ]
+[ "$DSEC2" = "$DSEC" ]
+
+# The identity response itself is authenticated by the original one-time token.
+SERVER_MS="$(printf '%s' "$OUT" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
+LEASE_MS="$(printf '%s' "$OUT" | sed -n 's/.*"lease_until_ms":\([0-9]*\).*/\1/p')"
+ENROLL_SIG="$(printf '%s' "$OUT" | sed -n 's/.*"enroll_sig":"\([^"]*\)".*/\1/p')"
+[ -n "$SERVER_MS" ] && [ -n "$LEASE_MS" ] && [ -n "$ENROLL_SIG" ]
+EXPECTED_ENROLL_SIG="$(bp_rental_hmac "$TOKEN" "enroll_response|$N|$DID|$DSEC|$SERVER_MS|$LEASE_MS|false")"
+[ "$ENROLL_SIG" = "$EXPECTED_ENROLL_SIG" ]
+
+# A different request nonce cannot steal an already redeemed enrollment.
+N_BAD=otherNonce123
+SIG_BAD="$(bp_rental_hmac "$TOKEN" "enroll|$N_BAD|$TOKEN")"
+OUT_BAD="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N_BAD" "$SIG_BAD" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUT_BAD" | grep -q 'enrollment already claimed'
 
 bp_rental_policy_ensure "$DID"
 bp_rental_admin_password_set "$DID" 'admin-strong-123'
@@ -49,6 +70,9 @@ echo "$OUT" | grep -q '"allowed_packages":"com.android.chrome,com.example.game"'
 echo "$OUT" | grep -q '"preferred_vendo":"vendo-02"'
 echo "$OUT" | grep -q '"admin_salt":"[0-9a-f]'
 echo "$OUT" | grep -q '"policy_sig":"[0-9a-f]'
+
+OUT_USED="$(printf 'action=enroll&enroll_id=%s&nonce=%s&sig=%s' "$EID" "$N" "$SIG" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUT_USED" | grep -q 'enrollment invalid or used'
 
 R1="$(bp_rental_apply_coin "$DID" vendo-02 aabbccdd 11223344 2)"
 echo "$R1" | grep -q '^credited'
