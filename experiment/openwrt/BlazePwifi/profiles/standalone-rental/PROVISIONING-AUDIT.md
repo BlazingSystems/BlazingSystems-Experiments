@@ -10,93 +10,136 @@ Two QR formats are intentionally separate and must never be treated as interchan
 
 - Scanner: BlazeRental in-app scanner.
 - Prerequisite: BlazeRental is already installed.
-- Purpose: one-time server binding only.
-- Schema: `blazerental.enrollment.v1`.
-- Payload: Rental Server URL, one-time enrollment token, device label.
+- Purpose: one-time Rental Server binding only.
+- Schema: `blazerental.enrollment.v2`.
+- Payload: Rental Server URL, one-time enrollment token, device label, and the server certificate SHA-256 pin when HTTPS is used.
 - Does not request or claim Device Owner.
+- RC5-generated tokens require enrollment protocol 2 and cannot be downgraded to the legacy protocol-1 secret-transport response.
 
 ### Android Device Provisioning QR
 
 - Scanner: Android Setup Wizard enterprise QR provisioning.
 - Prerequisite: new/factory-reset, unprovisioned, owned or explicitly authorized phone.
-- Purpose: install and verify the DPC, provision Device Owner where Android/OEM supports it, then bind BlazeRental to the Rental Server.
-- Admin-extras schema: `blazerental.provisioning.v1`.
-- Includes exact DPC component, exact APK HTTPS download URL, URL-safe Base64 SHA-256 APK checksum, minimum version code, one-time Rental Server enrollment material, and optional Wi-Fi.
+- Purpose: install and verify the DPC, provision Device Owner where Android/OEM policy permits it, then bind BlazeRental to the Rental Server.
+- Admin-extras schema: `blazerental.provisioning.v2`.
+- Includes the exact DPC component, exact APK HTTPS download URL, canonical URL-safe Base64 SHA-256 APK checksum, minimum version code, one-time Rental Server enrollment material, server certificate SHA-256 pin, and optional Wi-Fi.
+- Rental Server URL must be HTTPS.
+- Provisioning is rejected if the local Rental Server certificate cannot be fingerprinted and pinned.
 
-## Audit findings corrected
+## Corrected findings
 
-1. The server previously used one `rental_device_qr` concept for both discussions. It is now explicitly the compatibility alias for Standard Enrollment only; new actions are `rental_standard_qr`, `rental_provisioning_status`, and `rental_provisioning_qr`.
-2. The current APK source is `android/BlazeRentalLauncher/`. The older `android/BlazeRental/` project is legacy/reference and is not the provisioning release source.
-3. Android 12+ admin-integrated provisioning activities were missing. The Launcher3 APK now implements GET_PROVISIONING_MODE and ADMIN_POLICY_COMPLIANCE, while preserving legacy provisioning completion support.
-4. Managed provisioning no longer opens the normal/manual initial administrator wizard. A Device Owner-provisioned phone waits for server enrollment/operator admin policy instead of allowing a local user to claim setup.
-5. The in-app Standard Enrollment scanner explicitly rejects Android Device Provisioning payloads.
-6. Device Provisioning tokens use a longer one-hour one-time window; Standard Enrollment remains ten minutes.
-7. Provisioning metadata fails closed unless an exact APK URL/checksum/version/channel is installed on the server.
-8. The previous Rental release workflow reused a v0.5.1 TEST APK. The provisioning RC builds, test-signs, verifies, and publishes its exact Launcher3 APK in the same pipeline and injects the exact checksum metadata into OpenWrt bundles/images.
-9. The generic 0.5.2 compatibility test had a stale version whitelist; this was corrected so CI failures are meaningful.
+1. Standard Enrollment and Device Provisioning are distinct backend actions and UI flows. Compatibility aliases map only to Standard Enrollment.
+2. The active APK source is `android/BlazeRentalLauncher/`; the older `android/BlazeRental/` project is reference/legacy only.
+3. Android 12+ integrated provisioning is implemented through `GET_PROVISIONING_MODE` and `ADMIN_POLICY_COMPLIANCE`, with legacy provisioning completion retained for older supported Android.
+4. Provisioning activities are protected by `android.permission.BIND_DEVICE_ADMIN`.
+5. Device Owner provisioning cannot complete merely because Android assigned Device Owner. BlazeRental must persist valid provisioning extras, reach the intended Rental Server, complete one-time enrollment, and obtain a valid server response.
+6. The in-app Standard Enrollment scanner explicitly rejects Device Provisioning payloads.
+7. Device Provisioning uses an exact release-bound APK URL/checksum/version record. Missing or inconsistent metadata fails closed.
+8. Device Provisioning is administrator-only. Standard Enrollment remains available to the intended operator role.
+9. Google-certified-device/custom-DPC limitations are surfaced in metadata, API, and UI; the server requires an explicit acknowledgement when the DPC is not declared approved.
+10. The OpenWrt/R281 path remains network-neutral: Standalone does not take ownership of network, wireless, or firewall configuration.
+
+## Secure enrollment protocol v2
+
+RC5-generated Standard and Device Provisioning tokens are stored with minimum protocol 2.
+
+The APK authenticates enrollment with:
+
+```text
+enroll_v2|request-nonce|one-time-token
+```
+
+The long-lived device secret is never returned by the v2 enrollment response. Server and phone independently derive it as HMAC-SHA256 keyed by the one-time token over:
+
+```text
+device-secret-v2|request-nonce|device-id
+```
+
+The server response is authenticated over:
+
+```text
+enroll-response-v2|request-nonce|device-id|server-time|lease-until|kdf
+```
+
+The phone verifies that response before committing its permanent identity.
+
+### Retry safety
+
+Provisioning must survive loss of the first successful enrollment response.
+
+For protocol 2:
+
+- the phone persists one enrollment request nonce synchronously and reuses it until identity setup succeeds;
+- the server records only the redeemed request nonce and device ID in the temporary enrollment record;
+- the temporary record never stores the derived long-lived device secret;
+- retry with the same nonce returns the same device identity and does not create a second device;
+- retry with a different nonce is rejected as `enrollment already claimed`;
+- the temporary token/redemption record remains only until the device proves possession of the derived permanent secret on its first authenticated status request;
+- after that proof, the temporary redemption record is deleted.
+
+This closes both the response-loss stranding problem and the protocol-downgrade path for RC5-generated QR tokens.
+
+Legacy protocol 1 remains only for explicitly legacy enrollment records created without the protocol-2 requirement. New RC5 QR generators do not create such records.
+
+## Pinned HTTPS Rental Server identity
+
+Device Provisioning requires an HTTPS Rental Server URL plus the exact SHA-256 fingerprint of the local uHTTPd certificate.
+
+The certificate pin is:
+
+- generated by the OpenWrt Rental admin backend from the active local uHTTPd certificate;
+- embedded in Device Provisioning admin extras;
+- embedded in Standard Enrollment when HTTPS is used;
+- validated and persisted synchronously by BlazeRental;
+- enforced by a dedicated `HttpsURLConnection` trust manager and hostname verifier that accept the connection only when the peer certificate exactly matches the stored SHA-256 pin.
+
+An HTTPS QR without a valid pin is rejected by the Standard scanner. Device Provisioning v2 rejects any admin-extras bundle that is not HTTPS or lacks a valid 64-hex pin.
+
+### Certificate continuity
+
+Normal Standalone reinstall reuses the existing uHTTPd certificate; the installer must not silently rotate an existing certificate. A deliberate certificate replacement changes the pinned server identity and therefore requires controlled device re-enrollment or an explicit future pin-rotation protocol.
+
+## APK checksum and release binding
+
+`PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` uses canonical padded URL-safe Base64 SHA-256 for the exact APK bytes. For a SHA-256 digest this is 44 characters and ends with `=`.
+
+The release also records the ordinary 64-hex APK SHA-256 separately. Device Provisioning metadata is generated only after the exact APK package ID, version code, version name, signature verification, and checksum pass.
+
+The PC/offline provisioning generator follows the same contract as the server generator: HTTPS Rental Server, mandatory server certificate pin, schema v2, exact DPC component, exact APK URL/checksum, and minimum APK version code.
 
 ## Google-certified Android / custom DPC compatibility
 
-Current Android Enterprise policy can block custom DPC installation during enterprise enrollment when the DPC is not verified/approved by Android Enterprise. BlazeRental must therefore not advertise custom Device Owner QR provisioning as universally production-compatible on GMS/Play-Protect devices.
+Google-certified Android devices can restrict enterprise provisioning to approved/verified DPCs. BlazeRental must not advertise custom Device Owner provisioning as universally compatible on GMS/Play-Protect devices.
 
-The server metadata carries `GMS_DPC_APPROVED`. When it is `0`, both the API and UI require an explicit custom-DPC acknowledgement and label the QR for AOSP/non-GMS or explicitly supported test targets only.
+The release metadata carries `GMS_DPC_APPROVED`. When it is `0`, API and UI require an explicit custom-DPC acknowledgement and label the QR for AOSP/non-GMS or explicitly supported test targets only.
 
-Android Enterprise also states that device-financing / hardware-lease control solutions are not permitted scenarios for DPC approval. Production planning must account for that policy constraint rather than assuming an approval path exists.
+Production planning must treat this platform/policy limitation separately from technical correctness of the QR payload.
 
-Official reference: https://support.google.com/work/android/answer/16694822
+## Release/signing boundary
 
-## Checksum canonicalization
+Provisioning changes remain release-candidate work until physical Setup Wizard validation is complete.
 
-Android documents `PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM` as URL-safe Base64 SHA-256. RC5 emits canonical padded Base64URL for the 32-byte SHA-256 digest (44 characters ending in `=`) and publishes the exact raw APK SHA-256 separately.
+The CI provisioning APK is test-signed. The QR is exact-byte/checksum valid for that RC, but the TEST signing identity is not production signing continuity.
 
-## Secure enrollment transport
+Do not promote Device Owner provisioning to stable production status until all of the following are true:
 
-RC4 still returned the newly issued long-lived `device_secret` in the first HTTP enrollment response. The request was HMAC-authenticated, but the credential itself could be observed by a passive client on an untrusted LAN.
-
-RC5 replaces the generated onboarding contracts with protocol/schema v2:
-
-- Standard Enrollment QR schema: `blazerental.enrollment.v2`;
-- Device Provisioning admin-extras schema: `blazerental.provisioning.v2`;
-- the APK sends `protocol=2` and authenticates the request with `enroll_v2|nonce|one-time-token`;
-- server and phone independently derive the long-lived secret as HMAC-SHA256 over `device-secret-v2|nonce|device-id`, keyed by the one-time token;
-- the server returns only the device ID, KDF identifier, timestamps and an HMAC response signature;
-- the APK verifies `enroll-response-v2|nonce|device-id|server-time|lease-until|kdf` before persisting identity;
-- the consumed one-time enrollment token is removed from phone storage after successful identity setup.
-
-The legacy protocol-1 server path remains only for backward compatibility. RC5-generated QR payloads and the RC5 APK use protocol 2.
-
-## Release gate
-
-The provisioning implementation is intentionally released first as a release candidate.
-
-The current CI provisioning APK uses a test signing identity. It is valid for exact-byte provisioning validation because the QR carries that exact APK checksum, but it is not a substitute for production signing continuity.
-
-Do not promote Device Owner provisioning to stable production status until:
-
-- the APK is signed by the locked production BlazeRental identity;
-- a factory-reset physical Android device successfully completes Setup Wizard QR provisioning;
+- the APK is signed by the locked long-term BlazeRental production identity;
+- a factory-reset physical Android device completes Setup Wizard Device Provisioning;
 - Device Owner is confirmed on-device;
-- the one-time token is consumed and the phone appears on the intended Rental Server;
-- a second sync obtains and verifies server policy;
-- the manual in-app scanner rejects the provisioning QR;
-- the same release is exercised on representative older and Android 12+ provisioning paths.
+- HTTPS certificate pin validation succeeds against the intended Rental Server;
+- the one-time v2 enrollment completes and the phone appears on that server;
+- a simulated/lab response-loss retry returns the same device identity;
+- a protocol-1 downgrade attempt against a new token is rejected;
+- a second authenticated sync retires the temporary redemption record and obtains/verifies server policy;
+- the Standard scanner rejects the Device Provisioning QR;
+- representative older and Android 12+ provisioning paths are exercised where supported.
+
+## ESP scope
+
+ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but this RC does not claim Android Device Provisioning QR parity on ESP.
+
+ESP onboarding remains a separate constrained path. If Device Provisioning is ever added to ESP, it must implement the same distinct QR schemas, exact APK metadata binding, HTTPS server identity rules where technically supportable, and explicit resource/security audit.
 
 ## Non-goals
 
-The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, or privileged platform exploits.
-
-
-## ESP scope in RC5
-
-ESP8266/ESP32 remain valid Standalone Rental Servers and Remote Coin Slot Interfaces, but RC5 does not claim Android Device Provisioning QR parity on ESP.
-
-Current ESP Rental Server onboarding is a manual one-time server/token enrollment flow. The ESP firmware does not embed the OpenWrt QR renderer or release-bound Android DPC APK/checksum metadata. Adding those features must be evaluated separately against ESP flash/RAM limits and must use the same distinct Standard Enrollment vs Device Provisioning contract if implemented.
-
-Therefore RC5 Device Provisioning QR is explicitly scoped to the OpenWrt Rental Server path. ESP Device Provisioning QR support is false in the release manifest.
-
-
-## TEST signing continuity
-
-The provisioning RC APK is intentionally signed with a throwaway TEST identity generated by the release workflow. It is exact-byte/checksum valid for the RC that publishes it, but it does not provide signing continuity across RC releases.
-
-Do not treat a TEST-provisioned Device Owner phone as an in-place upgrade target for later RCs. A factory reset may be required to validate a later RC under a different TEST signing identity. Stable promotion requires the locked production BlazeRental signing identity or another explicitly approved long-term signing strategy.
+The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, privileged platform exploits, or a user with physical access who can perform an authorized factory wipe.
