@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.3-dev.4 — development
+
+- Added a reviewed **Pisonet Members metadata export/import** workflow for migration into BlazePwifi central member authority.
+- Export format `BLAZE_MEMBER_METADATA_V1` contains only username, enabled state, banked seconds, update timestamp, label and source metadata. Passwords, verifier hashes, salts, KDF scheme and rounds are deliberately absent.
+- Added two-stage import: Admin + CSRF preview first, then Admin + fresh password re-authentication to apply the exact reviewed preview.
+- Import preview tokens are short-lived, single-use, bound to the current authenticated admin session and source IP, and pinned to the member global revision so any intervening member mutation invalidates the preview.
+- Added explicit collision policies: abort on any collision, skip existing members, or metadata-only update. Existing password verifier material is never replaced by an import.
+- Newly imported members are created disabled with `reset_required` authentication state and must receive an administrator password reset before they can be enabled.
+- Import apply is transactional across members, member-event history and global revision. Any mid-import failure restores all three snapshots.
+- Added duplicate-username, malformed-field, size/member-count and bounded-bank-time rejection.
+- Fixed a pre-existing empty optional-label TSV parsing defect across member authentication, password reset, balance changes, transfers, public listing, SoftTimer snapshots and metadata export.
+- Added BusyBox-safe migration parsing/decoding and Base64-safe browser chunking for larger import files.
+- Added browser runtime coverage for verifier-free export download, collision preview, reviewed re-authenticated apply, disabled reset-required imported account and dual CSRF transport.
+- Development identity advanced to `0.5.3-dev.4` / Android versionCode `50293`.
+- Exact green application candidate: `723c9c2191542e6f6867ee5fbbc31083590b49f2`, workflow `37527877646` — PASS, including Device Owner emulator, x86 QEMU and final candidate gate.
+- Frozen v0.5.2 production/tag/signing/recovery workflows and `profiles/standalone-rental` remain untouched.
+
 ## 0.5.3-dev.3 — development
 
 - Enabled transactional **live WireGuard activation/disable** for Full BlazePwifi while keeping ZeroTier live activation staged-only.
