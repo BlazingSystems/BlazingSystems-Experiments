@@ -172,5 +172,8 @@ test "$(grep -c '.remove("server_cert_sha256")' "$SRC/RentalLeaseStore.java")" -
 grep -q '!RentalLeaseStore.saveManualEnrollment' "$SRC/QrEnrollmentScannerActivity.java"
 grep -q 'return RentalLeaseStore.acceptProvisioningExtras' "$SRC/BlazeProvisioningContract.java"
 grep -q '!RentalLeaseStore.acceptProvisioningExtras' "$SRC/BlazeProvisioningModeActivity.java"
+grep -q 'public static synchronized boolean acceptProvisioningExtras' "$SRC/RentalLeaseStore.java"
+grep -q 'existingToken.equals(token)' "$SRC/RentalLeaseStore.java"
+grep -q 'Preserve request nonce/device identity' "$SRC/RentalLeaseStore.java"
 
 echo "Standalone Rental v0.5.2-rental.2-rc.5 provisioning split checks passed"

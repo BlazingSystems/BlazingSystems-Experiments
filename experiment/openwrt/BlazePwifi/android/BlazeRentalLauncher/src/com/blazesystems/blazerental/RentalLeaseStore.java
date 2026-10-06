@@ -19,13 +19,37 @@ public final class RentalLeaseStore {
         return storage(context).getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public static boolean acceptProvisioningExtras(Context context, PersistableBundle extras) {
+    public static synchronized boolean acceptProvisioningExtras(
+            Context context, PersistableBundle extras) {
         if (extras == null) return false;
-        return saveEnrollment(context,
-                extras.getString("server_url"),
-                extras.getString("enrollment_token"),
-                extras.getString("device_name"),
-                extras.getString("server_cert_sha256"),
+        String server = safe(extras.getString("server_url"));
+        String token = safe(extras.getString("enrollment_token"));
+        String name = safe(extras.getString("device_name"));
+        String pin = normalizePin(extras.getString("server_cert_sha256"));
+        if (server.length() == 0 || token.length() == 0 || pin.length() != 64) return false;
+
+        SharedPreferences p = prefs(context);
+        String existingSource = p.getString("enrollment_source", "");
+        String existingServer = p.getString("server", "");
+        String existingToken = p.getString("enrollment", "");
+
+        if ("device_owner_provisioning".equals(existingSource)
+                && existingServer.equals(server)) {
+            if (existingToken.equals(token)) {
+                // Setup Wizard may deliver the same provisioning extras through
+                // more than one callback. Preserve request nonce/device identity.
+                return p.edit()
+                        .putString("device_name", name)
+                        .putString("server_cert_sha256", pin)
+                        .commit();
+            }
+            if (p.getString("device_id", "").length() > 0
+                    || p.getString("device_secret", "").length() > 0) {
+                return false;
+            }
+        }
+
+        return saveEnrollment(context, server, token, name, pin,
                 "device_owner_provisioning");
     }
 
