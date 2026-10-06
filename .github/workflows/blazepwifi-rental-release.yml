@@ -166,16 +166,16 @@ jobs:
           APK_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode().rstrip("="))' "$APK")"
           test "${#APK_SHA256}" -eq 64
           test "${#APK_CHECKSUM}" -eq 43
-          cat > "$OUT/rental-provisioning.env" <<EOF
-READY=1
-APK_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/BlazeRental-v0.5.2-rental.2-TEST.apk
-APK_CHECKSUM=${APK_CHECKSUM}
-APK_SHA256=${APK_SHA256}
-APK_VERSION=0.5.2-rental.2
-APK_VERSION_CODE=50202
-APK_CHANNEL=test
-PRODUCTION_READY=0
-EOF
+          printf '%s\n' \
+            'READY=1' \
+            "APK_URL=https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/BlazeRental-v0.5.2-rental.2-TEST.apk" \
+            "APK_CHECKSUM=${APK_CHECKSUM}" \
+            "APK_SHA256=${APK_SHA256}" \
+            'APK_VERSION=0.5.2-rental.2' \
+            'APK_VERSION_CODE=50202' \
+            'APK_CHANNEL=test' \
+            'PRODUCTION_READY=0' \
+            > "$OUT/rental-provisioning.env"
           grep -q '^READY=1$' "$OUT/rental-provisioning.env"
           grep -q '^APK_CHANNEL=test$' "$OUT/rental-provisioning.env"
           grep -q '^PRODUCTION_READY=0$' "$OUT/rental-provisioning.env"
