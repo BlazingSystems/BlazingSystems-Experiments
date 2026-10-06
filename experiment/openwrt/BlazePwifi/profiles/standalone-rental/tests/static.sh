@@ -92,8 +92,7 @@ grep -q 'PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE' "$ADMIN"
 grep -q 'PRODUCTION_READY' "$ADMIN"
 grep -q "APK_CHANNEL" "$ADMIN"
 grep -q 'rental-provisioning.env' "$ROOT/openwrt/install.sh"
-grep -q '^READY=0
- "$ROOT/openwrt/rental-provisioning.env"
+grep -qx 'READY=0' "$ROOT/openwrt/rental-provisioning.env"
 
 grep -q 'Standard Enrollment QR' "$HTML"
 grep -q 'Device Provisioning QR' "$HTML"
