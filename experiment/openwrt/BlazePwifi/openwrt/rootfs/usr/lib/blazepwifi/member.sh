@@ -156,11 +156,12 @@ bp_member_balance_change() {
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
 
   if [ -n "$event_id" ]; then
-    prior="$(bp_member_event_line "$event_id")"
+    prior="$(awk -F '\t' -v e="$event_id" -v u="$user" -v k="$mode" -v s="$source" '$1==e && $3==u && $4==k && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
       printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
       return 0
     fi
+    [ -z "$(bp_member_event_line "$event_id")" ] || return 5
   fi
 
   oldifs="$IFS"; IFS="$(printf '\t')"; set -- $line; IFS="$oldifs"
@@ -194,11 +195,12 @@ bp_member_transfer() {
   [ "$seconds" -gt 0 ] 2>/dev/null && [ "$seconds" -le 31536000 ] 2>/dev/null || return 2
 
   if [ -n "$event_id" ]; then
-    prior="$(bp_member_event_line "$event_id")"
+    prior="$(awk -F '\t' -v e="$event_id" -v u="$from" -v s="$source" '$1==e && $3==u && $4=="transfer" && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
       printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
       return 0
     fi
+    [ -z "$(bp_member_event_line "$event_id")" ] || return 5
   fi
 
   fl="$(bp_member_line "$from")"; tl="$(bp_member_line "$to")"
