@@ -32,15 +32,17 @@ public final class RentalLeaseStore {
         String existingSource = p.getString("enrollment_source", "");
         String existingServer = p.getString("server", "");
         String existingToken = p.getString("enrollment", "");
+        String existingPin = normalizePin(p.getString("server_cert_sha256", ""));
 
         if ("device_owner_provisioning".equals(existingSource)
                 && existingServer.equals(server)) {
             if (existingToken.equals(token)) {
                 // Setup Wizard may deliver the same provisioning extras through
-                // more than one callback. Preserve request nonce/device identity.
+                // more than one callback. Security-critical identity must be
+                // byte-for-byte stable across those callbacks.
+                if (!existingPin.equals(pin)) return false;
                 return p.edit()
                         .putString("device_name", name)
-                        .putString("server_cert_sha256", pin)
                         .commit();
             }
             if (p.getString("device_id", "").length() > 0

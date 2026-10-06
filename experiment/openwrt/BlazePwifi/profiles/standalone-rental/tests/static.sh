@@ -175,6 +175,7 @@ grep -q '!RentalLeaseStore.acceptProvisioningExtras' "$SRC/BlazeProvisioningMode
 grep -q 'public static synchronized boolean acceptProvisioningExtras' "$SRC/RentalLeaseStore.java"
 grep -q 'existingToken.equals(token)' "$SRC/RentalLeaseStore.java"
 grep -q 'Preserve request nonce/device identity' "$SRC/RentalLeaseStore.java"
+grep -q 'existingPin.equals(pin)' "$SRC/RentalLeaseStore.java"
 grep -q 'public static synchronized boolean saveManualEnrollment' "$SRC/RentalLeaseStore.java"
 grep -q 'if (isEnrolled(context)) return false' "$SRC/RentalLeaseStore.java"
 grep -q 'ALREADY_ENROLLED' "$SRC/QrEnrollmentScannerActivity.java"
