@@ -54,3 +54,20 @@ Do not promote Device Owner provisioning to stable production status until:
 ## Non-goals
 
 The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, or privileged platform exploits.
+
+
+## RC3 security findings
+
+RC3 extends the provisioning audit beyond QR shape:
+
+- enrollment redemption is retry-bound and crash-recoverable;
+- the server signs the enrollment identity response before BlazeRental commits device credentials;
+- the client persists and reuses the enrollment request nonce until identity commit;
+- Rental auth v2 binds mutations to action-specific canonical payloads and rejects replayed nonces;
+- legacy signatures remain compatibility-only and parameters they did not cover are ignored rather than trusted;
+- Rental TSV state writes and policy revision compare-and-swap are serialized;
+- Device Owner provisioning requires HTTPS plus the local BlazePwifi certificate SHA-256 pin;
+- exact Device Owner APK metadata is isolated in `/etc/blazepwifi/state/rental-provisioning.tsv`;
+- the checked-in source tree contains no ready-to-use provisioning APK metadata, so source installs fail closed until a release bundle injects an exact APK URL/hash/signer tuple.
+
+RC3 remains a prerelease until the exact hardened APK is production-signed and a factory-reset physical Android device completes Setup Wizard provisioning end-to-end.

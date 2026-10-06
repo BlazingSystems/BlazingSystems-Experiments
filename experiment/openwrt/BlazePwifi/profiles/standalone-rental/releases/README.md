@@ -1,5 +1,11 @@
 # Standalone Rental Releases
 
+## Provisioning/security candidate
+
+### v0.5.2-rental.2-rc.3
+
+Hardened prerelease candidate. Keeps Standard Enrollment and Device Owner Provisioning separate, adds pinned TLS, retry-safe enrollment, replay-safe auth v2, serialized state, and exact isolated DPC metadata. Physical Setup Wizard validation remains required before stable promotion.
+
 ## Provisioning candidate
 
 ### v0.5.2-rental.2-rc.2

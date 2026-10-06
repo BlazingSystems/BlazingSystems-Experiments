@@ -36,10 +36,19 @@ public final class BlazeProvisioningContract {
 
     public static boolean isValid(PersistableBundle extras) {
         if (extras == null) return false;
-        String schema = clean(extras.getString("blaze_schema"));
-        String server = clean(extras.getString("server_url"));
-        String token = clean(extras.getString("enrollment_token"));
-        String pin = clean(extras.getString("server_cert_sha256")).replace(":", "").toLowerCase();
+        return isValidValues(
+                extras.getString("blaze_schema"),
+                extras.getString("server_url"),
+                extras.getString("enrollment_token"),
+                extras.getString("server_cert_sha256"));
+    }
+
+    static boolean isValidValues(String schemaValue, String serverValue,
+                                 String tokenValue, String pinValue) {
+        String schema = clean(schemaValue);
+        String server = clean(serverValue);
+        String token = clean(tokenValue);
+        String pin = clean(pinValue).replace(":", "").toLowerCase();
         if (!SCHEMA.equals(schema)) return false;
         if (!server.startsWith("https://")) return false;
         int dot = token.indexOf('.');
