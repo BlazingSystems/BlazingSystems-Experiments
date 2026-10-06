@@ -214,7 +214,7 @@ public class BlazeAdminActivity extends Activity {
         content = page();
         addBrandHeader();
         content.addView(title("BlazeRental Control Center"));
-        content.addView(label("Native BlazeRental administration · v0.5.2 Launcher Edition"));
+        content.addView(label("Native BlazeRental administration · v" + BuildConfig.VERSION_NAME + " Launcher Edition"));
 
         section("Dashboard");
         addStatus("Security", ManagedPolicyController.isDeviceOwner(this)
