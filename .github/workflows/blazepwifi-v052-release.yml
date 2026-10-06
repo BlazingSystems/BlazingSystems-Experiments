@@ -126,7 +126,36 @@ jobs:
             cp artifacts/signed/BlazeRental.apk release-out/BlazeRental.apk
             cp artifacts/signed/BlazeRental-v0.5.1-rescue-for-v0.5.2.apk release-out/BlazeRental-v0.5.1-rescue-for-v0.5.2.apk
             cp artifacts/signed/SIGNING-MANIFEST.json release-out/BlazeRental-SIGNING-MANIFEST.json
+            cp artifacts/signed/RECOVERY-MANIFEST.json release-out/BlazeRental-RECOVERY-MANIFEST.json
             cp artifacts/signed/BlazeRental-signing-fingerprint.txt release-out/BlazeRental-signing-fingerprint.txt
+            cp artifacts/signed/BlazeRental-signing-cert.pem release-out/BlazeRental-signing-cert.pem
+            cp artifacts/signed/BlazeRental-apksigner-verify.txt release-out/BlazeRental-apksigner-verify.txt
+            cp artifacts/signed/BlazeRental-rescue-apksigner-verify.txt release-out/BlazeRental-rescue-apksigner-verify.txt
+            cp artifacts/signed/BlazeRental-v0.5.2-lineage2-signing-backup.enc release-out/
+            cp artifacts/signed/BlazeRental-v0.5.2-lineage2-signing-nonce.bin release-out/
+            cp artifacts/signed/BlazeRental-v0.5.2-lineage2-key-recovery-A.enc release-out/
+            cp artifacts/signed/BlazeRental-v0.5.2-lineage2-key-recovery-B.enc release-out/
+            cp artifacts/signed/BlazeRental-v0.5.2-recovery-A-public.pem release-out/
+            cp artifacts/signed/BlazeRental-v0.5.2-recovery-B-public.pem release-out/
+            cp artifacts/signed/unseal-blazerental-lineage2.py release-out/
+
+            python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py \
+              --apk release-out/BlazeRental.apk \
+              --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.2/BlazeRental.apk" \
+              --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html \
+              --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js \
+              --out release-out/BlazeRental-QR-Setup.html
+            python3 experiment/openwrt/BlazePwifi/tools/make-provisioning.py \
+              --apk release-out/BlazeRental.apk \
+              --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.2/BlazeRental.apk" \
+              --server-url "http://192.168.1.1:8080" \
+              --enrollment-token "000000000000.000000000000000000000000000000000000" \
+              --device-name "SAMPLE - generate a real token in admin" \
+              --out release-out/BlazeRental-provisioning-SAMPLE.json
+            python3 -m pip install --quiet "qrcode[pil]"
+            python3 experiment/openwrt/BlazePwifi/tools/render-qr.py \
+              --json release-out/BlazeRental-provisioning-SAMPLE.json \
+              --out release-out/BlazeRental-provisioning-SAMPLE.png
           fi
 
           # Flatten deployable build outputs while keeping names stable. Duplicate
@@ -149,8 +178,15 @@ jobs:
           cp "$RUNNER_TEMP/v052-README.md" release-out/README.md
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           cp "$GATE" release-out/CANDIDATE-GATE.json
+          LINEAGE="unsigned"
+          FINGERPRINT=""
+          if [ "$SIGN_RUN" != 0 ]; then
+            LINEAGE="$(jq -r .certificate_lineage artifacts/signed/SIGNING-MANIFEST.json)"
+            FINGERPRINT="$(jq -r .signing_fingerprint artifacts/signed/SIGNING-MANIFEST.json)"
+          fi
           jq -n --arg release "0.5.2" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" \
-            '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:($sign!="0"),transactional_update:"blazepwifi-overlay-v1",rollback_rescue:"0.5.1-rescue-for-0.5.2",android_package:"com.blazesystems.blazerental"}' \
+            --arg lineage "$LINEAGE" --arg fingerprint "$FINGERPRINT" \
+            '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:($sign!="0"),certificate_lineage:$lineage,signing_fingerprint:$fingerprint,transactional_update:"blazepwifi-overlay-v1",rollback_rescue:"0.5.1-rescue-for-0.5.2",android_package:"com.blazesystems.blazerental"}' \
             > release-out/RELEASE-MANIFEST.json
           (cd release-out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
@@ -187,4 +223,12 @@ jobs:
           if [ "$SIGN_RUN" != 0 ]; then
             jq -e '.assets[] | select(.name=="BlazeRental.apk")' release.json >/dev/null
             jq -e '.assets[] | select(.name=="BlazeRental-v0.5.1-rescue-for-v0.5.2.apk")' release.json >/dev/null
+            jq -e '.assets[] | select(.name=="BlazeRental-signing-cert.pem")' release.json >/dev/null
+            jq -e '.assets[] | select(.name=="BlazeRental-v0.5.2-lineage2-signing-backup.enc")' release.json >/dev/null
+            jq -e '.assets[] | select(.name=="BlazeRental-v0.5.2-lineage2-key-recovery-A.enc")' release.json >/dev/null
+            jq -e '.assets[] | select(.name=="BlazeRental-v0.5.2-lineage2-key-recovery-B.enc")' release.json >/dev/null
+            jq -e '.assets[] | select(.name=="BlazeRental-QR-Setup.html")' release.json >/dev/null
+            RID="$(jq -r .id release.json)"
+            gh api --method PATCH "repos/${{ github.repository }}/releases/$RID" -F prerelease=false >/dev/null
+            gh api "repos/${{ github.repository }}/releases/$RID" | jq -e '.prerelease == false' >/dev/null
           fi
