@@ -21,7 +21,7 @@
   - `BlazeRental-v0.5.0-TEST.apk`
   - `BlazeRental-v0.5.0-release-unsigned.apk`
 - A production `BlazeRental.apk` is intentionally absent until the locked v0.4 signer is restored.
-- Locked signing run `37327439782` failed safely because `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` / exact keystore was unavailable; it refused certificate rotation.
+- Locked signing run `37327439782` failed safely because `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` / exact keystore was unavailable; it refused certificate rotation. A second attempt on 2026-10-06 (`run_attempt=2`) reached the same protected restore step and failed for the same reason, again without altering the release or rotating the certificate.
 - Locked production fingerprint remains:
   `C7:7E:4D:A2:2E:92:D2:BE:7D:93:B9:D3:DC:7C:3F:77:56:C0:6A:5A:13:0E:C6:90:5A:DC:C2:AD:4E:A3:56:24`
 - Canonical final release log:
