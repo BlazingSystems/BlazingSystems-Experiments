@@ -275,10 +275,17 @@ bp_member_event_record() {
 
 bp_member_public_list_json() {
   first=1; printf '['
-  while IFS="$(printf '\t')" read -r user label enabled scheme salt hash rounds banked revision updated source; do
-    [ -n "$user" ] || continue
+  while IFS= read -r line || [ -n "$line" ]; do
+    user="$(printf '%s' "$line" | cut -f1)"; [ -n "$user" ] || continue
+    label="$(printf '%s' "$line" | cut -f2)"
+    enabled="$(printf '%s' "$line" | cut -f3)"
+    banked="$(printf '%s' "$line" | cut -f8)"
+    revision="$(printf '%s' "$line" | cut -f9)"
+    updated="$(printf '%s' "$line" | cut -f10)"
+    source="$(printf '%s' "$line" | cut -f11)"
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"username":"%s","label":"%s","enabled":%s,"banked_seconds":%s,"revision":%s,"updated":%s,"source":"%s"}'       "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}" "$(bp_json_escape "$source")"
+    printf '{"username":"%s","label":"%s","enabled":%s,"banked_seconds":%s,"revision":%s,"updated":%s,"source":"%s"}' \
+      "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}" "$(bp_json_escape "$source")"
   done < "$BP_MEMBERS"
   printf ']'
 }
@@ -302,10 +309,20 @@ bp_member_auth_proof_ok() {
 
 bp_member_snapshot_json() {
   first=1; printf '['
-  while IFS="$(printf '\t')" read -r user label enabled scheme salt hash rounds banked revision updated source; do
-    [ -n "$user" ] || continue
+  while IFS= read -r line || [ -n "$line" ]; do
+    user="$(printf '%s' "$line" | cut -f1)"; [ -n "$user" ] || continue
+    label="$(printf '%s' "$line" | cut -f2)"
+    enabled="$(printf '%s' "$line" | cut -f3)"
+    scheme="$(printf '%s' "$line" | cut -f4)"
+    salt="$(printf '%s' "$line" | cut -f5)"
+    rounds="$(printf '%s' "$line" | cut -f7)"
+    banked="$(printf '%s' "$line" | cut -f8)"
+    revision="$(printf '%s' "$line" | cut -f9)"
+    updated="$(printf '%s' "$line" | cut -f10)"
     [ "$first" = 1 ] || printf ','; first=0
-    printf '{"username":"%s","label":"%s","enabled":%s,"scheme":"%s","salt":"%s","rounds":%s,"banked_seconds":%s,"revision":%s,"updated":%s}'       "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "$(bp_json_escape "$scheme")"       "$(bp_json_escape "$salt")" "${rounds:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}"
+    printf '{"username":"%s","label":"%s","enabled":%s,"scheme":"%s","salt":"%s","rounds":%s,"banked_seconds":%s,"revision":%s,"updated":%s}' \
+      "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "${enabled:-0}" "$(bp_json_escape "$scheme")" \
+      "$(bp_json_escape "$salt")" "${rounds:-0}" "${banked:-0}" "${revision:-0}" "${updated:-0}"
   done < "$BP_MEMBERS"
   printf ']'
 }
