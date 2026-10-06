@@ -39,11 +39,14 @@ public final class BlazeProvisioningContract {
         String schema = clean(extras.getString("blaze_schema"));
         String server = clean(extras.getString("server_url"));
         String token = clean(extras.getString("enrollment_token"));
+        String certPin = normalizeHex(extras.getString("server_cert_sha256"));
         if (!SCHEMA.equals(schema)) return false;
-        if (!(server.startsWith("http://") || server.startsWith("https://"))) return false;
-        int dot = token.indexOf('.');
-        if (dot < 8 || dot >= token.length() - 16) return false;
-        return token.matches("[A-Fa-f0-9]+\\.[A-Fa-f0-9]+");
+
+        // Device Owner provisioning is a high-security path. Never accept a
+        // hand-crafted cleartext server URL or an unpinned local TLS endpoint.
+        if (!server.startsWith("https://")) return false;
+        if (!certPin.matches("[0-9a-f]{64}")) return false;
+        return token.matches("[A-Fa-f0-9]{12}\\.[A-Fa-f0-9]{36}");
     }
 
     public static boolean capture(Context context, Intent intent) {
@@ -73,5 +76,9 @@ public final class BlazeProvisioningContract {
 
     private static String clean(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String normalizeHex(String value) {
+        return clean(value).replace(":", "").toLowerCase(java.util.Locale.US);
     }
 }

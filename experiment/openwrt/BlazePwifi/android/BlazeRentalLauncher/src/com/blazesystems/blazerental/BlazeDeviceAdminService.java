@@ -4,9 +4,11 @@ import android.app.admin.DeviceAdminService;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BlazeDeviceAdminService extends DeviceAdminService {
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean syncInFlight = new AtomicBoolean(false);
     private long lastSync;
     private long lastHome;
 
@@ -18,13 +20,18 @@ public class BlazeDeviceAdminService extends DeviceAdminService {
                 long interval = RentalLeaseStore.isLeaseValid(BlazeDeviceAdminService.this)
                         ? 15000L : 4000L;
                 if (RentalLeaseStore.hasEnrollmentConfig(BlazeDeviceAdminService.this)
-                        && now - lastSync > interval) {
+                        && now - lastSync > interval
+                        && syncInFlight.compareAndSet(false, true)) {
                     lastSync = now;
                     new Thread(new Runnable() {
                         @Override public void run() {
-                            LeaseClient.sync(BlazeDeviceAdminService.this);
+                            try {
+                                LeaseClient.sync(BlazeDeviceAdminService.this);
+                            } finally {
+                                syncInFlight.set(false);
+                            }
                         }
-                    }).start();
+                    }, "BlazeRentalSync").start();
                 }
                 if (!RentalLeaseStore.isAdminWindowActive(BlazeDeviceAdminService.this)
                         && !RentalLeaseStore.isLeaseValid(BlazeDeviceAdminService.this)

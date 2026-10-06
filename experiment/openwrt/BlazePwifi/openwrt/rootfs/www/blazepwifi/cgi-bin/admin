@@ -16,26 +16,49 @@ bp_rental_policy_v2_init
 
 bp_admin_rental_server_url() {
   supplied="$(bp_param server_url)"
+  host="${HTTP_HOST:-}"
+  [ -n "$host" ] || host="${SERVER_NAME:-blazepwifi.local}"
+  host="$(printf '%s' "$host" | sed 's/:443$//')"
+  local_url="https://$host"
+
   if [ -n "$supplied" ]; then
-    case "$supplied" in
-      http://*|https://*) ;;
-      *) return 1 ;;
-    esac
+    supplied="$(printf '%s' "$supplied" | sed 's:/*$::')"
+    case "$supplied" in https://*) ;; *) return 1;; esac
     printf '%s' "$supplied" | grep -q '[[:space:][:cntrl:]]' && return 1
     [ "$(printf '%s' "$supplied" | wc -c)" -le 256 ] || return 1
-    printf '%s' "$supplied" | sed 's:/*$::'
+    # Standalone provisioning is bound to this OpenWrt server's TLS identity.
+    [ "$supplied" = "$local_url" ] || return 1
+    printf '%s' "$supplied"
     return 0
   fi
-  host="${SERVER_NAME:-}"
-  [ -n "$host" ] || host="${HTTP_HOST:-blazepwifi.local}"
+
+  printf '%s' "$local_url"
+}
+
+bp_admin_cert_sha256() {
+  cert="${BP_ADMIN_CERT:-/etc/uhttpd.crt}"
+  [ -r "$cert" ] || return 1
+  command -v base64 >/dev/null 2>&1 || return 1
+  command -v sha256sum >/dev/null 2>&1 || return 1
+  digest="$(awk '/-----BEGIN CERTIFICATE-----/{on=1;next}/-----END CERTIFICATE-----/{exit}on{gsub(/[[:space:]]/,"");printf "%s",$0}' "$cert" | base64 -d 2>/dev/null | sha256sum 2>/dev/null | awk '{print $1}')"
+  [ "$(printf '%s' "$digest" | wc -c)" -eq 64 ] || return 1
+  case "$digest" in *[!0-9a-fA-F]*) return 1;; esac
+  printf '%s' "$digest" | tr A-F a-f
+}
+
+bp_admin_local_cert_pin() {
+  server="$(printf '%s' "$1" | sed 's:/*$::;s/:443$//')"
+  host="${HTTP_HOST:-}"
+  [ -n "$host" ] || host="${SERVER_NAME:-blazepwifi.local}"
   host="$(printf '%s' "$host" | sed 's/:443$//')"
-  printf 'http://%s' "$host"
+  [ "$server" = "https://$host" ] || { printf ''; return 0; }
+  bp_admin_cert_sha256
 }
 
 bp_admin_standard_qr_payload() {
-  server="$1"; token="$2"; label="$3"
-  printf '{"schema":"blazerental.enrollment.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s"}' \
-    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+  server="$1"; token="$2"; label="$3"; cert_pin="$4"
+  printf '{"schema":"blazerental.enrollment.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
 }
 
 bp_provisioning_meta_file="${BP_RENTAL_PROVISIONING_META:-/usr/share/blazepwifi/rental-provisioning.env}"
@@ -72,10 +95,10 @@ bp_provisioning_validate() {
 }
 
 bp_admin_provisioning_payload() {
-  server="$1"; token="$2"; label="$3"; ssid="$4"; security="$5"; wifi_password="$6"; hidden="$7"
-  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s"}' \
+  server="$1"; token="$2"; label="$3"; ssid="$4"; security="$5"; wifi_password="$6"; hidden="$7"; cert_pin="$8"
+  printf '{"android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM":"%s","android.app.extra.PROVISIONING_DEVICE_ADMIN_MINIMUM_VERSION_CODE":%s,"android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE":{"blaze_schema":"blazerental.provisioning.v1","server_url":"%s","enrollment_token":"%s","device_name":"%s","server_cert_sha256":"%s"}' \
     "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$apk_code" \
-    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")"
+    "$(bp_json_escape "$server")" "$(bp_json_escape "$token")" "$(bp_json_escape "$label")" "$(bp_json_escape "$cert_pin")"
   if [ -n "$ssid" ]; then
     printf ',"android.app.extra.PROVISIONING_WIFI_SSID":"%s","android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE":"%s","android.app.extra.PROVISIONING_WIFI_HIDDEN":%s' \
       "$(bp_json_escape "$ssid")" "$(bp_json_escape "$security")" "$hidden"
@@ -98,22 +121,31 @@ case "$action" in
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
-    server="$(bp_admin_rental_server_url)" || bp_fail "invalid server url"
-    token="$(bp_rental_enroll_create "$label" 600)"
-    qr_payload="$(bp_admin_standard_qr_payload "$server" "$token" "$label")"
+    server="$(bp_admin_rental_server_url)" || bp_fail "Standard Enrollment requires this Rental Server HTTPS URL"
+    cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local Rental Server certificate"
+    printf '%s' "$cert_pin" | grep -Eq '^[a-f0-9]{64}$' || bp_fail "Standard Enrollment requires the pinned local HTTPS certificate"
+    token="$(bp_rental_enroll_create "$label" 600)" || bp_fail "unable to create enrollment token"
+    qr_payload="$(bp_admin_standard_qr_payload "$server" "$token" "$label" "$cert_pin")"
     bp_auth_audit rental_standard_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
-    bp_json "$(printf '{"ok":true,"qr_type":"standard_enrollment","schema":"blazerental.enrollment.v1","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","qr_payload":"%s"}' \
-      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$qr_payload")")"
+    bp_json "$(printf '{"ok":true,"qr_type":"standard_enrollment","schema":"blazerental.enrollment.v1","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","server_cert_sha256":"%s","device_name":"%s","qr_payload":"%s"}' \
+      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$cert_pin")" "$(bp_json_escape "$label")" "$(bp_json_escape "$qr_payload")")"
     ;;
   rental_provisioning_status)
     require_role viewer
-    if bp_provisioning_validate; then
+    status_server="$(bp_admin_rental_server_url 2>/dev/null || true)"
+    status_pin=""
+    [ -z "$status_server" ] || status_pin="$(bp_admin_local_cert_pin "$status_server" 2>/dev/null || true)"
+    if bp_provisioning_validate && printf '%s' "$status_pin" | grep -Eq '^[a-f0-9]{64}$'; then
       gms_warning=false
       [ "$gms_dpc_approved" = 1 ] || gms_warning=true
-      bp_json "$(printf '{"ok":true,"ready":true,"apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"custom_dpc_gms_warning":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
-        "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$gms_warning")"
+      bp_json "$(printf '{"ok":true,"ready":true,"tls_ready":true,"server_url":"%s","server_cert_sha256":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"custom_dpc_gms_warning":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver","server_tls_required":true}' \
+        "$(bp_json_escape "$status_server")" "$(bp_json_escape "$status_pin")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$gms_warning")"
     else
-      bp_json '{"ok":true,"ready":false,"production_ready":false,"error":"exact provisionable BlazeRental APK metadata unavailable"}'
+      if bp_provisioning_validate; then
+        bp_json '{"ok":true,"ready":false,"tls_ready":false,"production_ready":false,"error":"local Rental Server HTTPS certificate fingerprint unavailable"}'
+      else
+        bp_json '{"ok":true,"ready":false,"tls_ready":false,"production_ready":false,"error":"exact provisionable BlazeRental APK metadata unavailable"}'
+      fi
     fi
     ;;
   rental_provisioning_qr)
@@ -127,7 +159,10 @@ case "$action" in
       esac
     fi
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
-    server="$(bp_admin_rental_server_url)" || bp_fail "invalid server url"
+    server="$(bp_admin_rental_server_url)" || bp_fail "Device Provisioning requires this Rental Server HTTPS URL"
+    case "$server" in https://*) ;; *) bp_fail "Device Provisioning server URL must use HTTPS";; esac
+    cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local Rental Server certificate"
+    printf '%s' "$cert_pin" | grep -Eq '^[a-f0-9]{64}$' || bp_fail "Device Provisioning requires the pinned local HTTPS certificate"
     ssid="$(bp_param wifi_ssid)"
     security="$(bp_param wifi_security)"
     wifi_password="$(bp_param wifi_password)"
@@ -144,11 +179,11 @@ case "$action" in
       wifi_password=""
       hidden=false
     fi
-    token="$(bp_rental_enroll_create "$label" 3600)"
-    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden")"
+    token="$(bp_rental_enroll_create "$label" 3600)" || bp_fail "unable to create provisioning enrollment token"
+    qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s:%s:%s' "$apk_channel" "$apk_version" "$label" | cut -c1-120)"
-    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v1","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"qr_payload":"%s"}' \
-      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$qr_payload")")"
+    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v1","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"server_cert_sha256":"%s","qr_payload":"%s"}' \
+      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$cert_pin")" "$(bp_json_escape "$qr_payload")")"
     ;;
   rental_list|rental_device_list)
     require_role viewer

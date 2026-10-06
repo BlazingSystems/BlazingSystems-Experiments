@@ -17,20 +17,6 @@ bp_rental_init() {
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
 bp_rental_hex() { bp_auth_random_hex "$1"; }
 
-bp_rental_enroll_lock() {
-  mkdir -p "$BP_RUN"
-  exec 7>"$BP_RUN/rental-enroll.lock"
-  if ! bp_flock_wait 7 10; then
-    exec 7>&-
-    return 1
-  fi
-}
-
-bp_rental_enroll_unlock() {
-  flock -u 7 2>/dev/null || true
-  exec 7>&-
-}
-
 bp_rental_hmac() {
   secret="$1"; data="$2"
   command -v openssl >/dev/null 2>&1 || return 2
@@ -41,25 +27,39 @@ bp_rental_enroll_create() {
   label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; now="$(bp_now)"
   case "$ttl" in ''|*[!0-9]*) ttl=600;; esac
   [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
-  bp_rental_enroll_lock || return 1
+
+  # Enrollment TSV creation and retry-redemption updates share one lock domain.
+  # This prevents append-vs-rewrite lost updates while preserving collision checks.
+  bp_lock || return 1
   tries=0; id=""
   while [ "$tries" -lt 8 ]; do
     candidate="$(bp_rental_hex 6)"
-    if [ -z "$(bp_rental_enroll_lookup "$candidate")" ]; then id="$candidate"; break; fi
+    if [ -z "$(bp_rental_enroll_lookup "$candidate")" ]; then
+      id="$candidate"
+      break
+    fi
     tries=$((tries+1))
   done
   if [ -z "$id" ]; then
-    bp_rental_enroll_unlock
+    bp_unlock
     return 1
   fi
-  secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
+
+  secret="$(bp_rental_hex 18)"
+  token="$id.$secret"
+  expiry=$((now+ttl))
   if ! printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"; then
-    bp_rental_enroll_unlock
+    bp_unlock
     return 1
   fi
   chmod 600 "$BP_RENTAL_ENROLL"
-  bp_durable_sync
-  bp_rental_enroll_unlock
+  if ! bp_durable_sync; then
+    # Keep the row conservative; caller will fail rather than advertise a token
+    # whose persistence is not known to be durable.
+    bp_unlock
+    return 1
+  fi
+  bp_unlock
   printf '%s\n' "$token"
 }
 
@@ -67,9 +67,27 @@ bp_rental_enroll_lookup() {
   awk -F '\t' -v i="$1" '$1==i {print; exit}' "$BP_RENTAL_ENROLL"
 }
 
+bp_rental_enroll_mark_redeemed() {
+  id="$1"; request_nonce="$2"; did="$3"; dsecret="$4"
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v OFS='\t' -v i="$id" -v n="$request_nonce" -v d="$did" -v s="$dsecret" '
+    $1==i {$5=n;$6=d;$7=s}
+    {print}
+  ' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
 bp_rental_enroll_consume() {
   id="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
   awk -F '\t' -v i="$id" '$1!=i {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
+bp_rental_enroll_consume_device() {
+  did="$1"
+  awk -F '\t' -v d="$did" '$6==d {found=1} END{exit found?0:1}' "$BP_RENTAL_ENROLL" || return 3
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v d="$did" '$6!=d {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
     chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
 }
 
