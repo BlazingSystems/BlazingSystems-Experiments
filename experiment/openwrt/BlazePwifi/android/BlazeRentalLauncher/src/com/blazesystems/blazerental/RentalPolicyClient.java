@@ -28,11 +28,11 @@ public final class RentalPolicyClient {
             String adminPassword = value(patch, "admin_password");
 
             String nonce = Hmac.nonce();
-            String canonical = "policy_patch|" + nonce + "|" + deviceId + "|"
+            String canonical = "v2|policy_patch|" + nonce + "|" + deviceId + "|"
                     + expectedRevision + "|" + mode + "|" + allowed + "|" + hidden + "|"
                     + preferred + "|" + timer + "|" + notifications + "|" + quick + "|"
                     + gesture + "|" + adminPassword;
-            String body = "action=policy_patch&nonce=" + LeaseClient.enc(nonce)
+            String body = "action=policy_patch&auth_v=2&nonce=" + LeaseClient.enc(nonce)
                     + "&device_id=" + LeaseClient.enc(deviceId)
                     + "&expected_revision=" + expectedRevision
                     + "&launcher_mode=" + LeaseClient.enc(mode)

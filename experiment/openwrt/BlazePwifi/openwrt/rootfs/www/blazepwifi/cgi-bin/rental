@@ -10,8 +10,21 @@ bp_rental_policy_v2_init
 action="$(bp_param action)"
 nonce="$(bp_param nonce)"
 sig="$(bp_param sig)"
+auth_v="$(bp_param auth_v)"
 now="$(bp_now)"
 [ -n "$nonce" ] && [ -n "$sig" ] || bp_fail "missing authentication"
+case "$auth_v" in ''|2) ;; *) bp_fail "unsupported authentication version";; esac
+
+bp_rental_claim_v2() {
+  [ "$auth_v" = 2 ] || return 0
+  if bp_rental_replay_claim "$did" "$action" "$nonce" "$now"; then
+    return 0
+  fi
+  rc=$?
+  [ "$rc" -eq 3 ] && bp_fail "request replay rejected"
+  [ "$rc" -eq 2 ] && bp_fail "invalid v2 authentication nonce"
+  bp_fail "request replay state busy"
+}
 
 case "$action" in
   enroll)
@@ -75,7 +88,10 @@ EOF
       }
       reused=true
     else
-      did="$(bp_rental_hex 12)"
+      did="$(bp_rental_device_id_new)" || {
+        bp_unlock
+        bp_fail "unable to allocate rental device id"
+      }
       dsecret="$(bp_rental_hex 24)"
       bp_rental_enroll_mark_redeemed "$eid" "$nonce" "$did" "$dsecret" || {
         bp_unlock
@@ -117,8 +133,13 @@ EOF
     secret="$(printf '%s' "$line" | cut -f2)"
     lease="$(printf '%s' "$line" | cut -f3)"
     label="$(printf '%s' "$line" | cut -f4)"
-    expected="$(bp_rental_hmac "$secret" "$action|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    if [ "$auth_v" = 2 ]; then
+      expected="$(bp_rental_hmac "$secret" "v2|$action|$nonce|$did")" || bp_fail "rental crypto unavailable"
+    else
+      expected="$(bp_rental_hmac "$secret" "$action|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    fi
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_claim_v2
 
     # Once the device proves possession of its permanent secret, the temporary
     # retry-redemption record is no longer needed. Missing record is a no-op.
@@ -137,9 +158,9 @@ EOF
     fi
     bp_unlock
 
-    inventory="$(bp_param inventory)"
-    [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
-    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"
+    # Status is read/sync only. Inventory is intentionally not mutated here:
+    # legacy status HMACs never covered the inventory parameter.
+    bp_rental_device_touch "$did" "$now" || bp_fail "rental device state busy"
 
     v2="$(bp_rental_policy_v2_get "$did")" || bp_fail "policy unavailable"
     IFS="$(printf '\t')" read -r _did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
@@ -209,9 +230,14 @@ EOF
     gesture_new="$(bp_param admin_gesture_value)"; [ -n "$gesture_new" ] || gesture_new="@keep"
     admin_password="$(bp_param admin_password)"; [ -n "$admin_password" ] || admin_password="@keep"
 
-    canonical="policy_patch|$nonce|$did|$expected_rev|$mode_new|$allowed_new|$hidden_new|$preferred_new|$timer_toggle_new|$notifications_new|$quick_new|$gesture_new|$admin_password"
+    if [ "$auth_v" = 2 ]; then
+      canonical="v2|policy_patch|$nonce|$did|$expected_rev|$mode_new|$allowed_new|$hidden_new|$preferred_new|$timer_toggle_new|$notifications_new|$quick_new|$gesture_new|$admin_password"
+    else
+      canonical="policy_patch|$nonce|$did|$expected_rev|$mode_new|$allowed_new|$hidden_new|$preferred_new|$timer_toggle_new|$notifications_new|$quick_new|$gesture_new|$admin_password"
+    fi
     expected="$(bp_rental_hmac "$secret" "$canonical")" || bp_fail "rental crypto unavailable"
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_claim_v2
 
     if newrev="$(bp_rental_policy_v2_patch "$did" "$expected_rev" device "$mode_new" "$allowed_new" "$hidden_new" "$preferred_new" "$timer_toggle_new" "$notifications_new" "$quick_new" "$gesture_new" "$admin_password")"; then
       policy_json="$(bp_rental_policy_v2_json "$did")" || bp_fail "policy unavailable"
@@ -234,8 +260,13 @@ EOF
     secret="$(printf '%s' "$line" | cut -f2)"
     payload="$(bp_param inventory)"
     [ "$action" = device_capabilities ] && payload="$(bp_param capabilities)"
-    expected="$(bp_rental_hmac "$secret" "$action|$nonce|$payload|$secret")" || bp_fail "rental crypto unavailable"
+    if [ "$auth_v" = 2 ]; then
+      expected="$(bp_rental_hmac "$secret" "v2|$action|$nonce|$did|$payload")" || bp_fail "rental crypto unavailable"
+    else
+      expected="$(bp_rental_hmac "$secret" "$action|$nonce|$payload|$secret")" || bp_fail "rental crypto unavailable"
+    fi
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_claim_v2
     if [ "$action" = inventory_update ]; then
       bp_rental_inventory_write "$did" "$payload" || bp_fail "invalid app inventory"
     fi
@@ -247,13 +278,21 @@ EOF
     line="$(bp_rental_device_line "$did")"
     [ -n "$line" ] || bp_fail "unknown device"
     secret="$(printf '%s' "$line" | cut -f2)"
-    expected="$(bp_rental_hmac "$secret" "coin_start|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    requested_vendo="$(bp_param vendo)"
+    if [ "$auth_v" = 2 ]; then
+      expected="$(bp_rental_hmac "$secret" "v2|coin_start|$nonce|$did|$requested_vendo")" || bp_fail "rental crypto unavailable"
+    else
+      expected="$(bp_rental_hmac "$secret" "coin_start|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    fi
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_claim_v2
     bp_time_sane "$now" || bp_fail "router clock not synchronized"
     policy="$(bp_rental_policy_line "$did")"
     preferred="$(printf '%s' "$policy" | cut -f6)"
     [ "$preferred" = "-" ] && preferred=""
-    requested_vendo="$(bp_param vendo)"
+    # Legacy signatures did not cover the explicit vendo parameter. Ignore it
+    # rather than allowing an authenticated request to be parameter-tampered.
+    [ "$auth_v" = 2 ] || requested_vendo=""
     [ -n "$requested_vendo" ] || requested_vendo="$preferred"
     window="$(bp_cfg coin_window)"
     [ -n "$window" ] || window=120
@@ -327,8 +366,13 @@ EOF
     line="$(bp_rental_device_line "$did")"
     [ -n "$line" ] || bp_fail "unknown device"
     secret="$(printf '%s' "$line" | cut -f2)"
-    expected="$(bp_rental_hmac "$secret" "coin_stop|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    if [ "$auth_v" = 2 ]; then
+      expected="$(bp_rental_hmac "$secret" "v2|coin_stop|$nonce|$did")" || bp_fail "rental crypto unavailable"
+    else
+      expected="$(bp_rental_hmac "$secret" "coin_stop|$nonce|$secret")" || bp_fail "rental crypto unavailable"
+    fi
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
+    bp_rental_claim_v2
     bp_lock || bp_fail "accounting busy"
     removed=0
     received_pulses=0

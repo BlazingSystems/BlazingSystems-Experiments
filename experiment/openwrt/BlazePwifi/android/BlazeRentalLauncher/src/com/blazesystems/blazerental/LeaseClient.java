@@ -78,8 +78,10 @@ public final class LeaseClient {
             String base = RentalLeaseStore.server(context);
             if (base.length() == 0) return false;
             String deviceSecret = RentalLeaseStore.deviceSecret(context);
+            String currentDeviceId = RentalLeaseStore.deviceId(context);
             String enrollment = RentalLeaseStore.enrollment(context);
             boolean enrolling = deviceSecret.length() == 0;
+            if (!enrolling && currentDeviceId.length() == 0) return false;
             String nonce = enrolling
                     ? RentalLeaseStore.enrollmentRequestNonce(context) : Hmac.nonce();
             if (nonce.length() == 0) return false;
@@ -91,16 +93,18 @@ public final class LeaseClient {
             body.append("action=").append(enc(action))
                     .append("&nonce=").append(enc(nonce));
 
+            String canonicalAuth;
             if (enrolling) {
                 int dot = enrollment.indexOf('.');
                 if (dot <= 0) return false;
                 body.append("&enroll_id=").append(enc(enrollment.substring(0, dot)));
+                canonicalAuth = action + "|" + nonce + "|" + authSecret;
             } else {
-                body.append("&device_id=").append(enc(RentalLeaseStore.deviceId(context)));
-                body.append("&inventory=").append(enc(inventoryCsv(context)));
+                body.append("&auth_v=2")
+                        .append("&device_id=").append(enc(currentDeviceId));
+                canonicalAuth = "v2|" + action + "|" + nonce + "|" + currentDeviceId;
             }
 
-            String canonicalAuth = action + "|" + nonce + "|" + authSecret;
             body.append("&sig=").append(enc(Hmac.sha256Hex(authSecret, canonicalAuth)));
 
             JSONObject response = post(context, base, body.toString());
@@ -240,6 +244,9 @@ public final class LeaseClient {
                 }
             }
 
+            if (!enrolling) {
+                reportInventory(context, base, deviceId, newSecret);
+            }
             ManagedPolicyController.apply(context);
             return true;
         } catch (Exception ignored) {
@@ -256,13 +263,13 @@ public final class LeaseClient {
                 return "Rental phone is not enrolled.";
             }
             String nonce = Hmac.nonce();
-            String body = "action=coin_start&nonce=" + enc(nonce)
+            String requestedVendo = preferredVendo == null ? "" : preferredVendo.trim();
+            String canonical = "v2|coin_start|" + nonce + "|" + deviceId + "|"
+                    + requestedVendo;
+            String body = "action=coin_start&auth_v=2&nonce=" + enc(nonce)
                     + "&device_id=" + enc(deviceId)
-                    + "&sig=" + enc(Hmac.sha256Hex(secret,
-                    "coin_start|" + nonce + "|" + secret));
-            if (preferredVendo != null && preferredVendo.trim().length() > 0) {
-                body += "&vendo=" + enc(preferredVendo.trim());
-            }
+                    + "&vendo=" + enc(requestedVendo)
+                    + "&sig=" + enc(Hmac.sha256Hex(secret, canonical));
             JSONObject response = post(context, base, body);
             if (response == null) return "Server unavailable.";
             if (!response.optBoolean("ok", false)) {
@@ -298,10 +305,10 @@ public final class LeaseClient {
                 return "Rental phone is not enrolled.";
             }
             String nonce = Hmac.nonce();
-            String body = "action=coin_stop&nonce=" + enc(nonce)
+            String canonical = "v2|coin_stop|" + nonce + "|" + deviceId;
+            String body = "action=coin_stop&auth_v=2&nonce=" + enc(nonce)
                     + "&device_id=" + enc(deviceId)
-                    + "&sig=" + enc(Hmac.sha256Hex(secret,
-                    "coin_stop|" + nonce + "|" + secret));
+                    + "&sig=" + enc(Hmac.sha256Hex(secret, canonical));
             JSONObject response = post(context, base, body);
             if (response == null) return "Server unavailable.";
             if (!response.optBoolean("ok", false)) {
@@ -326,6 +333,23 @@ public final class LeaseClient {
             return "Coin window closed.";
         } catch (Exception ignored) {
             return "Unable to close coin slot.";
+        }
+    }
+
+    private static void reportInventory(Context context, String base,
+            String deviceId, String secret) {
+        try {
+            String inventory = inventoryCsv(context);
+            String nonce = Hmac.nonce();
+            String canonical = "v2|inventory_update|" + nonce + "|" + deviceId + "|"
+                    + inventory;
+            String body = "action=inventory_update&auth_v=2&nonce=" + enc(nonce)
+                    + "&device_id=" + enc(deviceId)
+                    + "&inventory=" + enc(inventory)
+                    + "&sig=" + enc(Hmac.sha256Hex(secret, canonical));
+            post(context, base, body);
+        } catch (Exception ignored) {
+            // Inventory is observational metadata. Lease/policy sync remains authoritative.
         }
     }
 

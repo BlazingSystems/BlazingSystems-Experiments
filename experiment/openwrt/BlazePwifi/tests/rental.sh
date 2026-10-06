@@ -84,6 +84,27 @@ echo "$OUT" | grep -q '"policy_sig":"[0-9a-f]'
 echo "$OUT" | grep -q '"coin_window_expires_ms":0'
 echo "$OUT" | grep -q '"coin_window_sig":"[0-9a-f]'
 
+# Legacy status never authenticated the inventory parameter; it must be ignored.
+[ "$(bp_rental_inventory_get "$DID")" = 'com.android.chrome,com.example.game,com.example.other' ]
+
+# RC3 auth_v=2 binds device identity and rejects replay of the same nonce.
+NV2=11111111111111111111111111111111
+SIGV2="$(bp_rental_hmac "$DSEC" "v2|status|$NV2|$DID")"
+OUTV2="$(printf 'action=status&auth_v=2&device_id=%s&nonce=%s&sig=%s' "$DID" "$NV2" "$SIGV2" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$OUTV2" | grep -q '"ok":true'
+REPLAYV2="$(printf 'action=status&auth_v=2&device_id=%s&nonce=%s&sig=%s' "$DID" "$NV2" "$SIGV2" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$REPLAYV2" | grep -q 'request replay rejected'
+
+# Inventory mutation has its own payload-bound v2 signature.
+NI=22222222222222222222222222222222
+INV='com.android.chrome,com.example.game'
+SIGI="$(bp_rental_hmac "$DSEC" "v2|inventory_update|$NI|$DID|$INV")"
+IOUT="$(printf 'action=inventory_update&auth_v=2&device_id=%s&nonce=%s&inventory=%s&sig=%s' "$DID" "$NI" 'com.android.chrome%2Ccom.example.game' "$SIGI" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$IOUT" | grep -q '"ok":true'
+[ "$(bp_rental_inventory_get "$DID")" = "$INV" ]
+IREPLAY="$(printf 'action=inventory_update&auth_v=2&device_id=%s&nonce=%s&inventory=%s&sig=%s' "$DID" "$NI" 'com.android.chrome%2Ccom.example.game' "$SIGI" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$IREPLAY" | grep -q 'request replay rejected'
+
 # The first authenticated request using the permanent device secret retires
 # the retry record. The original QR token is invalid from this point onward.
 [ -z "$(bp_rental_enroll_lookup "$EID")" ]
@@ -92,9 +113,9 @@ echo "$OUT_AFTER_STATUS" | grep -q 'enrollment invalid or used'
 
 # Opening a rental coin window is authenticated, server-timed and recoverable
 # through status. The returned reservation state has its own HMAC.
-NC=coinopen123
-SIGC="$(bp_rental_hmac "$DSEC" "coin_start|$NC|$DSEC")"
-COIN="$(printf 'action=coin_start&device_id=%s&nonce=%s&sig=%s' "$DID" "$NC" "$SIGC" | REQUEST_METHOD=POST sh "$CGI")"
+NC=33333333333333333333333333333333
+SIGC="$(bp_rental_hmac "$DSEC" "v2|coin_start|$NC|$DID|vendo-02")"
+COIN="$(printf 'action=coin_start&auth_v=2&device_id=%s&nonce=%s&vendo=vendo-02&sig=%s' "$DID" "$NC" "$SIGC" | REQUEST_METHOD=POST sh "$CGI")"
 echo "$COIN" | grep -q '"ok":true'
 echo "$COIN" | grep -q '"vendo":"vendo-02"'
 CS="$(printf '%s' "$COIN" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
@@ -106,6 +127,9 @@ CG="$(printf '%s' "$COIN" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
 [ -f "$BP_TARGET_DIR/vendo-02.progress" ]
 [ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 0 ]
 [ "$(cut -f6 "$BP_TARGET_DIR/vendo-02.tsv")" = rental ]
+
+COIN_REPLAY="$(printf 'action=coin_start&auth_v=2&device_id=%s&nonce=%s&vendo=vendo-02&sig=%s' "$DID" "$NC" "$SIGC" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$COIN_REPLAY" | grep -q 'request replay rejected'
 
 # Send one signed 2-pulse coin event through the real Vendo CGI, then replay
 # the exact same event. Only the first may increase lease/progress.
@@ -153,9 +177,9 @@ SG="$(printf '%s' "$COINSTATUS" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1
 [ "$SP" -eq 2 ] && [ "$SC" -eq 200 ]
 [ "$SG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$SS|$SE|$SV|$SP|$SC")" ]
 
-NX=coinstop123
-SIGX="$(bp_rental_hmac "$DSEC" "coin_stop|$NX|$DSEC")"
-STOP="$(printf 'action=coin_stop&device_id=%s&nonce=%s&sig=%s' "$DID" "$NX" "$SIGX" | REQUEST_METHOD=POST sh "$CGI")"
+NX=44444444444444444444444444444444
+SIGX="$(bp_rental_hmac "$DSEC" "v2|coin_stop|$NX|$DID")"
+STOP="$(printf 'action=coin_stop&auth_v=2&device_id=%s&nonce=%s&sig=%s' "$DID" "$NX" "$SIGX" | REQUEST_METHOD=POST sh "$CGI")"
 echo "$STOP" | grep -q '"ok":true'
 XS="$(printf '%s' "$STOP" | sed -n 's/.*"server_time_ms":\([0-9]*\).*/\1/p')"
 XP="$(printf '%s' "$STOP" | sed -n 's/.*"received_pulses":\([0-9]*\).*/\1/p')"
@@ -165,6 +189,19 @@ XG="$(printf '%s' "$STOP" | sed -n 's/.*"coin_window_sig":"\([^"]*\)".*/\1/p')"
 [ "$XG" = "$(bp_rental_hmac "$DSEC" "coin_window|$DID|$XS|0||$XP|$XC")" ]
 [ ! -f "$BP_TARGET_DIR/vendo-02.tsv" ]
 [ ! -f "$BP_TARGET_DIR/vendo-02.progress" ]
+STOP_REPLAY="$(printf 'action=coin_stop&auth_v=2&device_id=%s&nonce=%s&sig=%s' "$DID" "$NX" "$SIGX" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$STOP_REPLAY" | grep -q 'request replay rejected'
+
+# Legacy coin_start signatures did not bind the explicit vendo parameter.
+# A tampered legacy vendo must therefore be ignored in favor of policy/default.
+NL=legacycoin
+SIGL="$(bp_rental_hmac "$DSEC" "coin_start|$NL|$DSEC")"
+LEGACY_COIN="$(printf 'action=coin_start&device_id=%s&nonce=%s&vendo=attacker-choice&sig=%s' "$DID" "$NL" "$SIGL" | REQUEST_METHOD=POST sh "$CGI")"
+echo "$LEGACY_COIN" | grep -q '"ok":true'
+echo "$LEGACY_COIN" | grep -q '"vendo":"vendo-02"'
+NLS=legacy-stop
+SIGLS="$(bp_rental_hmac "$DSEC" "coin_stop|$NLS|$DSEC")"
+printf 'action=coin_stop&device_id=%s&nonce=%s&sig=%s' "$DID" "$NLS" "$SIGLS" | REQUEST_METHOD=POST sh "$CGI" | grep -q '"ok":true'
 
 # Reset the lease baseline before the lower-level library duplicate test.
 bp_rental_device_write "$DID" "$DSEC" 2000003600 'Phone 01' 2000000000
@@ -206,5 +243,43 @@ EVENTS="$(bp_rental_events_json 16)"
 printf '%s' "$EVENTS" | grep -q '"kind":"rename"'
 printf '%s' "$EVENTS" | grep -q '"kind":"lease_add"'
 printf '%s' "$EVENTS" | grep -q '"kind":"expire"'
+
+# Concurrent Rental state writers must not overwrite one another.
+i=1
+while [ "$i" -le 12 ]; do
+  n="$i"
+  (
+    didc="$(printf '%024x' "$n")"
+    secc="$(printf '%048x' "$n")"
+    bp_rental_device_write "$didc" "$secc" "$n" "Concurrent $n" "$n"
+  ) &
+  i=$((i+1))
+done
+wait
+i=1
+while [ "$i" -le 12 ]; do
+  didc="$(printf '%024x' "$i")"
+  [ -n "$(bp_rental_device_line "$didc")" ]
+  i=$((i+1))
+done
+
+# Policy revision CAS must serialize: two writers with the same expected
+# revision cannot both commit.
+PREV="$(bp_rental_policy_v2_get "$DID" | cut -f2)"
+(
+  bp_rental_policy_v2_patch "$DID" "$PREV" device @keep @keep @keep @keep @keep @keep @keep @keep @keep @keep > "$T/patch-a.out"
+  echo $? > "$T/patch-a.rc"
+) &
+PA=$!
+(
+  bp_rental_policy_v2_patch "$DID" "$PREV" device @keep @keep @keep @keep @keep @keep @keep @keep @keep @keep > "$T/patch-b.out"
+  echo $? > "$T/patch-b.rc"
+) &
+PB=$!
+set +e
+wait "$PA"; RA=$?
+wait "$PB"; RB=$?
+set -e
+[ "$RA" -eq 0 ] && [ "$RB" -eq 4 ] || [ "$RA" -eq 4 ] && [ "$RB" -eq 0 ]
 
 echo "BlazeRental production server checks passed"

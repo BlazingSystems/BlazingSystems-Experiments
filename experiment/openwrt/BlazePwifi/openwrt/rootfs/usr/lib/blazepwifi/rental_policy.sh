@@ -24,7 +24,21 @@ bp_rental_policy_v2_list_valid() {
   [ -z "$value" ] || printf '%s' "$value" | grep -Eq '^[A-Za-z0-9._,*-]+$'
 }
 
-bp_rental_policy_migrate() {
+bp_rental_policy_v2_lock() {
+  mkdir -p "$BP_RUN"
+  exec 5>"$BP_RUN/rental-policy-v2.lock"
+  if ! bp_flock_wait 5 10; then
+    exec 5>&-
+    return 1
+  fi
+}
+
+bp_rental_policy_v2_unlock() {
+  flock -u 5 2>/dev/null || true
+  exec 5>&-
+}
+
+bp_rental_policy_migrate_unlocked() {
   did="$1"
   bp_rental_policy_v2_init
   [ -n "$(bp_rental_policy_v2_line "$did")" ] && return 0
@@ -47,6 +61,14 @@ bp_rental_policy_migrate() {
   bp_durable_sync
 }
 
+bp_rental_policy_migrate() {
+  bp_rental_policy_v2_lock || return 1
+  bp_rental_policy_migrate_unlocked "$@"
+  rc=$?
+  bp_rental_policy_v2_unlock
+  return "$rc"
+}
+
 bp_rental_policy_v2_get() {
   did="$1"
   bp_rental_policy_migrate "$did" || return 1
@@ -66,13 +88,13 @@ EOF
   printf '{"device_id":"%s","policy_revision":%s,"updated_at":%s,"updated_by":"%s","launcher_mode":"%s","allowed_packages":"%s","hidden_packages":"%s","preferred_vendo":"%s","timer_mode":"%s","timer_user_toggle":%s,"quick_controls":"%s","notifications_enabled":%s,"admin_gesture_type":"%s","admin_gesture_value":"%s","offline_grace":%s,"capabilities":"%s"}'     "$(bp_json_escape "$did")" "${rev:-1}" "${updated:-0}" "$(bp_json_escape "$by")"     "$(bp_json_escape "$mode")" "$(bp_json_escape "$allowed")" "$(bp_json_escape "$hidden")"     "$(bp_json_escape "$preferred")" "$(bp_json_escape "$timer_mode")" "${timer_toggle:-1}"     "$(bp_json_escape "$quick")" "${notifications:-1}" "$(bp_json_escape "$gesture_type")"     "$(bp_json_escape "$gesture_value")" "${grace:-0}" "$(bp_json_escape "$caps")"
 }
 
-bp_rental_policy_v2_patch() {
+bp_rental_policy_v2_patch_unlocked() {
   did="$1"; expected="$2"; actor="$3"; mode_new="$4"; allowed_new="$5"; hidden_new="$6"; preferred_new="$7"
   timer_toggle_new="$8"; notifications_new="$9"; shift 9
   quick_new="$1"; gesture_new="$2"; admin_password="$3"; timer_mode_new="${4:-@keep}"
 
   case "$expected" in ''|*[!0-9]*) return 3;; esac
-  line="$(bp_rental_policy_v2_get "$did")" || return 1
+  line="$(bp_rental_policy_v2_line "$did")"; [ -n "$line" ] || return 1
   IFS="$(printf '\t')" read -r id rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
 $line
 EOF
@@ -117,4 +139,14 @@ EOF
   bp_rental_policy_write "$did" "$allowed" "$salt" "$hash" "$rounds" "$preferred" || return 1
   bp_rental_event_log policy_patch "$did" "revision=$newrev actor=$actor"
   printf '%s\n' "$newrev"
+}
+
+bp_rental_policy_v2_patch() {
+  did="$1"
+  bp_rental_policy_migrate "$did" || return 1
+  bp_rental_policy_v2_lock || return 1
+  bp_rental_policy_v2_patch_unlocked "$@"
+  rc=$?
+  bp_rental_policy_v2_unlock
+  return "$rc"
 }

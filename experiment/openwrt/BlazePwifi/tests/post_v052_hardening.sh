@@ -103,6 +103,24 @@ SIG_VERIFY_LINE="$(grep -n 'Hmac.sha256Hex(authSecret, enrollCanonical)' "$LEASE
 IDENTITY_LINE="$(grep -n 'RentalLeaseStore.setDeviceIdentity(context, deviceId, newSecret)' "$LEASE" | head -n1 | cut -d: -f1)"
 [ -n "$SIG_VERIFY_LINE" ] && [ -n "$IDENTITY_LINE" ] && [ "$SIG_VERIFY_LINE" -lt "$IDENTITY_LINE" ]
 
+echo "hardening: Rental auth_v=2 integrity and replay protection"
+grep -Fq 'auth_v="$(bp_param auth_v)"' "$RENTAL_API"
+grep -Fq 'bp_rental_replay_claim' "$RENTAL_API"
+grep -Fq 'request replay rejected' "$RENTAL_API"
+grep -Fq 'v2|$action|$nonce|$did' "$RENTAL_API"
+grep -Fq 'v2|coin_start|$nonce|$did|$requested_vendo' "$RENTAL_API"
+grep -Fq 'Legacy signatures did not cover the explicit vendo parameter' "$RENTAL_API"
+! grep -Fq 'inventory="$(bp_param inventory)"' "$RENTAL_API"
+grep -Fq 'BP_RENTAL_REPLAY=' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+grep -Fq 'rental-state.lock' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+grep -Fq 'bp_rental_device_touch' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental.sh"
+grep -Fq 'rental-policy-v2.lock' "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_policy.sh"
+grep -Fq 'auth_v=2' "$LEASE"
+grep -Fq 'v2|inventory_update|' "$LEASE"
+grep -Fq 'v2|coin_start|' "$LEASE"
+grep -Fq 'v2|coin_stop|' "$LEASE"
+grep -Fq 'v2|policy_patch|' "$POLICY_CLIENT"
+
 echo "hardening: portal and Rental coin-window contracts"
 # Portal and Rental app must expose the authoritative insert-coin window.
 grep -Fq '\"server_time\":$now' "$PORTAL_API"
@@ -139,4 +157,4 @@ grep -Fq 'OPENING COIN WINDOW' "$PAGES"
 grep -Fq 'Received • ' "$PAGES"
 grep -Fq 'COIN WINDOW OPEN' "$PAGES"
 
-echo "post-v0.5.2 CSRF, QR, and coin-window hardening contracts passed"
+echo "post-v0.5.2 CSRF, QR, auth-v2, replay, and coin-window hardening contracts passed"
