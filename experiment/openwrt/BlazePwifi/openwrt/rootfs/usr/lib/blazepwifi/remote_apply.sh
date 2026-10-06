@@ -123,10 +123,10 @@ bp_remote_runtime_set_public_key() {
     "$public" "$(bp_remote_runtime_get last_handshake 0)"
 }
 
-# These helpers run in subshell scope intentionally. POSIX shell function
-# variables are otherwise global, and route-validation helpers must never
-# overwrite the caller's current Allowed-IP loop variable.
-bp_remote_ipv4_bounds() (
+# IPv4 route helpers deliberately avoid caller variable names. POSIX shell
+# function variables are global, so generic names such as "cidr" can corrupt
+# the outer Allowed-IP validation loop.
+bp_remote_ipv4_bounds() {
   printf '%s' "$1" | awk -F/ '
     function ipnum(s, a,i,n) {
       n=split(s,a,"."); if(n!=4) return -1
@@ -145,30 +145,38 @@ bp_remote_ipv4_bounds() (
       end=start+size-1
       printf "%.0f %.0f %d",start,end,$2
     }'
-)
+}
 
-bp_remote_ipv4_cidr_valid() (
+bp_remote_ipv4_cidr_valid() {
   bp_remote_ipv4_bounds "$1" >/dev/null 2>&1
-)
+}
 
-bp_remote_ipv4_overlap() (
-  a="$(bp_remote_ipv4_bounds "$1")" || return 2
-  b="$(bp_remote_ipv4_bounds "$2")" || return 2
-  as="$(printf '%s' "$a" | awk '{print $1}')"; ae="$(printf '%s' "$a" | awk '{print $2}')"
-  bs="$(printf '%s' "$b" | awk '{print $1}')"; be="$(printf '%s' "$b" | awk '{print $2}')"
-  [ "$as" -le "$be" ] 2>/dev/null && [ "$bs" -le "$ae" ] 2>/dev/null
-)
+bp_remote_ipv4_overlap() {
+  bp_ip_a="$(bp_remote_ipv4_bounds "$1")" || return 2
+  bp_ip_b="$(bp_remote_ipv4_bounds "$2")" || return 2
+  bp_ip_as="$(printf '%s' "$bp_ip_a" | awk '{print $1}')"
+  bp_ip_ae="$(printf '%s' "$bp_ip_a" | awk '{print $2}')"
+  bp_ip_bs="$(printf '%s' "$bp_ip_b" | awk '{print $1}')"
+  bp_ip_be="$(printf '%s' "$bp_ip_b" | awk '{print $2}')"
+  [ "$bp_ip_as" -le "$bp_ip_be" ] 2>/dev/null && [ "$bp_ip_bs" -le "$bp_ip_ae" ] 2>/dev/null
+}
 
-bp_remote_ipv4_contains() (
-  outer="$(bp_remote_ipv4_bounds "$1")" || return 2
-  inner="$(bp_remote_ipv4_bounds "$2")" || return 2
-  os="$(printf '%s' "$outer" | awk '{print $1}')"; oe="$(printf '%s' "$outer" | awk '{print $2}')"
-  is="$(printf '%s' "$inner" | awk '{print $1}')"; ie="$(printf '%s' "$inner" | awk '{print $2}')"
-  [ "$os" -le "$is" ] 2>/dev/null && [ "$oe" -ge "$ie" ] 2>/dev/null
-)
+bp_remote_ipv4_contains() {
+  bp_ip_outer="$(bp_remote_ipv4_bounds "$1")" || return 2
+  bp_ip_inner="$(bp_remote_ipv4_bounds "$2")" || return 2
+  bp_ip_os="$(printf '%s' "$bp_ip_outer" | awk '{print $1}')"
+  bp_ip_oe="$(printf '%s' "$bp_ip_outer" | awk '{print $2}')"
+  bp_ip_is="$(printf '%s' "$bp_ip_inner" | awk '{print $1}')"
+  bp_ip_ie="$(printf '%s' "$bp_ip_inner" | awk '{print $2}')"
+  [ "$bp_ip_os" -le "$bp_ip_is" ] 2>/dev/null && [ "$bp_ip_oe" -ge "$bp_ip_ie" ] 2>/dev/null
+}
 
-bp_remote_ipv4_host() (
-  printf '%s' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}bp_remote_split_cidrs() {
+bp_remote_ipv4_host() {
+  case "$1" in ''|*/*|*:*) return 1;; esac
+  bp_remote_ipv4_cidr_valid "$1/32"
+}
+
+bp_remote_split_cidrs() {
   printf '%s' "$1" | tr ', ' '\n\n' | awk 'NF'
 }
 
