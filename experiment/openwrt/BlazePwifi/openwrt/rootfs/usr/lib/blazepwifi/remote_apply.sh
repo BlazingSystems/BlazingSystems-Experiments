@@ -8,7 +8,6 @@ BP_REMOTE_RUNTIME=${BP_REMOTE_RUNTIME:-$BP_STATE/remote-runtime.tsv}
 BP_REMOTE_WG_KEY=${BP_REMOTE_WG_KEY:-$BP_STATE/remote-wireguard.key}
 BP_REMOTE_NETWORK_CONFIG=${BP_REMOTE_NETWORK_CONFIG:-/etc/config/network}
 BP_REMOTE_FIREWALL_CONFIG=${BP_REMOTE_FIREWALL_CONFIG:-/etc/config/firewall}
-BP_REMOTE_UHTTPD_CONFIG=${BP_REMOTE_UHTTPD_CONFIG:-/etc/config/uhttpd}
 BP_REMOTE_WG_IF=${BP_REMOTE_WG_IF:-blazewg}
 BP_REMOTE_WG_PEER=${BP_REMOTE_WG_PEER:-blazewg_peer}
 BP_REMOTE_FW_ZONE=${BP_REMOTE_FW_ZONE:-blazewg}
@@ -249,7 +248,7 @@ bp_remote_snapshot_create() {
   snap="$BP_REMOTE_APPLY_ROOT/snapshots/$id"
   mkdir -p "$snap"
   chmod 700 "$snap"
-  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "uhttpd:$BP_REMOTE_UHTTPD_CONFIG"; do
+  for pair in "network:$BP_REMOTE_NETWORK_CONFIG" "firewall:$BP_REMOTE_FIREWALL_CONFIG" "runtime:$BP_REMOTE_RUNTIME"; do
     name="${pair%%:*}"; file="${pair#*:}"
     if [ -f "$file" ]; then
       cp -p "$file" "$snap/$name" || return 1
@@ -293,22 +292,51 @@ bp_remote_firewall_reload() {
   /etc/init.d/firewall reload >/dev/null 2>&1
 }
 
-bp_remote_uhttpd_restart() {
-  if [ -n "${BP_REMOTE_UHTTPD_RESTART_HOOK:-}" ]; then sh -c "$BP_REMOTE_UHTTPD_RESTART_HOOK"; return; fi
-  /etc/init.d/uhttpd restart >/dev/null 2>&1
+bp_remote_admin_start() {
+  if [ -n "${BP_REMOTE_ADMIN_START_HOOK:-}" ]; then sh -c "$BP_REMOTE_ADMIN_START_HOOK"; return; fi
+  /etc/init.d/blazepwifi-remote-admin restart >/dev/null 2>&1
+}
+
+bp_remote_admin_stop() {
+  if [ -n "${BP_REMOTE_ADMIN_STOP_HOOK:-}" ]; then sh -c "$BP_REMOTE_ADMIN_STOP_HOOK"; return; fi
+  /etc/init.d/blazepwifi-remote-admin stop >/dev/null 2>&1 || true
+}
+
+bp_remote_admin_running() {
+  if [ -n "${BP_REMOTE_ADMIN_STATUS_HOOK:-}" ]; then sh -c "$BP_REMOTE_ADMIN_STATUS_HOOK"; return; fi
+  /etc/init.d/blazepwifi-remote-admin running >/dev/null 2>&1
+}
+
+bp_remote_admin_sync() {
+  state="$(bp_remote_runtime_get state staged)"
+  listener="$(bp_remote_runtime_get wg_listener)"
+  case "$state" in
+    active|active_staged_changes|applying)
+      if [ -n "$listener" ]; then
+        bp_remote_admin_start || return 1
+        bp_remote_admin_running || return 1
+      else
+        bp_remote_admin_stop || return 1
+      fi
+      ;;
+    *)
+      bp_remote_admin_stop || return 1
+      ;;
+  esac
 }
 
 bp_remote_restore_snapshot() {
   id="$1"
   snap="$BP_REMOTE_APPLY_ROOT/snapshots/$id"
   [ -d "$snap" ] || return 1
+  bp_remote_admin_stop || true
   bp_remote_config_restore_file "$snap" network "$BP_REMOTE_NETWORK_CONFIG" || return 1
   bp_remote_config_restore_file "$snap" firewall "$BP_REMOTE_FIREWALL_CONFIG" || return 1
-  bp_remote_config_restore_file "$snap" uhttpd "$BP_REMOTE_UHTTPD_CONFIG" || return 1
+  bp_remote_config_restore_file "$snap" runtime "$BP_REMOTE_RUNTIME" || return 1
   bp_remote_ifdown || true
   bp_remote_network_reload || return 1
   bp_remote_firewall_reload || return 1
-  bp_remote_uhttpd_restart || return 1
+  bp_remote_admin_sync || return 1
 }
 
 bp_remote_pending_write() {
@@ -349,13 +377,21 @@ bp_remote_rollback_pending() {
   line="$(bp_remote_pending_read 2>/dev/null || true)"
   pending_id="$(printf '%s' "$line" | cut -f1)"
   [ "$pending_id" = "$id" ] || { bp_remote_unlock; return 0; }
-  public="$(bp_remote_runtime_get public_key)"
   if bp_remote_restore_snapshot "$id"; then
     bp_remote_pending_clear
-    bp_remote_runtime_write rolled_back "$id" "" "$(bp_now)" "$reason" "" "$public" 0
+    restored_state="$(bp_remote_runtime_get state staged)"
+    restored_id="$(bp_remote_runtime_get apply_id)"
+    restored_profile="$(bp_remote_runtime_get profile_sha)"
+    restored_applied="$(bp_remote_runtime_get applied_at 0)"
+    restored_listener="$(bp_remote_runtime_get wg_listener)"
+    restored_public="$(bp_remote_runtime_get public_key)"
+    restored_handshake="$(bp_remote_runtime_get last_handshake 0)"
+    bp_remote_runtime_write "$restored_state" "$restored_id" "$restored_profile" "$restored_applied" "$reason" \
+      "$restored_listener" "$restored_public" "$restored_handshake"
     bp_remote_unlock
     return 0
   fi
+  public="$(bp_remote_runtime_get public_key)"
   bp_remote_runtime_write rollback_failed "$id" "" "$(bp_now)" "$reason" "" "$public" 0
   bp_remote_unlock
   return 1
@@ -431,27 +467,34 @@ bp_remote_wg_write_uci() {
 }
 
 bp_remote_wg_listener_apply() {
-  old_listener="$(bp_remote_runtime_get wg_listener)"
-  [ -z "$old_listener" ] || uci -q del_list "uhttpd.blazepwifi_admin.listen_https=$old_listener" || true
   management="$(bp_remote_get management 0)"
   listener=""
   if [ "$management" = 1 ]; then
     ipaddr="$(bp_remote_get wg_address | cut -d/ -f1)"
     admin_port="$(bp_cfg admin_port)"; [ -n "$admin_port" ] || admin_port=8443
     listener="$ipaddr:$admin_port"
-    uci -q del_list "uhttpd.blazepwifi_admin.listen_https=$listener" || true
-    uci add_list "uhttpd.blazepwifi_admin.listen_https=$listener"
   fi
-  uci commit uhttpd
-  bp_remote_uhttpd_restart || return 1
+
+  bp_remote_runtime_write applying "$(bp_remote_runtime_get apply_id)" "$(bp_remote_runtime_get profile_sha)" 0 "" \
+    "$listener" "$(bp_remote_runtime_get public_key)" "$(bp_remote_runtime_get last_handshake 0)"
+  if [ -n "$listener" ]; then
+    bp_remote_admin_start || return 1
+    bp_remote_admin_running || return 1
+  else
+    bp_remote_admin_stop || return 1
+  fi
   BP_REMOTE_NEW_LISTENER="$listener"
   export BP_REMOTE_NEW_LISTENER
 }
 
 bp_remote_wg_wait_health() {
   if [ -n "${BP_REMOTE_WG_HEALTH_HOOK:-}" ]; then
-    BP_REMOTE_HEALTH_IF="$BP_REMOTE_WG_IF" sh -c "$BP_REMOTE_WG_HEALTH_HOOK"
-    return
+    if BP_REMOTE_HEALTH_IF="$BP_REMOTE_WG_IF" sh -c "$BP_REMOTE_WG_HEALTH_HOOK"; then
+      BP_REMOTE_LAST_HANDSHAKE="${BP_REMOTE_LAST_HANDSHAKE:-$(bp_now)}"
+      export BP_REMOTE_LAST_HANDSHAKE
+      return 0
+    fi
+    return 1
   fi
   wait_seconds="${BP_REMOTE_WG_HEALTH_SECONDS:-25}"
   start="$(bp_now)"
@@ -517,15 +560,12 @@ bp_remote_wireguard_apply() {
 }
 
 bp_remote_wireguard_remove_uci() {
-  old_listener="$(bp_remote_runtime_get wg_listener)"
   uci -q delete "network.$BP_REMOTE_WG_IF" || true
   uci -q delete "network.$BP_REMOTE_WG_PEER" || true
   uci -q delete "firewall.$BP_REMOTE_FW_ZONE" || true
   uci -q delete "firewall.$BP_REMOTE_FW_ADMIN" || true
-  [ -z "$old_listener" ] || uci -q del_list "uhttpd.blazepwifi_admin.listen_https=$old_listener" || true
   uci commit network
   uci commit firewall
-  uci commit uhttpd
 }
 
 bp_remote_wireguard_disable() {
@@ -547,11 +587,11 @@ bp_remote_wireguard_disable() {
   bp_remote_unlock
   bp_remote_guard_spawn "$id"
 
+  if ! bp_remote_admin_stop; then bp_remote_rollback_pending "$id" disable-admin-stop-failed; return 28; fi
   if ! bp_remote_wireguard_remove_uci; then bp_remote_rollback_pending "$id" disable-uci-failed; return 24; fi
   bp_remote_ifdown || true
   if ! bp_remote_network_reload; then bp_remote_rollback_pending "$id" disable-network-reload-failed; return 25; fi
   if ! bp_remote_firewall_reload; then bp_remote_rollback_pending "$id" disable-firewall-failed; return 26; fi
-  if ! bp_remote_uhttpd_restart; then bp_remote_rollback_pending "$id" disable-uhttpd-failed; return 28; fi
   if ! bp_remote_route_health "$source_ip" "$source_sig" "$default_sig"; then bp_remote_rollback_pending "$id" disable-route-survival-failed; return 29; fi
 
   bp_remote_lock || { bp_remote_rollback_pending "$id" disable-finalize-lock-failed; return 30; }
