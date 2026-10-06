@@ -15,6 +15,13 @@ bp_console_bool() {
   case "$1" in 0|1) return 0;; *) return 1;; esac
 }
 
+bp_console_no_controls() {
+  value="$1"
+  stripped="$(printf '%s' "$value" | tr -d '\t\r\n')"
+  [ "$stripped" = "$value" ] || return 1
+  ! printf '%s' "$value" | grep -q '[[:cntrl:]]'
+}
+
 bp_console_reauth() {
   password="$1"; ip="${REMOTE_ADDR:-unknown}"
   [ -n "${BP_AUTH_USER:-}" ] || return 1
@@ -155,11 +162,11 @@ bp_terminal_command_safe_wrapper() {
   cmd="$1"
   [ -n "$cmd" ] || return 1
   [ "$(printf '%s' "$cmd" | wc -c)" -le 512 ] || return 1
-  printf '%s' "$cmd" | grep -q '[[:cntrl:]]' && return 1
+  bp_console_no_controls "$cmd" || return 1
   # No detached/background jobs. Advanced Terminal is a bounded request/response runner.
   case "$cmd" in *'&'*) return 2;; esac
   # High-risk appliance lifecycle/storage operations use dedicated guarded controls.
-  printf '%s' "$cmd" | grep -Eiq '(^|[;|[:space:]])(reboot|poweroff|halt|firstboot|jffs2reset|sysupgrade|mtd|fw_setenv)([;|[:space:]]|$)' && return 2
+  printf '%s' "$cmd" | grep -Eiq '(^|[^A-Za-z0-9_.-])(reboot|poweroff|halt|firstboot|jffs2reset|sysupgrade|mtd|fw_setenv)([^A-Za-z0-9_.-]|$)' && return 2
   return 0
 }
 
@@ -222,7 +229,7 @@ bp_remote_get() {
 bp_remote_text() {
   value="$1"; max="$2"
   [ "$(printf '%s' "$value" | wc -c)" -le "$max" ] || return 1
-  ! printf '%s' "$value" | grep -q '[\t\r\n[:cntrl:]]'
+  bp_console_no_controls "$value"
 }
 
 bp_remote_host() {
@@ -245,6 +252,7 @@ bp_remote_save() {
   case "$mode" in disabled|wireguard|zerotier) ;; *) return 2;; esac
   bp_console_bool "$monitoring" && bp_console_bool "$management" && bp_console_bool "$terminal" || return 2
   [ "$terminal" = 0 ] || [ "$management" = 1 ] || return 2
+  [ -n "$node" ] || return 2
   bp_remote_text "$node" 64 || return 2
   bp_remote_text "$site" 96 || return 2
   bp_remote_cidr_list "$allowlist" || return 2
