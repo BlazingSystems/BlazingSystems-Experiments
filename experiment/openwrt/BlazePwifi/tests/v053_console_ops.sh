@@ -73,6 +73,24 @@ bp_terminal_exec "$TOKEN" 'printf terminal-ok'
 [ "$BP_TERMINAL_RC" -eq 0 ]
 [ "$BP_TERMINAL_OUTPUT" = "terminal-ok" ]
 
+# Only one Advanced Terminal command may execute at a time.
+(
+  exec 5>"$BP_RUN/terminal-exec.lock"
+  flock 5
+  sleep 2
+) &
+LOCK_PID=$!
+sleep 1
+if bp_terminal_exec "$TOKEN" 'printf should-not-run'; then
+  echo "concurrent terminal command was not blocked" >&2
+  kill "$LOCK_PID" 2>/dev/null || true
+  wait "$LOCK_PID" 2>/dev/null || true
+  exit 1
+else
+  [ "$?" -eq 5 ]
+fi
+wait "$LOCK_PID"
+
 # Detached/background and lifecycle commands are blocked before execution.
 if bp_terminal_exec "$TOKEN" 'sleep 1 &'; then
   echo "background terminal command was not blocked" >&2
