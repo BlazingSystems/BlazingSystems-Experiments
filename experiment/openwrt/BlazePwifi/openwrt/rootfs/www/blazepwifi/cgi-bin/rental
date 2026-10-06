@@ -562,6 +562,12 @@ esac
         # device row was written. Recover the exact claimed identity; never
         # mint a second device for the same enrollment token.
         bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
+        device_line="$(bp_rental_device_line "$did")"
+        device_secret="$(printf '%s' "$device_line" | cut -f2)"
+        [ "$device_secret" = "$dsecret" ] || {
+          bp_unlock
+          bp_fail "enrollment device write failed"
+        }
       fi
       bp_rental_policy_ensure "$did"
       reused=true
@@ -576,6 +582,12 @@ esac
       }
       bp_durable_sync
       bp_rental_device_write "$did" "$dsecret" 0 "${label:-Rental phone}" "$now"
+      device_line="$(bp_rental_device_line "$did")"
+      device_secret="$(printf '%s' "$device_line" | cut -f2)"
+      [ "$device_secret" = "$dsecret" ] || {
+        bp_unlock
+        bp_fail "enrollment device write failed"
+      }
       bp_rental_policy_ensure "$did"
       reused=false
     fi
