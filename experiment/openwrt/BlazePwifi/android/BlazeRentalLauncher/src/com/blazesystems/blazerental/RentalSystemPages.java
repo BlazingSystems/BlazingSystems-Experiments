@@ -138,12 +138,18 @@ public final class RentalSystemPages {
             }
         });
         final TextView detail = body(launcher, "TIME FINISHED");
+        final TextView coinWindow = body(launcher, "");
+        coinWindow.setVisibility(View.GONE);
         final Button coin = actionButton(launcher, "INSERT COIN");
+        final Button coinDone = smallButton(launcher, "DONE INSERTING");
+        coinDone.setVisibility(View.GONE);
 
         root.addView(state);
         root.addView(timer);
         root.addView(detail);
+        root.addView(coinWindow);
         root.addView(coin, buttonMargins(launcher));
+        root.addView(coinDone, rowMargins(launcher));
 
         coin.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -163,15 +169,47 @@ public final class RentalSystemPages {
             }
         });
 
+        coinDone.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                coinDone.setEnabled(false);
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final String result = LeaseClient.coinStop(launcher);
+                        launcher.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                detail.setText(result);
+                                coinDone.setEnabled(true);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        });
+
         final Runnable refresh = new Runnable() {
             @Override public void run() {
                 long remaining = RentalLeaseStore.remainingMs(launcher);
+                long coinRemaining = LeaseClient.coinWindowRemainingMs();
                 boolean paid = remaining > 0L;
+                boolean coinActive = coinRemaining > 0L;
                 if (paid) FloatingTimerService.ensure(launcher);
                 else FloatingTimerService.stop(launcher);
                 setTextIfChanged(timer, formatDuration(remaining));
-                setTextIfChanged(detail, paid ? "RENTAL ACTIVE" : "TIME FINISHED");
-                setTextIfChanged(coin, paid ? "ADD MORE TIME" : "INSERT COIN");
+                setTextIfChanged(detail, coinActive ? "INSERT COIN NOW" :
+                        (paid ? "RENTAL ACTIVE" : "TIME FINISHED"));
+                setTextIfChanged(coin, coinActive ? "COIN WINDOW OPEN" :
+                        (paid ? "ADD MORE TIME" : "INSERT COIN"));
+                coin.setEnabled(!coinActive);
+                if (coinActive) {
+                    String vendo = LeaseClient.coinWindowVendo();
+                    setTextIfChanged(coinWindow, "Coin window • " + formatCoinDuration(coinRemaining)
+                            + (vendo.length() > 0 ? " • " + vendo : ""));
+                    coinWindow.setVisibility(View.VISIBLE);
+                    coinDone.setVisibility(View.VISIBLE);
+                } else {
+                    coinWindow.setVisibility(View.GONE);
+                    coinDone.setVisibility(View.GONE);
+                }
                 if (root.getWindowToken() != null) root.postDelayed(this, 1000L);
             }
         };
@@ -710,6 +748,13 @@ public final class RentalSystemPages {
         long minutes = (total % 3600L) / 60L;
         long seconds = total % 60L;
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+    }
+
+    private static String formatCoinDuration(long ms) {
+        long total = Math.max(0L, (ms + 999L) / 1000L);
+        long minutes = total / 60L;
+        long seconds = total % 60L;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     private static int dp(Context c, int value) {
