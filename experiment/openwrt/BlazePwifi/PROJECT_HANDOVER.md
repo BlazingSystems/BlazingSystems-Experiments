@@ -21,7 +21,7 @@
   - `BlazeRental-v0.5.0-TEST.apk`
   - `BlazeRental-v0.5.0-release-unsigned.apk`
 - A production `BlazeRental.apk` is intentionally absent until the locked v0.4 signer is restored.
-- Locked signing run `37327439782` failed safely because `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` / exact keystore was unavailable; it refused certificate rotation.
+- Locked signing run `37327439782` failed safely because `BLAZERENTAL_TRANSFER_PRIVATE_KEY_PEM` / exact keystore was unavailable; it refused certificate rotation. A second attempt on 2026-10-06 (`run_attempt=2`) reached the same protected restore step and failed for the same reason, again without altering the release or rotating the certificate.
 - Locked production fingerprint remains:
   `C7:7E:4D:A2:2E:92:D2:BE:7D:93:B9:D3:DC:7C:3F:77:56:C0:6A:5A:13:0E:C6:90:5A:DC:C2:AD:4E:A3:56:24`
 - Canonical final release log:
@@ -224,6 +224,27 @@ Required controls include:
 - static asset caching and lightweight portal rendering for constrained devices;
 - audit/security event logging;
 - safe recovery path for the owner.
+
+## v0.5.0 implementation state
+
+Implementation resumed by explicit owner instruction on 2026-10-05.
+
+Current branch: `blazepwifi-v0.5.0-implementation`
+
+Completed in the first v0.5 launcher milestone:
+
+- Version bumped to 0.5.0 / Android versionCode 50000.
+- User-visible Rootless Pixel/Launcher3 branding replaced with BlazeRental.
+- Approved LCM icon added and wired as the APK launcher icon.
+- Added one authoritative `canUseDevice()` gate: unrestricted OR valid paid lease.
+- Added `BlazeLeftPanel` using Launcher3 custom-left content rather than deleting normal workspace pages.
+- Unpaid rental state blocks leaving Blaze content for normal Home.
+- Paid/unrestricted state restores normal Launcher3 chrome/interactions.
+- Notifications gained Clear All support.
+- First setup now offers `USE DEVICE AS IS · NORMAL LAUNCHER` without BlazePwifi enrollment.
+- Legacy Google overlay is disabled so Blaze owns the custom-left gesture surface.
+
+Next: complete v0.5 tests/emulator flow, QR scanner/native admin polish, rich Management Console/portal modules, then exact-SHA build and v0.5.0 release staging/publish.
 
 ## Last validated application candidate
 
