@@ -58,7 +58,7 @@ case "$action" in
       if [ "$expires" -gt "$now" ] 2>/dev/null && [ "$wanted" = "$id" ]; then
         insert=1
       else
-        rm -f "$target_file"
+        rm -f "$target_file" "$BP_TARGET_DIR/$id.progress"
       fi
     fi
     controller="$(bp_controller_json "$id")"
@@ -79,19 +79,32 @@ case "$action" in
     IFS="$(printf '\t')" read -r device mac target_nonce expires wanted kind < "$target_file"
     kind="${kind:-hotspot}"
     [ "$target" = "$target_nonce" ] || bp_fail "coin target mismatch"
-    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_fail "coin window expired"; }
+    [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file" "$BP_TARGET_DIR/$id.progress"; bp_fail "coin window expired"; }
     [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
 
     if [ "$kind" = rental ]; then
       bp_lock || bp_fail "rental accounting busy"
       result="$(bp_rental_apply_coin "$device" "$id" "$nonce" "$target" "$pulses")"
       rc=$?
-      bp_unlock
-      [ "$rc" -eq 0 ] || bp_fail "rental target not found"
+      [ "$rc" -eq 0 ] || { bp_unlock; bp_fail "rental target not found"; }
       state="$(printf '%s' "$result" | cut -f1)"
       lease="$(printf '%s' "$result" | cut -f2)"
+      progress_file="$BP_TARGET_DIR/$id.progress"
+      received_pulses=0
+      [ -r "$progress_file" ] && received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
+      case "$received_pulses" in ''|*[!0-9]*) received_pulses=0;; esac
+      if [ "$state" != duplicate ]; then
+        received_pulses=$((received_pulses+pulses))
+        printf '%s\n' "$received_pulses" > "$progress_file"
+        chmod 600 "$progress_file"
+        bp_durable_sync
+      fi
+      bp_unlock
+      unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
+      case "$unit" in ''|*[!0-9]*) unit=100;; esac
+      received_cents=$((unit*received_pulses))
       [ "$state" = duplicate ] && duplicate=true || duplicate=false
-      body="$(printf '{"ok":true,"duplicate":%s,"rental":true,"lease_until":%s,"target_nonce":"%s"}' "$duplicate" "$lease" "$(bp_json_escape "$target")")"
+      body="$(printf '{"ok":true,"duplicate":%s,"rental":true,"lease_until":%s,"received_pulses":%s,"received_cents":%s,"target_nonce":"%s"}' "$duplicate" "$lease" "$received_pulses" "$received_cents" "$(bp_json_escape "$target")")"
       bp_json "$body"
       exit 0
     fi

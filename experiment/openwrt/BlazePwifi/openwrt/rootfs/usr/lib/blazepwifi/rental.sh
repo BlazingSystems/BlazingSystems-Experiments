@@ -37,9 +37,27 @@ bp_rental_enroll_lookup() {
   awk -F '\t' -v i="$1" '$1==i {print; exit}' "$BP_RENTAL_ENROLL"
 }
 
+bp_rental_enroll_mark_redeemed() {
+  id="$1"; request_nonce="$2"; did="$3"; dsecret="$4"
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v OFS='\t' -v i="$id" -v n="$request_nonce" -v d="$did" -v s="$dsecret" '
+    $1==i {$5=n;$6=d;$7=s}
+    {print}
+  ' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
 bp_rental_enroll_consume() {
   id="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
   awk -F '\t' -v i="$id" '$1!=i {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
+    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+}
+
+bp_rental_enroll_consume_device() {
+  did="$1"
+  awk -F '\t' -v d="$did" '$6==d {found=1} END{exit found?0:1}' "$BP_RENTAL_ENROLL" || return 3
+  tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  awk -F '\t' -v d="$did" '$6!=d {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
     chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
 }
 

@@ -138,15 +138,27 @@ public final class RentalSystemPages {
             }
         });
         final TextView detail = body(launcher, "TIME FINISHED");
+        final TextView coinWindow = body(launcher, "");
+        coinWindow.setVisibility(View.GONE);
+        final TextView coinProgress = body(launcher, "");
+        coinProgress.setVisibility(View.GONE);
         final Button coin = actionButton(launcher, "INSERT COIN");
+        final Button coinDone = smallButton(launcher, "DONE INSERTING");
+        final boolean[] coinOpening = new boolean[]{false};
+        coinDone.setVisibility(View.GONE);
 
         root.addView(state);
         root.addView(timer);
         root.addView(detail);
+        root.addView(coinWindow);
+        root.addView(coinProgress);
         root.addView(coin, buttonMargins(launcher));
+        root.addView(coinDone, rowMargins(launcher));
 
         coin.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
+                if (coinOpening[0]) return;
+                coinOpening[0] = true;
                 coin.setEnabled(false);
                 detail.setText("Waiting for coin controller...");
                 new Thread(new Runnable() {
@@ -154,8 +166,26 @@ public final class RentalSystemPages {
                         final String result = LeaseClient.coinStart(launcher, "");
                         launcher.runOnUiThread(new Runnable() {
                             @Override public void run() {
+                                coinOpening[0] = false;
                                 detail.setText(result);
-                                coin.setEnabled(true);
+                                coin.setEnabled(LeaseClient.coinWindowRemainingMs() <= 0L);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        });
+
+        coinDone.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                coinDone.setEnabled(false);
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final String result = LeaseClient.coinStop(launcher);
+                        launcher.runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                detail.setText(result);
+                                coinDone.setEnabled(true);
                             }
                         });
                     }
@@ -166,12 +196,36 @@ public final class RentalSystemPages {
         final Runnable refresh = new Runnable() {
             @Override public void run() {
                 long remaining = RentalLeaseStore.remainingMs(launcher);
+                long coinRemaining = LeaseClient.coinWindowRemainingMs();
                 boolean paid = remaining > 0L;
+                boolean coinActive = coinRemaining > 0L;
                 if (paid) FloatingTimerService.ensure(launcher);
                 else FloatingTimerService.stop(launcher);
                 setTextIfChanged(timer, formatDuration(remaining));
-                setTextIfChanged(detail, paid ? "RENTAL ACTIVE" : "TIME FINISHED");
-                setTextIfChanged(coin, paid ? "ADD MORE TIME" : "INSERT COIN");
+                setTextIfChanged(detail, coinActive ? "INSERT COIN NOW" :
+                        (paid ? "RENTAL ACTIVE" : "TIME FINISHED"));
+                setTextIfChanged(coin, coinOpening[0] ? "OPENING COIN WINDOW…" :
+                        (coinActive ? "COIN WINDOW OPEN" :
+                        (paid ? "ADD MORE TIME" : "INSERT COIN")));
+                coin.setEnabled(!coinActive && !coinOpening[0]);
+                if (coinActive) {
+                    String vendo = LeaseClient.coinWindowVendo();
+                    int pulses = LeaseClient.coinWindowReceivedPulses();
+                    int cents = LeaseClient.coinWindowReceivedCents();
+                    setTextIfChanged(coinWindow, "Coin window • " + formatCoinDuration(coinRemaining)
+                            + (vendo.length() > 0 ? " • " + vendo : ""));
+                    setTextIfChanged(coinProgress, pulses > 0
+                            ? "Received • " + pulses + " pulse" + (pulses == 1 ? "" : "s")
+                              + " • " + LeaseClient.formatCentavos(cents)
+                            : "Waiting for coin…");
+                    coinWindow.setVisibility(View.VISIBLE);
+                    coinProgress.setVisibility(View.VISIBLE);
+                    coinDone.setVisibility(View.VISIBLE);
+                } else {
+                    coinWindow.setVisibility(View.GONE);
+                    coinProgress.setVisibility(View.GONE);
+                    coinDone.setVisibility(View.GONE);
+                }
                 if (root.getWindowToken() != null) root.postDelayed(this, 1000L);
             }
         };
@@ -710,6 +764,13 @@ public final class RentalSystemPages {
         long minutes = (total % 3600L) / 60L;
         long seconds = total % 60L;
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
+    }
+
+    private static String formatCoinDuration(long ms) {
+        long total = Math.max(0L, (ms + 999L) / 1000L);
+        long minutes = total / 60L;
+        long seconds = total % 60L;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     private static int dp(Context c, int value) {

@@ -55,12 +55,23 @@ case "$action" in
     else
       remaining=0; time_sync=false
     fi
+    coin_expires=0; coin_vendo=""
+    for target_file in "$BP_TARGET_DIR"/*.tsv; do
+      [ -f "$target_file" ] || continue
+      IFS="$(printf '\t')" read -r target_device target_mac target_nonce target_expires target_vendo target_kind < "$target_file"
+      [ "$target_device" = "$device" ] || continue
+      [ "${target_kind:-hotspot}" = hotspot ] || continue
+      if [ "${target_expires:-0}" -gt "$now" ] 2>/dev/null; then
+        coin_expires="$target_expires"; coin_vendo="$target_vendo"
+      fi
+      break
+    done
     vlan="$(bp_cfg hotspot_vlan)"; [ -n "$vlan" ] || vlan=0
     speed="$(bp_cfg default_speed_limit_kbps)"; [ -n "$speed" ] || speed=0
     free_kb="$(awk '/MemAvailable:/ {print $2; found=1} END{if(!found) print 0}' /proc/meminfo 2>/dev/null)"
     load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
     uptime="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
-    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync,\"hotspot_vlan\":$vlan,\"speed_limit_kbps\":$speed,\"mem_available_kb\":${free_kb:-0},\"load1\":\"$(bp_json_escape "${load1:-0}")\",\"uptime_seconds\":${uptime:-0}}"
+    bp_json "{\"ok\":true,\"device\":\"$device\",\"mac\":\"$mac\",\"ip\":\"$(bp_json_escape "$ipaddr")\",\"credit_cents\":$credit,\"remaining_seconds\":$remaining,\"paused\":$paused,\"time_synchronized\":$time_sync,\"server_time\":$now,\"coin_expires\":${coin_expires:-0},\"coin_vendo\":\"$(bp_json_escape "$coin_vendo")\",\"hotspot_vlan\":$vlan,\"speed_limit_kbps\":$speed,\"mem_available_kb\":${free_kb:-0},\"load1\":\"$(bp_json_escape "${load1:-0}")\",\"uptime_seconds\":${uptime:-0}}"
     ;;
 
   coin_start)
@@ -89,7 +100,7 @@ case "$action" in
     mv "$target_tmp" "$target_file"
     bp_durable_sync
     bp_unlock
-    bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"expires\":$expires}"
+    bp_json "{\"ok\":true,\"vendo\":\"$(bp_json_escape "$vendo")\",\"target_nonce\":\"$target_nonce\",\"server_time\":$now,\"expires\":$expires}"
     ;;
 
   coin_stop)
@@ -101,7 +112,7 @@ case "$action" in
     done
     [ "$removed" = 1 ] && bp_durable_sync
     bp_unlock
-    bp_json '{"ok":true}'
+    bp_json "$(printf '{"ok":true,"server_time":%s}' "$(bp_now)")"
     ;;
 
   connect)
