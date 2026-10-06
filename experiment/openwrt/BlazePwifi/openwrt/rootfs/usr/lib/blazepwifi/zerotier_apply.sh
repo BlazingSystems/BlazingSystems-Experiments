@@ -96,7 +96,7 @@ bp_zt_configure_uci() {
     uci set zerotier.global.enabled='1'
     uci set zerotier.blazepwifi=network
     uci set "zerotier.blazepwifi.id=$network_id"
-    uci set zerotier.blazepwifi.allow_managed='1'
+    uci set zerotier.blazepwifi.allow_managed='0'
     uci set zerotier.blazepwifi.allow_global='0'
     uci set zerotier.blazepwifi.allow_default='0'
     uci set zerotier.blazepwifi.allow_dns='0'
@@ -134,9 +134,17 @@ bp_zt_device() {
   printf '%s' "$dev"
 }
 
-bp_zt_ipv4() {
-  dev="$1"
-  ip -4 addr show dev "$dev" 2>/dev/null | awk '/inet / {sub(/\/.*/,"",$2); print $2; exit}'
+bp_zt_assigned_ipv4_cidr() {
+  zt_network_id="$1"
+  zt_line="$(zerotier-cli listnetworks 2>/dev/null | grep -i "$zt_network_id" | head -n1 || true)"
+  zt_cidr="$(printf '%s\n' "$zt_line" | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}' | head -n1 || true)"
+  if [ -z "$zt_cidr" ]; then
+    zt_plain="$(zerotier-cli get "$zt_network_id" ip4 2>/dev/null | tail -n1 | tr -d '\r' | awk '{print $NF}')"
+    if bp_remote_ipv4_host "$zt_plain"; then zt_cidr="$zt_plain/32"; fi
+  fi
+  [ -n "$zt_cidr" ] || return 1
+  bp_remote_ipv4_cidr_valid "$zt_cidr" || return 1
+  printf '%s' "$zt_cidr"
 }
 
 bp_zt_prepare() {
@@ -145,14 +153,25 @@ bp_zt_prepare() {
   network_id="$(bp_remote_get zt_network_id)"
   bp_zt_network_id_valid "$network_id" || return 12
 
+  layout="$(bp_zt_layout)"
+  [ "$layout" = modern ] || {
+    bp_zt_write legacy_unsupported "$network_id" "" "" "" "" 0 "ZeroTier <=1.14.0 cannot safely pre-disable managed routes on OpenWrt" "$layout" 0
+    return 14
+  }
   layout="$(bp_zt_configure_uci "$network_id")" || return $?
   bp_zt_service_restart || return 13
   sleep "${BP_ZT_SETTLE_SECONDS:-2}"
+  # Defense in depth: even though modern UCI was written with all route/DNS
+  # permissions disabled, enforce the client-side settings again via CLI.
+  zerotier-cli set "$network_id" allowManaged false >/dev/null 2>&1 || true
+  zerotier-cli set "$network_id" allowGlobal false >/dev/null 2>&1 || true
+  zerotier-cli set "$network_id" allowDefault false >/dev/null 2>&1 || true
+  zerotier-cli set "$network_id" allowDNS false >/dev/null 2>&1 || true
 
   node_id="$(bp_zt_node_id)"
   status="$(bp_zt_network_status "$network_id")"
   device="$(bp_zt_device "$network_id" 2>/dev/null || true)"
-  ipv4=""; [ -z "$device" ] || ipv4="$(bp_zt_ipv4 "$device")"
+  ipv4="$(bp_zt_assigned_ipv4_cidr "$network_id" 2>/dev/null || true)"
 
   state=joining; reboot_required=0; error=""
   case "$status" in
@@ -180,10 +199,14 @@ bp_zt_refresh() {
   [ -n "$network_id" ] || network_id="$(bp_remote_get zt_network_id)"
   bp_zt_network_id_valid "$network_id" || return 1
   layout="$(bp_zt_layout)"
+  if [ "$layout" != modern ]; then
+    bp_zt_write legacy_unsupported "$network_id" "$(bp_zt_node_id)" "" "" "" 0 "ZeroTier <=1.14.0 live activation is safety-disabled" "$layout" 0
+    return 0
+  fi
   node_id="$(bp_zt_node_id)"
   status="$(bp_zt_network_status "$network_id")"
   device="$(bp_zt_device "$network_id" 2>/dev/null || true)"
-  ipv4=""; [ -z "$device" ] || ipv4="$(bp_zt_ipv4 "$device")"
+  ipv4="$(bp_zt_assigned_ipv4_cidr "$network_id" 2>/dev/null || true)"
   listener="$(bp_zt_get listener)"
   applied_at="$(bp_zt_get applied_at 0)"
   prior="$(bp_zt_get state staged)"
