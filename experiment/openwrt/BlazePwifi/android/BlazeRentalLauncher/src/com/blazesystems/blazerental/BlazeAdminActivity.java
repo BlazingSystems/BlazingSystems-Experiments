@@ -29,6 +29,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONObject;
+import com.android.launcher3.R;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
