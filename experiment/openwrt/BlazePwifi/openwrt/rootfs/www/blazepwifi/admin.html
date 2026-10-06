@@ -27,6 +27,7 @@
 
   <div class="nav-label">SERVICES</div>
   <button class="nav-btn" data-page="vouchers"><span class="nav-dot"></span>Vouchers & Rates</button>
+  <button class="nav-btn" data-page="members"><span class="nav-dot"></span>Pisonet Members</button>
   <button class="nav-btn" data-page="rentals"><span class="nav-dot"></span>Rental Devices</button>
   <button class="nav-btn" data-page="controllers"><span class="nav-dot"></span>Coin Controllers</button>
   <button class="nav-btn" data-page="portal"><span class="nav-dot"></span>Portal Designer</button>
@@ -139,6 +140,30 @@
     <div class="card"><div class="card-body"><div class="card-title">Voucher designer</div><p class="muted">Batch generation, printable layouts, QR/barcode, logo, expiry, speed profile and CSV/PDF/HTML/XLSX-oriented export belong here.</p></div></div></div>
   </section>
 
+  <section id="page-members" class="section"><div class="page-head"><div><h2>Pisonet Members</h2><p>Central member accounts and authoritative banked time for BlazePisonet SoftTimer stations.</p></div><div class="toolbar"><span id="memberRevision" class="badge">Central revision —</span><button class="btn" onclick="BlazeMembers.load()">Refresh</button></div></div>
+    <div class="notice"><b>Authority model:</b> when SoftTimer is integrated with BlazePwifi, member account state and banked time are owned here. SoftTimer keeps only a revisioned local cache and fails closed on offline balance mutations.</div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="card"><div class="card-body"><div class="card-title">Create member</div>
+        <div class="form-grid">
+          <label><span class="field-label">Username</span><input id="memberCreateUser" class="field" maxlength="32" placeholder="member01"></label>
+          <label><span class="field-label">Display name / label</span><input id="memberCreateLabel" class="field" maxlength="96" placeholder="Optional"></label>
+          <label class="span2"><span class="field-label">Initial password</span><input id="memberCreatePassword" class="field" type="password" autocomplete="new-password" placeholder="At least 4 characters"></label>
+        </div>
+        <button class="btn primary" style="margin-top:12px" onclick="BlazeMembers.create()">Create member</button>
+      </div></div>
+      <div class="card"><div class="card-body"><div class="card-title">Transfer banked time</div>
+        <div class="form-grid">
+          <label><span class="field-label">From member</span><input id="memberTransferFrom" class="field"></label>
+          <label><span class="field-label">To member</span><input id="memberTransferTo" class="field"></label>
+          <label><span class="field-label">Minutes</span><input id="memberTransferMinutes" class="field" type="number" min="1" max="525600" value="30"></label>
+        </div>
+        <button class="btn" style="margin-top:12px" onclick="BlazeMembers.transfer()">Transfer time</button>
+      </div></div>
+    </div>
+    <div id="memberCards" class="grid two" style="margin-top:16px"><div class="card empty">Loading Pisonet members…</div></div>
+    <div class="card" style="margin-top:16px"><div class="card-body"><div class="device-top"><div><div class="card-title">Recent member events</div><div class="small muted">Password contents are never logged or returned.</div></div><button class="btn sm" onclick="BlazeMembers.loadEvents('')">All events</button></div><pre id="memberEvents" class="console-output">Loading…</pre></div></div>
+  </section>
+
   <section id="page-rentals" class="section"><div class="page-head"><div><h2>Rental Devices</h2><p>Enroll phones, control apps, launcher mode, time and security.</p></div><div class="toolbar"><button class="btn" onclick="BlazeRental.load()">Refresh</button><button class="btn primary" onclick="BlazeRental.openAdd()">+ Add device</button></div></div>
     <div class="card"><div class="card-body"><div class="form-grid"><label><span class="field-label">Seconds per coin pulse</span><input id="pulseSeconds" class="field" type="number" min="1" max="86400" value="600"></label><div style="align-self:end"><button class="btn" onclick="BlazeRental.savePulse()">Save coin rate</button></div></div></div></div>
     <div class="card" style="margin-top:16px"><div class="card-body"><div class="card-title">BlazeRental Update Manager</div><p class="muted">Publish the exact same-signer APK and an optional higher-version rescue APK. Phones still verify package identity, signing certificate and SHA-256 before installation.</p>
@@ -226,5 +251,5 @@
 <div id="addRentalModal" class="modal-backdrop hidden"><div class="modal"><div class="modal-head"><b>Add Rental Device</b><button class="btn ghost sm" onclick="BlazeRental.closeAdd()">✕</button></div><div class="modal-body"><label class="field-label">Phone label</label><input id="addRentalLabel" class="field" value="Rental phone"><label class="field-label" style="margin-top:12px">BlazePwifi server URL</label><input id="addRentalServer" class="field" placeholder="https://192.168.1.1:8443"><div class="grid two" style="margin-top:14px"><button class="btn" onclick="BlazeRental.generateBindingQr()">Bind existing BlazeRental</button><button class="btn primary" onclick="BlazeRental.generateProvisioningQr()">Provision factory-reset phone</button></div><div class="notice" style="margin-top:12px"><b>Binding QR</b> is for a manually installed BlazeRental APK and provides lower anti-bypass protection. <b>Device Owner QR</b> is for Android Setup Wizard on a new/factory-reset phone and uses the published signed BlazeRental APK.</div><div id="qrResult" class="hidden"><div id="qrBox" class="qr-box"></div><div id="qrNotice" class="notice"></div><div id="qrMeta" class="code-box mono small"></div><div id="qrToken" class="code-box mono small"></div></div></div></div></div>
 <div id="toastHost"></div>
 <script src="/vendor/qrcode/qrcode.js"></script>
-<script src="/admin/core.js"></script><script src="/admin/rental.js"></script><script src="/admin/controllers.js"></script><script src="/admin/console-v05.js"></script>
+<script src="/admin/core.js"></script><script src="/admin/members.js"></script><script src="/admin/rental.js"></script><script src="/admin/controllers.js"></script><script src="/admin/console-v05.js"></script>
 </body></html>
