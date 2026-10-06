@@ -79,8 +79,9 @@ public final class LeaseClient {
             if (base.length() == 0) return false;
             String deviceSecret = RentalLeaseStore.deviceSecret(context);
             String enrollment = RentalLeaseStore.enrollment(context);
-            String nonce = Hmac.nonce();
             boolean enrolling = deviceSecret.length() == 0;
+            String nonce = enrolling
+                    ? RentalLeaseStore.enrollmentRequestNonce(context) : Hmac.nonce();
             String action = enrolling ? "enroll" : "status";
             String authSecret = enrolling ? enrollment : deviceSecret;
             if (authSecret.length() == 0) return false;
