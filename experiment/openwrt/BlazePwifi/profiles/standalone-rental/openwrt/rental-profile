@@ -26,6 +26,12 @@ audit_json(){
   done
   printf ']'
 }
+lan_ip(){
+  ip="$(uci -q get network.lan.ipaddr || true)"
+  [ -n "$ip" ] || ip="$(ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./ {sub(/\/.*/,"",$2);print $2;exit}')"
+  [ -n "$ip" ] || ip="router-ip"
+  printf '%s' "$ip"
+}
 
 case "$action" in
   status)
@@ -34,18 +40,24 @@ case "$action" in
     model="$(cat /tmp/sysinfo/model 2>/dev/null || cat /proc/device-tree/model 2>/dev/null | tr -d '\000' || echo unknown)"
     release="$(. /etc/openwrt_release 2>/dev/null; printf '%s' "${DISTRIB_RELEASE:-unknown}")"
     edition="$(uci -q get blazepwifi.main.edition || echo rental-standalone)"
-    version="$(uci -q get blazepwifi.main.edition_version || echo 0.5.0-rental-rc.1)"
+    version="$(uci -q get blazepwifi.main.edition_version || echo 0.5.0-rental-rc.2)"
     upgrade="$(uci -q get blazepwifi.main.full_upgrade_available || echo 1)"
     free_kb="$(awk '/MemAvailable:/ {print $2; found=1} END{if(!found) print 0}' /proc/meminfo)"
     uptime="$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)"
-    bp_json "$(printf '{"ok":true,"edition":"%s","version":"%s","full_upgrade_available":%s,"board":"%s","model":"%s","openwrt":"%s","mem_available_kb":%s,"uptime_seconds":%s}'       "$(bp_json_escape "$edition")" "$(bp_json_escape "$version")" "${upgrade:-1}" "$(bp_json_escape "$board")" "$(bp_json_escape "$model")" "$(bp_json_escape "$release")" "${free_kb:-0}" "${uptime:-0}")"
+    bp_json "$(printf '{"ok":true,"edition":"%s","version":"%s","full_upgrade_available":%s,"board":"%s","model":"%s","openwrt":"%s","mem_available_kb":%s,"uptime_seconds":%s}' \
+      "$(bp_json_escape "$edition")" "$(bp_json_escape "$version")" "${upgrade:-1}" "$(bp_json_escape "$board")" "$(bp_json_escape "$model")" "$(bp_json_escape "$release")" "${free_kb:-0}" "${uptime:-0}")"
+    ;;
+  controller_binding)
+    require_role admin
+    key="$(uci -q get blazepwifi.main.vendo_key || true)"
+    [ -n "$key" ] || bp_fail "controller binding key unavailable"
+    ip="$(lan_ip)"
+    bp_json "$(printf '{"ok":true,"server":"http://%s:4455","binding_key":"%s"}' "$(bp_json_escape "$ip")" "$(bp_json_escape "$key")")"
     ;;
   audit_list)
     require_role admin
     body="$(audit_json "$(bp_param limit)")"
     bp_json "$(printf '{"ok":true,"audit":%s}' "$body")"
     ;;
-  *)
-    bp_fail "unknown profile action"
-    ;;
+  *) bp_fail "unknown profile action" ;;
 esac

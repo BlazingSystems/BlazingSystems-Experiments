@@ -1,57 +1,47 @@
 # BlazePwifi Standalone Rental Server
 
-Release line: **v0.5.0-rental-rc.1**
+Current release line: **v0.5.2-rental-rc.1**
 
-This edition installs the **full BlazePwifi v0.5 software payload** on OpenWrt, but activates and exposes only the parts required for managed Android rentals. Hotspot/captive-portal features are not deleted; they remain dormant so the device can later be converted to the full BlazePwifi server by software upgrade.
+This edition follows the BlazePwifi **0.5.2 implementation** branch. OpenWrt installs the complete BlazePwifi software payload but activates/exposes only rental-related management until the operator explicitly converts the device to full BlazePwifi.
 
-## Targets
+## Releases
 
-- Notion R281 running OpenWrt/EasyMode (24.10.x baseline)
-- Ruijie RG-EW1200G Pro v1.1 running OpenWrt 25.12.x
-- other OpenWrt 24.10/25.12 devices with usable LAN/Wi-Fi and sufficient writable storage
-- ESP8266 and ESP32 as true standalone rental servers, with a convertible multi-coinslot-controller role
+### [BlazePwifi Standalone Rental Server v0.5.2-rental-rc.1 — Latest](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental-rc.1)
 
-## OpenWrt standalone edition
+Primary existing-router deployment:
 
-The OpenWrt edition keeps the full v0.5 runtime, libraries, admin APIs and web assets installed. Only these listeners are activated initially:
+- **[Windows OneClick Installer](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.2-rental-rc.1/BlazePwifi-Rental-Standalone-Windows-OneClick-v0.5.2-rental-rc.1.zip)**
 
-- Rental/Android API: `http://LAN_IP:8090/cgi-bin/rental`
-- Rental management: `https://LAN_IP:8444/`
-- Controller API: `http://LAN_IP:4455/cgi-bin/vendo`
+This release fixes the R281 deployment path found during physical testing:
 
-The hotspot nftables gate, captive portal, voucher sales and full general-purpose admin navigation are **not activated** in Rental Standalone mode.
+- detects `notion,r281` immediately after SSH;
+- automatically runs the dedicated R281/EasyMode installer;
+- uses only BusyBox-compatible archive extraction;
+- does not use GNU `tar` strip-components;
+- preserves the successful R281 assumptions: OpenWrt 24.10.x, `/www`, `/cgi-bin`, HTTPS :443, EasyMode-owned networking.
 
-The rental management console exposes only rental-related pages: dashboard, enrollment, rental devices, lease controls, launcher policy, installed-app inventory, allowed/hidden apps, device admin settings, timer/quick-control policy, coinslot controllers, rental events, security audit, server diagnostics and the full-upgrade status.
+Older 0.5.0 Rental RCs remain in [the release archive](./releases/) for history only.
 
-## Upgrade to full BlazePwifi
+## OpenWrt URL model
 
-The complete full-server files are already installed. Running:
+Existing router/basic/advanced administration remains where the router already provides it. Rental Standalone adds:
 
-```sh
-/usr/sbin/blazepwifi-rental-upgrade --full
-```
+- `https://LocalIP/rental/` — rental administration
+- `http://LocalIP/cgi-bin/rental` — BlazeRental application API
+- `http://LocalIP:4455/cgi-bin/vendo` — authenticated remote ESP coinslot API
 
-backs up configuration, enables the normal BlazePwifi portal/admin/controller listeners, enables the BlazePwifi core and activates the hotspot gate. This is an explicit conversion because it changes network/firewall behavior.
+Normal Rental Standalone installation does **not** modify OpenWrt `network`, `wireless`, or `firewall` UCI packages.
 
-## ESP standalone edition
+## Credit model
 
-ESP8266/ESP32 do not pretend to run OpenWrt. Their firmware implements a protocol-compatible standalone rental server directly on the MCU:
+There is no customer network captive portal. Rental phones remain on the same reachable network as the server. Credit can be added manually, by a supported local coinslot, or by authenticated remote ESP8266/ESP32 coin interfaces.
 
-- AP + optional STA
-- local rental management page
-- one-time device enrollment
-- HMAC-authenticated BlazeRental status
-- v3 signed rental policy
-- manual lease add/set/expire/revoke
-- app allow/hide policy and preferred controller
-- persistent LittleFS state
-- local coin inputs
-- role switch to **MultiCoin Controller**, where one board exposes multiple logical coin controllers to a larger BlazePwifi server
+## ESP modes
 
-ESP firmware is **not upgradable to full BlazePwifi**. It is convertible only between Standalone Rental Server and MultiCoin Controller roles.
+ESP8266 and ESP32 use one admin console at `http://assigned-ip/` and support:
 
-## Safety
+1. Rental Server
+2. Rental Server + one Local Coin Slot
+3. Remote Coin Slot Interface
 
-OpenWrt standalone installation does not modify `network`, `wireless` or `firewall` UCI packages. It only creates BlazePwifi's own configuration and additive uHTTPd listeners. Full conversion is the point where firewall/hotspot behavior is deliberately activated.
-
-This RC is CI/build validated. Physical boot, flash-space, Wi-Fi, GPIO, coinslot voltage isolation and sustained-load testing are still required on the exact hardware revision.
+Rental-server modes can bind additional remote ESP coin interfaces.

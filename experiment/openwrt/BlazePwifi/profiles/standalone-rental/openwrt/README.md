@@ -1,17 +1,33 @@
-# OpenWrt Rental Standalone
+# OpenWrt Rental Standalone — v0.5.2-rental-rc.1
 
-Use `install.sh --target=auto` after extracting the release bundle.
+The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
-Recognized target hints: `r281`, `ew1200g-pro`, `generic`, and `auto` (default).
+After installation:
 
-The installer supports OpenWrt 24.10.x and 25.12.x and detects `opkg` vs `apk`.
+- existing router/basic UI stays where the device already provides it;
+- BlazePwifi Rental management is added at `https://LocalIP/rental/`;
+- BlazeRental phones use `http://LocalIP`;
+- authenticated remote ESP coinslot interfaces use `http://LocalIP:4455/cgi-bin/vendo`.
 
-It copies the complete BlazePwifi rootfs payload but does **not** run the full BlazePwifi uci-defaults script and does **not** start the hotspot core. A separate rental-only document root is created so normal browsing does not expose hotspot/media/general management consoles.
+## R281 / EasyMode path
 
-To convert the installed software to full BlazePwifi later:
+When the Windows OneClick installer detects `/tmp/sysinfo/board_name = notion,r281`, it automatically runs `install-r281.sh`.
+
+That R281-specific entry verifies:
+
+- OpenWrt 24.10.x;
+- uHTTPd home `/www`;
+- CGI prefix `/cgi-bin`;
+- existing HTTPS :443.
+
+The Windows deployer extracts the bundle with plain BusyBox-supported `tar -xzf ... -C ...` and then enters the archive's single top-level directory. No GNU-only archive options are used.
+
+## Full conversion
+
+The complete BlazePwifi payload remains installed but the hotspot core stays disabled. Conversion to full BlazePwifi is explicit:
 
 ```sh
 /usr/sbin/blazepwifi-rental-upgrade --full
 ```
 
-Backups are written under `/root/blazepwifi-rental-standalone-backups/`.
+Only that conversion step may activate BlazePwifi hotspot/firewall ownership.
