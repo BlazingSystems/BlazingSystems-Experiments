@@ -1,3 +1,5 @@
+using Microsoft.Win32;
+
 namespace BlazePisonet.SoftTimer;
 
 public sealed class ActiveTimerForm : Form
