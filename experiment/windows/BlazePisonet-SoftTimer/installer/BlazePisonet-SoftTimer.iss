@@ -69,6 +69,66 @@ begin
     DeleteFile(FileName);
 end;
 
+procedure DeleteScheduledTask(const TaskName: string);
+var
+  Service, RootFolder: Variant;
+begin
+  try
+    Service := CreateOleObject('Schedule.Service');
+    Service.Connect();
+    RootFolder := Service.GetFolder('\');
+    try
+      RootFolder.DeleteTask(TaskName, 0);
+      Log('Deleted scheduled task: ' + TaskName);
+    except
+      Log('Scheduled task did not exist or could not be deleted: ' + TaskName);
+    end;
+  except
+    Log('Task Scheduler COM unavailable while deleting ' + TaskName);
+  end;
+end;
+
+procedure CreateLogonTask(const TaskName, Description, ExePath: string);
+var
+  Service, RootFolder, Definition, Trigger, Action, Principal: Variant;
+  UserName: string;
+begin
+  UserName := ExpandConstant('{username}');
+  Service := CreateOleObject('Schedule.Service');
+  Service.Connect();
+  RootFolder := Service.GetFolder('\');
+
+  try
+    RootFolder.DeleteTask(TaskName, 0);
+  except
+  end;
+
+  Definition := Service.NewTask(0);
+  Definition.RegistrationInfo.Description := Description;
+  Definition.Settings.Enabled := True;
+  Definition.Settings.StartWhenAvailable := True;
+  Definition.Settings.DisallowStartIfOnBatteries := False;
+  Definition.Settings.StopIfGoingOnBatteries := False;
+  Definition.Settings.ExecutionTimeLimit := 'PT0S';
+  Definition.Settings.MultipleInstances := 2;
+
+  Principal := Definition.Principal;
+  Principal.UserId := UserName;
+  Principal.LogonType := 3;
+  Principal.RunLevel := 1;
+
+  Trigger := Definition.Triggers.Create(9);
+  Trigger.Enabled := True;
+  Trigger.UserId := UserName;
+
+  Action := Definition.Actions.Create(0);
+  Action.Path := ExePath;
+  Action.WorkingDirectory := ExtractFileDir(ExePath);
+
+  RootFolder.RegisterTaskDefinition(TaskName, Definition, 6, UserName, '', 3, '');
+  Log('Created interactive highest-privilege logon task: ' + TaskName + ' for ' + UserName);
+end;
+
 procedure ConfigureSystem;
 var
   AppExe, WatchdogExe, DataDir: string;
@@ -79,15 +139,18 @@ begin
 
   DeleteIfExists(DataDir + '\maintenance.until');
 
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Delete /TN "BlazePisonet SoftTimer" /F');
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Delete /TN "BlazePisonet SoftTimer Watchdog" /F');
-
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Create /TN "BlazePisonet SoftTimer" /SC ONLOGON /TR "' + AppExe + '" /RL HIGHEST /F');
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Create /TN "BlazePisonet SoftTimer Watchdog" /SC ONLOGON /TR "' + WatchdogExe + '" /RL HIGHEST /F');
+  try
+    CreateLogonTask(
+      'BlazePisonet SoftTimer',
+      'Starts BlazePisonet SoftTimer for the current Pisonet Windows account.',
+      AppExe);
+    CreateLogonTask(
+      'BlazePisonet SoftTimer Watchdog',
+      'Keeps BlazePisonet SoftTimer available after an unexpected process exit.',
+      WatchdogExe);
+  except
+    Log('Could not create one or more SoftTimer startup tasks.');
+  end;
 
   RunHidden(ExpandConstant('{sys}\netsh.exe'),
     'advfirewall firewall delete rule name="BlazePisonet SoftTimer Centralized"');
@@ -103,10 +166,8 @@ begin
   ForceDirectories(DataDir);
   SaveStringToFile(DataDir + '\maintenance.until', '4102444800', False);
 
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Delete /TN "BlazePisonet SoftTimer" /F');
-  RunHidden(ExpandConstant('{sys}\schtasks.exe'),
-    '/Delete /TN "BlazePisonet SoftTimer Watchdog" /F');
+  DeleteScheduledTask('BlazePisonet SoftTimer');
+  DeleteScheduledTask('BlazePisonet SoftTimer Watchdog');
   RunHidden(ExpandConstant('{sys}\netsh.exe'),
     'advfirewall firewall delete rule name="BlazePisonet SoftTimer Centralized"');
   RunHidden(ExpandConstant('{sys}\taskkill.exe'),
