@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -eux
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
 for f in "$ROOT/openwrt/install.sh" "$ROOT/openwrt/upgrade-to-full.sh" "$ROOT/openwrt/uninstall.sh" "$ROOT/openwrt/install-r281.sh" "$ROOT/openwrt/install-ew1200g-pro.sh" "$ROOT/openwrt/install-generic-openwrt.sh" "$ROOT/openwrt/rental-profile"; do
