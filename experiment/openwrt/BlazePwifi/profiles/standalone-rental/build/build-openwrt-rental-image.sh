@@ -99,7 +99,7 @@ esac
 
 cat > "$OUT/BUILD-MANIFEST.txt" <<EOF
 Edition: BlazePwifi Rental Standalone
-Edition version: 0.5.2-rental-rc.2
+Edition version: 0.5.2-rental
 OpenWrt version: $VER
 Target: $TARGET
 OpenWrt target: $SUB

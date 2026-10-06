@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental-rc.2
+Version: v0.5.2-rental
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -27,3 +27,12 @@ Fresh-install Rental console credentials:
   Password: admin
 
 Existing admin accounts are preserved on upgrade. Change the default password later in Rental settings.
+
+
+PASSWORD RESET:
+  Double-click Reset-BlazePwifi-Admin-Password.bat.
+  It works with Standalone Rental and full BlazePwifi.
+  It resets only to:
+    Username: admin
+    Password: admin
+  No manual file upload to the router is required.

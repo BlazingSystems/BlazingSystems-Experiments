@@ -1,20 +1,22 @@
 # Standalone Rental Releases
 
-## Latest
+## Latest stable
 
-### v0.5.2-rental-rc.2
+### v0.5.2-rental
 
-Login/bootstrap correction over rc.1:
+Finalized Standalone Rental release.
 
-- fresh OpenWrt installs use `admin / admin`;
-- password can be changed later;
-- robust uHTTPd POST-body parsing using `CONTENT_LENGTH`;
-- BusyBox-compatible `flock -n` retry locking for R281;
-- R281 BusyBox-specific deployment from rc.1 retained;
-- first-SSH GUI host-key handling retained.
+Default fresh-install login:
 
-## Older
+```text
+admin / admin
+```
 
+Windows packages include a one-click administrator reset BAT that works with both Standalone Rental and full BlazePwifi and always restores `admin / admin`.
+
+## Previous release candidates
+
+- v0.5.2-rental-rc.2 — R281 auth/login/BusyBox fixes.
 - v0.5.2-rental-rc.1 — R281 BusyBox installer fix.
 - v0.5.0-rental-rc.3 — first-SSH host-key fix.
 - v0.5.0-rental-rc.2 — superseded.

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-PROFILE_VERSION="0.5.2-rental-rc.2"
+PROFILE_VERSION="0.5.2-rental"
 TARGET="auto"
 FORCE=0
 PREINSTALLED=0
@@ -182,9 +182,29 @@ BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh BP_
 BOOT=""
 if ! grep -q "^admin$(printf '\t')" /etc/blazepwifi/state/admin-users.tsv 2>/dev/null; then
   BOOT="admin"
-  BP_AUTH_ALLOW_WEAK_BOOTSTRAP=1 BP_LIB=/usr/lib/blazepwifi/common.sh \
-    /usr/lib/blazepwifi/auth.sh --set-password admin admin "$BOOT" || die "Unable to create default administrator."
-  printf '%s\n' "$BOOT" > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
+  BP_LIB=/usr/lib/blazepwifi/common.sh BP_AUTH_LIB=/usr/lib/blazepwifi/auth.sh \
+  sh -c '
+    set -eu
+    . "$BP_LIB"
+    . "$BP_AUTH_LIB"
+    bp_auth_init
+    salt="$(bp_auth_random_hex 8 2>/dev/null || true)"
+    [ -n "$salt" ] || salt="$(printf "%s|%s|admin-default" "$(date +%s)" "$$" | bp_sha256 | cut -c1-16)"
+    rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"
+    case "$rounds" in ""|*[!0-9]*) rounds=2048;; esac
+    [ "$rounds" -ge 1 ] 2>/dev/null || rounds=2048
+    hash="$(bp_auth_sha256i admin "$salt" "$rounds")"
+    tmp="$BP_STATE/.admin-users.default.$$"
+    awk -F "\t" '"'"'$1!="admin"{print}'"'"' "$BP_ADMIN_USERS" > "$tmp"
+    printf "admin\tadmin\tsha256i\t%s\t%s\t%s\t0\n" "$salt" "$hash" "$rounds" >> "$tmp"
+    chmod 600 "$tmp"
+    mv "$tmp" "$BP_ADMIN_USERS"
+    : > "$BP_ADMIN_SESSIONS"
+    : > "$BP_AUTH_FAILURES"
+    chmod 600 "$BP_ADMIN_SESSIONS" "$BP_AUTH_FAILURES"
+    bp_auth_verify_password admin admin
+  ' || die "Unable to create verified default administrator."
+  printf 'admin\n' > /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
   chmod 600 /etc/blazepwifi/INITIAL_ADMIN_PASSWORD
 fi
 
