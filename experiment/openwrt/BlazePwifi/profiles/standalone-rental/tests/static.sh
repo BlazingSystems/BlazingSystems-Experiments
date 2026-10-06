@@ -165,7 +165,7 @@ grep -q '!server.startsWith("https://")' "$SRC/BlazeProvisioningContract.java"
 grep -q 'HttpsURLConnection' "$SRC/LeaseClient.java"
 grep -q 'BlazePwifi TLS certificate pin mismatch' "$SRC/LeaseClient.java"
 grep -q 'LeaseClient.post(context, base, body)' "$SRC/RentalPolicyClient.java"
-grep -q 'public static boolean acceptProvisioningExtras' "$SRC/RentalLeaseStore.java"
+grep -q 'public static synchronized boolean acceptProvisioningExtras' "$SRC/RentalLeaseStore.java"
 grep -q 'private static boolean saveEnrollment' "$SRC/RentalLeaseStore.java"
 grep -q 'if (saved) AndroidRentalPolicyRepository.clear' "$SRC/RentalLeaseStore.java"
 test "$(grep -c '.remove("server_cert_sha256")' "$SRC/RentalLeaseStore.java")" -eq 1
