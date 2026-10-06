@@ -43,3 +43,8 @@ Still a prerelease. Stable promotion requires physical Setup Wizard validation o
 ## RC3 target scope
 
 Device Provisioning QR in this candidate is **OpenWrt-server only**. ESP8266/ESP32 Rental Server mode keeps manual one-time token enrollment and does not claim QR provisioning parity in RC3. This limitation is encoded in the release manifest.
+
+
+## TEST signer lifecycle
+
+The RC3 provisioning APK uses a release-build TEST signing identity. It is intended for disposable physical Setup Wizard validation. In-place upgrades between provisioning RCs are not guaranteed; a factory reset may be required when testing a later RC. Stable promotion still requires production signing continuity.

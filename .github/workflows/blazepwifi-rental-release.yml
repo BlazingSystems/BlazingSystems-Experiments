@@ -539,6 +539,9 @@ jobs:
               version_code:50204,
               android_12_integrated_provisioning:true,
               physical_setup_wizard_validation_pending:true,
+              test_signing_identity_ephemeral_per_release_build:true,
+              in_place_upgrade_between_test_rcs_not_guaranteed:true,
+              factory_reset_may_be_required_between_provisioning_rcs:true,
               server_scope:"openwrt_only_in_rc3",
               esp_server_device_provisioning:false
             },
