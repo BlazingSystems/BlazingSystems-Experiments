@@ -151,6 +151,7 @@ bp_remote_wireguard_apply 192.168.1.10
 [ "$(bp_remote_runtime_get wg_listener)" = '10.20.0.2:8443' ]
 [ "$(bp_remote_runtime_get public_key)" = "$PUB" ]
 [ "$(bp_remote_runtime_get last_handshake)" -gt 0 ]
+[ "$(stat -c '%a' "$BP_REMOTE_NETWORK_CONFIG")" = 600 ]
 [ ! -e "$BP_REMOTE_PENDING" ]
 [ -e "$ADMIN_STATE" ]
 grep -q 'network.blazewg' "$UCI_LOG"
