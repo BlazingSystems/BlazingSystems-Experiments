@@ -166,6 +166,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $zip="BlazePisonet-SoftTimer-v$env:VERSION-win-x64.zip"
+          $releaseTarget=(git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (gh release view $env:TAG *> $null) {
             gh release upload $env:TAG $zip SHA256SUMS --clobber
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
