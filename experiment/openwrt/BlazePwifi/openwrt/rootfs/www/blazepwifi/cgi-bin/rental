@@ -580,7 +580,11 @@ esac
       reused=false
     fi
     bp_unlock
-    bp_json "$(printf '{"ok":true,"reused":%s,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s}' "$reused" "$did" "$dsecret" "$((now*1000))" "$((now*1000))")"
+    server_ms=$((now*1000))
+    lease_ms=$server_ms
+    enroll_canonical="enroll_response|$nonce|$did|$dsecret|$server_ms|$lease_ms|$reused"
+    enroll_sig="$(bp_rental_hmac "$token" "$enroll_canonical")" || bp_fail "rental crypto unavailable"
+    bp_json "$(printf '{"ok":true,"reused":%s,"device_id":"%s","device_secret":"%s","server_time_ms":%s,"lease_until_ms":%s,"enroll_sig":"%s"}' "$reused" "$did" "$dsecret" "$server_ms" "$lease_ms" "$enroll_sig")"
     ;;
   status|policy_get)
     did="$(bp_param device_id)"
