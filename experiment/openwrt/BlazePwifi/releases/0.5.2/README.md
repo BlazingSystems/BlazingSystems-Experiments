@@ -85,6 +85,33 @@ Required gates include:
 - required Orange Pi builds/simulations;
 - final v0.5.2 candidate gate.
 
-## Signing state
+## Production signing
 
-This first v0.5.2 publication is intentionally a **prerelease** and does not claim production Android signing. A new permanent production signing lineage, with proper external recovery storage, will be handled only after the unsigned/test v0.5.2 release is frozen and verified.
+BlazeRental v0.5.2 establishes the new permanent **BlazeRental Production Lineage 2** certificate.
+
+Fingerprint:
+
+`1A:18:D5:8E:1F:95:55:96:89:10:20:71:F5:6C:93:E9:B9:D2:EA:6B:E4:0E:6F:20:70:06:C9:89:62:A1:6A:25`
+
+Production signing run: `37448352082`
+
+The production release includes:
+
+- `BlazeRental.apk` — signed v0.5.2 production launcher;
+- `BlazeRental-v0.5.1-rescue-for-v0.5.2.apk` — known-good rescue code signed with the same Lineage-2 certificate;
+- signing certificate/fingerprint and verification logs;
+- AES-256-GCM encrypted PKCS12 recovery backup;
+- two RSA-OAEP-SHA256 wrapped recovery-key paths;
+- production Device Owner QR/provisioning assets generated from the signed APK.
+
+Both independent owner recovery keys were tested by decrypting the sealed backup and verifying the restored PKCS12 fingerprint against the signed APK certificate.
+
+### Migration from the abandoned old signer
+
+The earlier v0.4 certificate lineage is intentionally abandoned.
+
+A phone containing BlazeRental signed by that older certificate cannot accept Lineage 2 as an ordinary APK signature update. Reprovision/factory reset is required for that migration.
+
+Once a device is provisioned with **v0.5.2 Lineage 2**, all future production BlazeRental APKs must use this exact certificate.
+
+Older 0.5.1 application releases are not being newly production-signed.
