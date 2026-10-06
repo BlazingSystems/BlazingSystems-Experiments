@@ -256,6 +256,23 @@ bp_member_public_list_json() {
   printf ']'
 }
 
+bp_member_auth_proof_expected() {
+  user="$1"; nonce="$2"; controller_id="$3"
+  line="$(bp_member_line "$user")"; [ -n "$line" ] || return 1
+  enabled="$(printf '%s' "$line" | cut -f3)"
+  stored="$(printf '%s' "$line" | cut -f6)"
+  [ "$enabled" = 1 ] && [ -n "$stored" ] || return 1
+  secret="$(bp_cfg vendo_key)"
+  [ -n "$secret" ] || return 1
+  printf '%s|%s|%s|%s' "$stored" "$nonce" "$controller_id" "$secret" | bp_sha256
+}
+
+bp_member_auth_proof_ok() {
+  user="$1"; nonce="$2"; controller_id="$3"; got="$4"
+  expected="$(bp_member_auth_proof_expected "$user" "$nonce" "$controller_id")" || return 1
+  [ -n "$got" ] && [ "$got" = "$expected" ]
+}
+
 bp_member_snapshot_json() {
   first=1; printf '['
   while IFS="$(printf '\t')" read -r user label enabled scheme salt hash rounds banked revision updated source; do
