@@ -77,8 +77,7 @@ echo "$OUT" | grep -q '"banked_seconds":600'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 600 ]
 
 BANK_NONCE2=1000000000000004
-BANK_PROOF2="$(proof_for "$ALICE_HASH" "$BANK_NONCE2")"
-OUT="$(call_vendo member_bank "$BANK_NONCE2" 600 "alice:$BANK_EVENT:$BANK_PROOF2")"
+OUT="$(call_vendo member_bank "$BANK_NONCE2" 600 "alice:$BANK_EVENT:replay")"
 echo "$OUT" | grep -q '"result_seconds":600'
 echo "$OUT" | grep -q '"banked_seconds":600'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 600 ]
@@ -93,8 +92,8 @@ echo "$OUT" | grep -q '"banked_seconds":0'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 0 ]
 
 RESTORE_NONCE2=1000000000000006
-RESTORE_PROOF2="$(proof_for "$ALICE_HASH" "$RESTORE_NONCE2")"
-OUT="$(call_vendo member_restore "$RESTORE_NONCE2" 0 "alice:$RESTORE_EVENT:$RESTORE_PROOF2")"
+OUT="$(call_vendo member_restore "$RESTORE_NONCE2" 0 "alice:$RESTORE_EVENT:replay")"
+echo "$OUT" | grep -q '"replayed":true'
 echo "$OUT" | grep -q '"result_seconds":600'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 0 ]
 [ "$(awk -F '\t' -v e="$RESTORE_EVENT" '$1==e {c++} END{print c+0}' "$BP_MEMBER_EVENTS")" -eq 1 ]
@@ -115,8 +114,8 @@ echo "$OUT" | grep -q '"source_banked_seconds":300'
 [ "$(printf '%s' "$(bp_member_line bob)" | cut -f8)" -eq 300 ]
 
 TRANSFER_NONCE2=1000000000000009
-TRANSFER_PROOF2="$(proof_for "$ALICE_HASH" "$TRANSFER_NONCE2")"
-OUT="$(call_vendo member_transfer "$TRANSFER_NONCE2" 300 "alice>bob:$TRANSFER_EVENT:$TRANSFER_PROOF2")"
+OUT="$(call_vendo member_transfer "$TRANSFER_NONCE2" 300 "alice>bob:$TRANSFER_EVENT:replay")"
+echo "$OUT" | grep -q '"replayed":true'
 echo "$OUT" | grep -q '"result_seconds":300'
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 300 ]
 [ "$(printf '%s' "$(bp_member_line bob)" | cut -f8)" -eq 300 ]
