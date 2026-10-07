@@ -127,16 +127,16 @@ jobs:
           python3 experiment/openwrt/BlazePwifi/tools/make-provisioning.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --server-url "http://192.168.1.1:8080"             --enrollment-token "000000000000.000000000000000000000000000000000000"             --device-name "SAMPLE - generate a real token in admin"             --out "$OUT/BlazeRental-provisioning-SAMPLE.json"
 
           EXPECTED_CHECKSUM="$(python3 - "$OUT/BlazeRental.apk" <<'PY'
-import base64,hashlib,sys
-print(base64.urlsafe_b64encode(hashlib.sha256(open(sys.argv[1],'rb').read()).digest()).decode().rstrip('='))
-PY
-)"
+          import base64,hashlib,sys
+          print(base64.urlsafe_b64encode(hashlib.sha256(open(sys.argv[1],'rb').read()).digest()).decode().rstrip('='))
+          PY
+          )"
           ACTUAL_CHECKSUM="$(python3 - "$OUT/BlazeRental-provisioning-SAMPLE.json" <<'PY'
-import json,sys
-j=json.load(open(sys.argv[1]))
-print(j["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM"])
-PY
-)"
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          print(j["android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM"])
+          PY
+          )"
           test "$ACTUAL_CHECKSUM" = "$EXPECTED_CHECKSUM"
 
           python3 -m pip install --quiet "qrcode[pil]"
