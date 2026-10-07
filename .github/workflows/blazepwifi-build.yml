@@ -5,10 +5,14 @@ on:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
       - '.github/workflows/blazepwifi-build.yml'
+      - '.github/workflows/blazepwifi-v053-release.yml'
+      - '.github/workflows/blazerental-v053-lineage2-sign.yml'
   pull_request:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
       - '.github/workflows/blazepwifi-build.yml'
+      - '.github/workflows/blazepwifi-v053-release.yml'
+      - '.github/workflows/blazerental-v053-lineage2-sign.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
