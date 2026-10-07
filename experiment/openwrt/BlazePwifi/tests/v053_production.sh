@@ -58,6 +58,8 @@ grep -Fq '/releases/download/v0.5.3/BlazeRental.apk' "$RELEASE"
 grep -Fq 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$RELEASE"
 grep -Fq 'provisioning_generated_from_signed_apk:true' "$RELEASE"
 grep -Fq 'different target; refusing retag/retarget' "$RELEASE"
+grep -Fq -- '--draft' "$RELEASE"
+grep -Fq -- '-F draft=false -F prerelease=false' "$RELEASE"
 grep -Fq "$EXPECTED" "$RELEASE"
 [ "$(grep -Fc 'name: BlazePwifi v0.5.3 production release' "$RELEASE")" -eq 1 ]
 [ "$(grep -Fc 'Resolve exact production request' "$RELEASE")" -eq 1 ]
