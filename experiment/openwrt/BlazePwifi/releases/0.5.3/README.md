@@ -52,6 +52,7 @@ The recovery code is higher than production 50300 so Android can install the kno
 - `BlazeRental-Binding-QR.html` is for an **already-installed** BlazeRental app. It contains only binding details: server URL, one-time enrollment token, device label, and optional TLS certificate pin. It does not download/install an APK and does not grant Device Owner.
 - `BlazeRental-DeviceOwner-Provisioning-QR.html` is for a **factory-reset / unprovisioned** Android device. It contains Android enterprise provisioning fields and the checksum of the exact signed production APK.
 - These generators are intentionally separate. The standard Binding QR must never be treated as a Device Owner provisioning QR.
+- `BlazeRental-provisioning-SAMPLE.json` is a non-operational reference with placeholder token/pin values. No scannable sample Device Owner QR image is published, to prevent accidental provisioning with dummy enrollment data.
 
 ## Device Owner provisioning
 Production Device Owner QR/provisioning assets are generated only after production signing and use the exact signed BlazeRental.apk.
