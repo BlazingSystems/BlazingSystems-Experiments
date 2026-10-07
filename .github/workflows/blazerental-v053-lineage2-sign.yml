@@ -1,0 +1,226 @@
+name: BlazeRental v0.5.3 production Lineage 2 sign
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful exact-candidate BlazePwifi v0.5.3 build run"
+        required: true
+        type: string
+      candidate_sha:
+        description: "Exact validated v0.5.3 candidate SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: blazerental-v053-production-lineage2
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_FINGERPRINT: "1A:18:D5:8E:1F:95:55:96:89:10:20:71:F5:6C:93:E9:B9:D2:EA:6B:E4:0E:6F:20:70:06:C9:89:62:A1:6A:25"
+      RECOVERY_PRIVATE_KEY_PEM: ${{ secrets.BLAZERENTAL_LINEAGE2_RECOVERY_PRIVATE_KEY_PEM }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve exact validated candidate
+        id: req
+        shell: bash
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+          SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+$'
+          printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$'
+
+          B="$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID")"
+          test "$(printf '%s' "$B" | jq -r .conclusion)" = success
+          test "$(printf '%s' "$B" | jq -r .head_sha)" = "$SHA"
+
+          VERSION="$(gh api "repos/${{ github.repository }}/contents/experiment/openwrt/BlazePwifi/VERSION?ref=$SHA" --jq .content | base64 -d)"
+          test "$VERSION" = "0.5.3"
+
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.req.outputs.candidate_sha }}
+
+      - name: Download exact unsigned v0.5.3 candidate
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.req.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name BlazePwifi-android-current --dir candidate
+          UNSIGNED="$(find candidate -type f -name 'BlazeRental-0.5.3-release-unsigned.apk' -print -quit)"
+          RESCUE_UNSIGNED="$(find candidate -type f -name 'BlazeRental-v0.5.2-rescue-for-0.5.3-release-unsigned.apk' -print -quit)"
+          test -n "$UNSIGNED" -a -s "$UNSIGNED"
+          test -n "$RESCUE_UNSIGNED" -a -s "$RESCUE_UNSIGNED"
+          echo "UNSIGNED=$UNSIGNED" >> "$GITHUB_ENV"
+          echo "RESCUE_UNSIGNED=$RESCUE_UNSIGNED" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install signing and recovery tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "build-tools;36.0.0"
+          python3 -m pip install --quiet cryptography
+          echo "APKSIGNER=${ANDROID_SDK_ROOT}/build-tools/36.0.0/apksigner" >> "$GITHUB_ENV"
+          echo "ZIPALIGN=${ANDROID_SDK_ROOT}/build-tools/36.0.0/zipalign" >> "$GITHUB_ENV"
+          echo "AAPT=${ANDROID_SDK_ROOT}/build-tools/36.0.0/aapt" >> "$GITHUB_ENV"
+
+      - name: Download permanent Lineage 2 recovery assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/recovery"
+          cd "$RUNNER_TEMP/recovery"
+          for asset in             BlazeRental-v0.5.2-lineage2-signing-backup.enc             BlazeRental-v0.5.2-lineage2-signing-nonce.bin             BlazeRental-v0.5.2-lineage2-key-recovery-A.enc             BlazeRental-v0.5.2-lineage2-key-recovery-B.enc             BlazeRental-v0.5.2-recovery-A-public.pem             BlazeRental-v0.5.2-recovery-B-public.pem             BlazeRental-RECOVERY-MANIFEST.json             BlazeRental-signing-cert.pem             BlazeRental-signing-fingerprint.txt             BlazeRental.apk
+          do
+            gh release download v0.5.2 --repo "${{ github.repository }}" --pattern "$asset"
+            test -s "$asset"
+          done
+
+      - name: Recover exact Lineage 2 signer and verify identity
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.req.outputs.candidate_sha }}
+          BUILD_RUN_ID: ${{ steps.req.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          test -n "${RECOVERY_PRIVATE_KEY_PEM:-}" || {
+            echo "Missing Actions secret BLAZERENTAL_LINEAGE2_RECOVERY_PRIVATE_KEY_PEM." >&2
+            echo "Supply one owner Recovery A/B private key; never commit it to Git." >&2
+            exit 1
+          }
+
+          SECRET="$RUNNER_TEMP/lineage2-secret"
+          REC="$RUNNER_TEMP/recovery"
+          OUT="$RUNNER_TEMP/blazerental-v053-lineage2"
+          mkdir -p "$SECRET" "$OUT"
+          chmod 700 "$SECRET" "$OUT"
+          printf '%s\n' "$RECOVERY_PRIVATE_KEY_PEM" > "$SECRET/recovery-private.pem"
+          chmod 600 "$SECRET/recovery-private.pem"
+
+          openssl pkey -in "$SECRET/recovery-private.pem" -pubout -outform DER > "$SECRET/recovery-public.der"
+          PRIVATE_PUB_SHA="$(sha256sum "$SECRET/recovery-public.der" | awk '{print $1}')"
+
+          openssl pkey -pubin -in "$REC/BlazeRental-v0.5.2-recovery-A-public.pem" -outform DER > "$SECRET/recovery-A-public.der"
+          openssl pkey -pubin -in "$REC/BlazeRental-v0.5.2-recovery-B-public.pem" -outform DER > "$SECRET/recovery-B-public.der"
+          A_SHA="$(sha256sum "$SECRET/recovery-A-public.der" | awk '{print $1}')"
+          B_SHA="$(sha256sum "$SECRET/recovery-B-public.der" | awk '{print $1}')"
+
+          if [ "$PRIVATE_PUB_SHA" = "$A_SHA" ]; then
+            WRAPPED="$REC/BlazeRental-v0.5.2-lineage2-key-recovery-A.enc"
+            RECOVERY_SLOT=A
+          elif [ "$PRIVATE_PUB_SHA" = "$B_SHA" ]; then
+            WRAPPED="$REC/BlazeRental-v0.5.2-lineage2-key-recovery-B.enc"
+            RECOVERY_SLOT=B
+          else
+            echo "Recovery private key does not match v0.5.2 owner Recovery A or B." >&2
+            exit 1
+          fi
+
+          python3 experiment/openwrt/BlazePwifi/tools/unseal-blazerental-lineage2.py             --private-key "$SECRET/recovery-private.pem"             --wrapped-key "$WRAPPED"             --encrypted-backup "$REC/BlazeRental-v0.5.2-lineage2-signing-backup.enc"             --nonce "$REC/BlazeRental-v0.5.2-lineage2-signing-nonce.bin"             --manifest "$REC/BlazeRental-RECOVERY-MANIFEST.json"             --out "$SECRET/lineage2-backup.tar.gz"
+
+          tar -xzf "$SECRET/lineage2-backup.tar.gz" -C "$SECRET"
+          P12="$SECRET/BlazeRental-v0.5.2-production-lineage2.p12"
+          PASS="$(cat "$SECRET/keystore-password.txt")"
+          test -s "$P12" -a -n "$PASS"
+
+          FP="$(keytool -list -v -alias blazerental -keystore "$P12" -storetype PKCS12 -storepass "$PASS" |
+            sed -n 's/^[[:space:]]*SHA256: //p' | head -n1)"
+          test "$FP" = "$EXPECTED_FINGERPRINT"
+
+          OLD_FP="$("$APKSIGNER" verify --print-certs "$REC/BlazeRental.apk" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr '[:lower:]' '[:upper:]' |
+            sed 's/../&:/g;s/:$//')"
+          test "$OLD_FP" = "$EXPECTED_FINGERPRINT"
+
+          "$AAPT" dump badging "$UNSIGNED" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50300' versionName='0.5.3'"
+          "$AAPT" dump badging "$RESCUE_UNSIGNED" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50301' versionName='0.5.2-rescue-for-0.5.3'"
+
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED" "$OUT/BlazeRental-aligned.apk"
+          "$APKSIGNER" sign             --ks "$P12" --ks-type PKCS12 --ks-key-alias blazerental             --ks-pass "pass:$PASS" --key-pass "pass:$PASS"             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true             --out "$OUT/BlazeRental.apk" "$OUT/BlazeRental-aligned.apk"
+
+          "$ZIPALIGN" -p -f 4 "$RESCUE_UNSIGNED" "$OUT/BlazeRental-rescue-aligned.apk"
+          "$APKSIGNER" sign             --ks "$P12" --ks-type PKCS12 --ks-key-alias blazerental             --ks-pass "pass:$PASS" --key-pass "pass:$PASS"             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true             --out "$OUT/BlazeRental-v0.5.2-rescue-for-v0.5.3.apk" "$OUT/BlazeRental-rescue-aligned.apk"
+
+          "$APKSIGNER" verify --verbose --print-certs "$OUT/BlazeRental.apk" > "$OUT/BlazeRental-apksigner-verify.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$OUT/BlazeRental-v0.5.2-rescue-for-v0.5.3.apk" > "$OUT/BlazeRental-rescue-apksigner-verify.txt"
+          grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' "$OUT/BlazeRental-apksigner-verify.txt"
+          grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' "$OUT/BlazeRental-apksigner-verify.txt"
+
+          "$AAPT" dump badging "$OUT/BlazeRental.apk" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50300' versionName='0.5.3'"
+          "$AAPT" dump badging "$OUT/BlazeRental-v0.5.2-rescue-for-v0.5.3.apk" | grep -q "package: name='com.blazesystems.blazerental' versionCode='50301' versionName='0.5.2-rescue-for-0.5.3'"
+
+          APP_DIGEST="$("$APKSIGNER" verify --print-certs "$OUT/BlazeRental.apk" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr '[:lower:]' '[:upper:]' |
+            sed 's/../&:/g;s/:$//')"
+          RESCUE_DIGEST="$("$APKSIGNER" verify --print-certs "$OUT/BlazeRental-v0.5.2-rescue-for-v0.5.3.apk" |
+            sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr '[:lower:]' '[:upper:]' |
+            sed 's/../&:/g;s/:$//')"
+          test "$APP_DIGEST" = "$EXPECTED_FINGERPRINT"
+          test "$RESCUE_DIGEST" = "$EXPECTED_FINGERPRINT"
+
+          keytool -exportcert -rfc -alias blazerental -keystore "$P12" -storetype PKCS12             -storepass "$PASS" -file "$OUT/BlazeRental-signing-cert.pem"
+          printf 'SHA256: %s\n' "$EXPECTED_FINGERPRINT" > "$OUT/BlazeRental-signing-fingerprint.txt"
+
+          cp "$REC/BlazeRental-v0.5.2-lineage2-signing-backup.enc" "$OUT/"
+          cp "$REC/BlazeRental-v0.5.2-lineage2-signing-nonce.bin" "$OUT/"
+          cp "$REC/BlazeRental-v0.5.2-lineage2-key-recovery-A.enc" "$OUT/"
+          cp "$REC/BlazeRental-v0.5.2-lineage2-key-recovery-B.enc" "$OUT/"
+          cp "$REC/BlazeRental-v0.5.2-recovery-A-public.pem" "$OUT/"
+          cp "$REC/BlazeRental-v0.5.2-recovery-B-public.pem" "$OUT/"
+          cp "$REC/BlazeRental-RECOVERY-MANIFEST.json" "$OUT/"
+          cp experiment/openwrt/BlazePwifi/tools/unseal-blazerental-lineage2.py "$OUT/"
+
+          SIGNED_SHA="$(sha256sum "$OUT/BlazeRental.apk" | awk '{print $1}')"
+          RESCUE_SHA="$(sha256sum "$OUT/BlazeRental-v0.5.2-rescue-for-v0.5.3.apk" | awk '{print $1}')"
+          jq -n             --arg release "0.5.3"             --arg candidate_sha "$CANDIDATE_SHA"             --arg build_run_id "$BUILD_RUN_ID"             --arg signed_sha256 "$SIGNED_SHA"             --arg rescue_signed_sha256 "$RESCUE_SHA"             --arg signing_fingerprint "$EXPECTED_FINGERPRINT"             --arg recovery_slot "$RECOVERY_SLOT"             '{
+              release:$release,
+              candidate_sha:$candidate_sha,
+              build_run_id:$build_run_id,
+              signed_sha256:$signed_sha256,
+              rollback_rescue:"0.5.2-rescue-for-0.5.3",
+              rollback_rescue_signed_sha256:$rescue_signed_sha256,
+              certificate_lineage:"BlazeRental-production-lineage2",
+              signing_fingerprint:$signing_fingerprint,
+              signer_recovered_from_release:"v0.5.2",
+              recovery_slot_used:$recovery_slot,
+              provisioning_must_use_signed_apk:true
+            }' > "$OUT/SIGNING-MANIFEST.json"
+
+          rm -f "$OUT/BlazeRental-aligned.apk" "$OUT/BlazeRental-rescue-aligned.apk"
+          (cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+
+          rm -rf "$SECRET"
+          unset RECOVERY_PRIVATE_KEY_PEM PASS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlazeRental-v0.5.3-production-signed
+          path: ${{ runner.temp }}/blazerental-v053-lineage2/
+          retention-days: 90
+          if-no-files-found: error
