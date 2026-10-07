@@ -33,7 +33,7 @@ function setRemoteEditable(enabled){
   ['#remoteMode','#remoteNodeName','#remoteSiteLabel','#remoteAllowlist','#remoteHeartbeat','#remoteOffline',
    '#remoteMonitoring','#remoteManagement','#remoteTerminal','#wgEndpoint','#wgPort','#wgAddress',
    '#wgKeepalive','#wgPeerKey','#wgAllowedIps','#wgDns','#wgMtu','#ztNetworkId','#remotePassword',
-   '#wgKeyButton','#wgApplyButton','#wgDisableButton']
+   '#wgKeyButton','#wgApplyButton','#wgDisableButton','#ztIdentityButton','#ztApplyButton','#ztDisableButton']
     .forEach(id=>{const n=q(id);if(n)n.disabled=!enabled});
 }
 function renderRemoteStatus(r){
@@ -46,19 +46,29 @@ function renderRemoteStatus(r){
   const ready=q('#remoteReadyState');
   if(ready){
     if(r.mode==='disabled')ready.textContent='Remote access off';
-    else if(activation==='active')ready.textContent='Live WireGuard active';
-    else if(activation==='active_staged_changes')ready.textContent='Live tunnel active · staged changes not applied';
+    else if(activation==='active')ready.textContent='Live '+(rt.transport==='zerotier'?'ZeroTier':'WireGuard')+' active';
+    else if(activation==='active_staged_changes')ready.textContent='Live '+(rt.transport==='zerotier'?'ZeroTier':'WireGuard')+' · staged changes not applied';
     else ready.textContent=r.ready?'Profile complete · '+activation:'Profile incomplete';
   }
   const node=q('#remoteNodeState');if(node)node.textContent=r.node_name||'BlazePwifi';
   const site=q('#remoteSiteState');if(site)site.textContent=r.site_label||'No site label';
   const act=q('#wgActivationState');if(act){act.textContent=activation;act.className='metric-value small '+(activation==='active'?'good':'');}
-  const hs=q('#wgHandshakeState');
+  const hs=q('#wgHandshakeState'),ztr=rt.zerotier||{};
   if(hs){
     const stamp=Number(rt.last_handshake||0);
-    hs.textContent=stamp>0?'Handshake '+new Date(stamp*1000).toLocaleString():(rt.last_error?'Last error: '+rt.last_error:(rt.apply_supported?'No verified handshake yet':'Live apply unavailable'));
+    if(rt.transport==='zerotier'&&String(ztr.active)==='1')
+      hs.textContent='ZeroTier '+(ztr.status||'—')+' · '+(ztr.interface||'no interface')+' · '+(ztr.address||'no IPv4');
+    else
+      hs.textContent=stamp>0?'Handshake '+new Date(stamp*1000).toLocaleString():(rt.last_error?'Last error: '+rt.last_error:(rt.apply_supported?'No verified handshake yet':'Live apply unavailable'));
   }
   const pub=q('#wgLocalPublicKey');if(pub)pub.value=rt.public_key||'';
+  const ztn=q('#ztNodeId');if(ztn)ztn.value=ztr.node_id||'';
+  const zts=q('#ztLiveState');
+  if(zts){
+    if(String(ztr.active)==='1')zts.textContent='Active · '+(ztr.status||'—')+' · '+(ztr.interface||'—')+' · '+(ztr.address||'—');
+    else if(ztr.node_id)zts.textContent='Identity ready · node '+ztr.node_id+' · authorize this node before applying.';
+    else zts.textContent=rt.apply_supported?'Identity not prepared yet.':'ZeroTier live apply unavailable on this target.';
+  }
 }
 async function loadRemote(){
   const generation=++remoteLoadGeneration;
@@ -93,8 +103,10 @@ async function loadRemote(){
       state.textContent='Profile saved. The existing WireGuard tunnel is still active with the previous applied profile; use Test & Apply to activate these staged changes.';
     else if(v.mode==='wireguard')
       state.textContent='WireGuard profile validated. Save and apply are separate operations; live activation requires a handshake and route-survival checks.';
+    else if(v.mode==='zerotier'&&String(rt.activation_state||'staged')==='active_staged_changes')
+      state.textContent='Profile saved. The existing ZeroTier tunnel remains active with the previously applied profile; use Test & Apply ZeroTier to activate staged changes.';
     else if(v.mode==='zerotier')
-      state.textContent='ZeroTier profile validated and staged. Live ZeroTier activation remains disabled in dev.3.';
+      state.textContent='ZeroTier profile validated. Prepare/authorize the node ID, then use Test & Apply ZeroTier.';
     else
       state.textContent='Remote access profile is disabled/staged.';
   }
@@ -121,7 +133,7 @@ async function saveRemote(){
   // The save response is authoritative. Render it immediately so a delayed
   // follow-up status request cannot leave the operator looking at stale state.
   renderRemoteStatus(x.remote||{});
-  C().toast('Remote profile validated and stored. Use Test & Apply for WireGuard live activation.');
+  C().toast('Remote profile validated and stored. Use the selected transport\'s Test & Apply control for live activation.');
   await loadRemote();
 }
 async function generateWireGuardKey(){
@@ -161,6 +173,46 @@ async function disableWireGuard(){
   renderRemoteStatus(x.remote||{});
   if(state)state.textContent='Live WireGuard is disabled. The profile and device key remain staged for future use.';
   C().toast('Live WireGuard disabled.');
+  await loadRemote();
+}
+async function prepareZeroTierIdentity(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to prepare the ZeroTier identity.',true);return}
+  const x=await C().api('remote_zerotier_identity',{password});
+  if(pass)pass.value='';
+  if(!x.ok){C().toast(x.error||'Unable to prepare ZeroTier identity',true);return}
+  const n=q('#ztNodeId');if(n)n.value=x.node_id||'';
+  renderRemoteStatus(x.remote||{});
+  C().toast('ZeroTier node ID is ready. Authorize this node in your ZeroTier network before applying.');
+  await loadRemote();
+}
+async function applyZeroTier(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to apply ZeroTier.',true);return}
+  if(!confirm('Test and apply the staged ZeroTier profile? Start this only from a local/non-ZeroTier admin path. The node must already be authorized. BlazePwifi will roll back automatically unless ZeroTier reaches OK with an assigned IPv4 and safe routes.'))return;
+  const state=q('#remoteConfigState');if(state)state.textContent='Applying ZeroTier transaction and waiting for authorized OK state…';
+  const x=await C().api('remote_zerotier_apply',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'ZeroTier apply rolled back safely.';C().toast(x.error||'ZeroTier apply failed and was rolled back',true);await loadRemote();return}
+  renderRemoteStatus(x.remote||{});
+  if(state)state.textContent='ZeroTier is active. Network authorization, assigned IPv4, route safety and management-path survival all passed.';
+  C().toast('ZeroTier activated successfully.');
+  await loadRemote();
+}
+async function disableZeroTier(){
+  ++remoteLoadGeneration;
+  const pass=q('#remotePassword'),password=(pass&&pass.value)||'';
+  if(!password){C().toast('Admin password is required to disable ZeroTier.',true);return}
+  if(!confirm('Disable the live ZeroTier tunnel? This must be initiated from a local/non-ZeroTier admin path.'))return;
+  const state=q('#remoteConfigState');if(state)state.textContent='Disabling ZeroTier transaction…';
+  const x=await C().api('remote_zerotier_disable',{password});
+  if(pass)pass.value='';
+  if(!x.ok){if(state)state.textContent=x.error||'ZeroTier disable failed safely.';C().toast(x.error||'ZeroTier disable failed safely',true);await loadRemote();return}
+  renderRemoteStatus(x.remote||{});
+  if(state)state.textContent='Live ZeroTier is disabled. The stable node identity and staged profile remain available for reuse.';
+  C().toast('Live ZeroTier disabled.');
   await loadRemote();
 }
 async function runTool(){
@@ -269,7 +321,7 @@ function onPage(name){
   if(name==='tools')loadTerminal();
   if(name==='lan')loadLan();
 }
-window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,generateWireGuardKey,applyWireGuard,disableWireGuard,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
+window.BlazeConsole={loadSystem,loadStorage,loadRemote,saveRemote,generateWireGuardKey,applyWireGuard,disableWireGuard,prepareZeroTierIdentity,applyZeroTier,disableZeroTier,runTool,loadTerminal,setTerminalEnabled,openTerminal,runTerminal,closeTerminal,loadLan,loadUpdate,installUpdate,rollbackUpdate,onPage};
 // Do not preload editable Remote Access configuration in the background.
  // It is loaded on page entry/explicit refresh so a delayed startup request
  // cannot overwrite operator edits.

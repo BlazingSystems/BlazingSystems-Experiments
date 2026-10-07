@@ -12,6 +12,9 @@ FREE_KB="$(df -k /overlay 2>/dev/null | awk 'NR==2{print $4}')"; [ -n "${FREE_KB
 
 echo "Installing runtime packages..."
 apk -U add uhttpd nftables px5g-mbedtls flock ip-full kmod-wireguard wireguard-tools >/dev/null
+if ! apk -U add zerotier >/dev/null 2>&1; then
+  echo "WARNING: ZeroTier package unavailable on this target; WireGuard remote access remains available." >&2
+fi
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="/root/blazepwifi-backup-$STAMP"
