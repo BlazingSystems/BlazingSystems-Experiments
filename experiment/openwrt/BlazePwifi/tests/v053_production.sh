@@ -44,6 +44,10 @@ grep -Fq 'BlazeRental-production-lineage2' "$SIGN"
 ! grep -Fq 'keytool -genkeypair' "$SIGN"
 ! grep -Fq 'openssl genrsa' "$SIGN"
 ! grep -Fq 'openssl genpkey' "$SIGN"
+[ "$(grep -Fc 'name: BlazeRental v0.5.3 production Lineage 2 sign' "$SIGN")" -eq 1 ]
+[ "$(grep -Fc 'Recover exact Lineage 2 signer and verify identity' "$SIGN")" -eq 1 ]
+[ "$(grep -Fc '# End of BlazeRental v0.5.3 Lineage-2 signing workflow.' "$SIGN")" -eq 1 ]
+[ "$(tail -n 1 "$SIGN")" = '# End of BlazeRental v0.5.3 Lineage-2 signing workflow.' ]
 
 # Production release requires signing and derives provisioning checksum from signed BlazeRental.apk.
 test -s "$RELEASE"
