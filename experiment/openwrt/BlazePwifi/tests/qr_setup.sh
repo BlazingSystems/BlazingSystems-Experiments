@@ -28,12 +28,27 @@ grep -q 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$PROVISION_T"
 ! grep -q 'PROVISIONING_SKIP_EDUCATION_SCREENS' "$PROVISION_T"
 grep -q 'server_cert_sha256' "$PROVISION_T"
 grep -q 'https://192.168.1.1:8443' "$PROVISION_T"
+grep -q 'Device Owner provisioning requires an HTTPS BlazePwifi server URL.' "$PROVISION_T"
+grep -q -- '--server-url must use https://' "$PROVISION_JSON"
+grep -q -- '--apk-url must use https://' "$PROVISION_JSON"
 grep -q 'PROVISIONING_WIFI_SSID' "$PROVISION_T"
 grep -q '__APK_CHECKSUM__' "$PROVISION_T"
 grep -q '__QRCODE_JS__' "$PROVISION_T"
 grep -q 'server-cert-sha256' "$PROVISION_JSON"
 
 python3 -m py_compile "$BINDING_B" "$PROVISION_B" "$PROVISION_JSON"
+DUMMY_APK="$(mktemp)"
+BAD_JSON="$(mktemp)"
+printf 'not-an-apk-but-stable-checksum-input' > "$DUMMY_APK"
+if python3 "$PROVISION_JSON" --apk "$DUMMY_APK" --apk-url "https://example.invalid/BlazeRental.apk" --server-url "http://192.168.1.1:8080" --enrollment-token "000000000000.000000000000000000000000000000000000" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner provisioning JSON tool accepted insecure HTTP server URL" >&2
+  exit 1
+fi
+if python3 "$PROVISION_JSON" --apk "$DUMMY_APK" --apk-url "http://example.invalid/BlazeRental.apk" --server-url "https://192.168.1.1:8443" --enrollment-token "000000000000.000000000000000000000000000000000000" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner provisioning JSON tool accepted insecure HTTP APK URL" >&2
+  exit 1
+fi
+rm -f "$DUMMY_APK" "$BAD_JSON"
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT INT TERM
 python3 "$BINDING_B" --template "$BINDING_T" --qrcode-js "$Q" --out "$TMP" >/dev/null
