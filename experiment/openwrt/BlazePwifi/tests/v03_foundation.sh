@@ -4,7 +4,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 
 case "$(cat "$ROOT/VERSION")" in
-  0.3.0|0.4.0|0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4|0.5.3-dev.5) ;;
+  0.3.0|0.4.0|0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4|0.5.3-dev.5|0.5.3) ;;
   *)
     echo "unexpected BlazePwifi VERSION" >&2
     exit 1
