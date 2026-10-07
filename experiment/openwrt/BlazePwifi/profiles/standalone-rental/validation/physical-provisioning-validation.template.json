@@ -1,0 +1,20 @@
+{
+  "schema": "blazerental.physical-provisioning-validation.v1",
+  "passed": false,
+  "release": "v0.5.2-rental.2-rc.7",
+  "package_id": "com.blazesystems.blazerental",
+  "apk_sha256": "",
+  "signer_certificate_sha256": "",
+  "factory_reset_setup_wizard_completed": false,
+  "device_owner_confirmed": false,
+  "https_certificate_pin_verified": false,
+  "v2_enrollment_completed": false,
+  "device_visible_on_intended_server": false,
+  "response_loss_retry_same_identity": false,
+  "protocol1_downgrade_rejected": false,
+  "redemption_record_retired_after_authenticated_sync": false,
+  "standard_scanner_rejected_device_provisioning_qr": false,
+  "android_12_plus_path_tested": false,
+  "tested_android_versions": [],
+  "notes": "Template only. Stable promotion must remain blocked until this evidence is completed from physical authorized-device testing using the exact production-signed APK."
+}

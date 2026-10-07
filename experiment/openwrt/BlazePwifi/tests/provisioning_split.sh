@@ -254,4 +254,39 @@ STATUS="$(printf 'action=status&device_id=%s&nonce=%s&sig=%s' "$DID" "$STATUS_NO
 printf '%s' "$STATUS" | grep -q '"ok":true'
 [ -z "$(bp_rental_enroll_lookup "$EID")" ]
 
+# Stable-promotion gate must fail closed for the current RC/test channel even
+# when given the locked public production identity.
+PROMOTE="$ROOT/profiles/standalone-rental/build/check-stable-promotion.py"
+IDENTITY="$ROOT/../../../.github/blazerental-v052-production-identity.json"
+EVIDENCE="$ROOT/profiles/standalone-rental/validation/physical-provisioning-validation.template.json"
+test -x "$PROMOTE"
+test -f "$IDENTITY"
+test -f "$EVIDENCE"
+
+printf 'rc7-test-apk' > "$TMP/rc7-test.apk"
+RC7_SHA="$(sha256sum "$TMP/rc7-test.apk" | awk '{print $1}')"
+RC7_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode())' "$TMP/rc7-test.apk")"
+LOCKED_FP="$(python3 -c 'import json,re,sys; d=json.load(open(sys.argv[1])); print(re.sub(r"[^0-9A-Fa-f]","",d["sha256_fingerprint"]).lower())' "$IDENTITY")"
+printf '%s\n' \
+  'READY=1' \
+  'PACKAGE_NAME=com.blazesystems.blazerental' \
+  'APK_VERSION=0.5.2-rental.2-rc.7' \
+  'APK_VERSION_CODE=50208' \
+  'APK_CHANNEL=test' \
+  'PRODUCTION_READY=0' \
+  "APK_SHA256=$RC7_SHA" \
+  "APK_CHECKSUM=$RC7_CHECKSUM" \
+  "SIGNER_CERT_SHA256=$LOCKED_FP" \
+  > "$TMP/rc7-meta.env"
+
+if python3 "$PROMOTE" \
+    --identity "$IDENTITY" \
+    --metadata "$TMP/rc7-meta.env" \
+    --evidence "$EVIDENCE" \
+    --apk "$TMP/rc7-test.apk" >/dev/null 2>&1
+then
+  echo "stable promotion gate incorrectly accepted RC/test metadata" >&2
+  exit 1
+fi
+
 echo "BlazeRental provisioning/enrollment split audit passed"

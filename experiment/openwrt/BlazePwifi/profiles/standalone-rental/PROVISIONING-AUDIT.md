@@ -161,3 +161,23 @@ ESP onboarding remains a separate constrained path. If Device Provisioning is ev
 ## Non-goals
 
 The product does not claim resistance to bootloader unlock, recovery flashing, OEM service tooling, privileged platform exploits, or a user with physical access who can perform an authorized factory wipe.
+
+
+## Stable promotion gate
+
+RC7 now has an executable fail-closed promotion gate at:
+
+`profiles/standalone-rental/build/check-stable-promotion.py`
+
+It requires the locked public Lineage-2 identity record from
+`.github/blazerental-v052-production-identity.json`, exact production APK bytes
+and checksum metadata, plus explicit physical Setup Wizard validation evidence.
+
+The checked-in physical validation file is intentionally a **failing template**.
+RC/test metadata (`APK_CHANNEL=test`, `PRODUCTION_READY=0`) must never pass.
+Stable promotion requires all physical evidence booleans to be true and the
+physical evidence APK SHA-256 and signer fingerprint to match the exact
+production artifact and locked Lineage-2 certificate.
+
+This gate is a promotion control, not a substitute for the physical test.
+RC7 remains a prerelease and its published assets/tags stay immutable.
