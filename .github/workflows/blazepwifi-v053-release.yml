@@ -123,7 +123,8 @@ jobs:
           cp "$RESCUE_TEST" "$OUT/"
           cp "$RESCUE_UNSIGNED" "$OUT/"
 
-          python3 experiment/openwrt/BlazePwifi/tools/build-binding-qr-tool.py             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-Binding-QR.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-Binding-QR.html"\n          python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
+          python3 experiment/openwrt/BlazePwifi/tools/build-binding-qr-tool.py             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-Binding-QR.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-Binding-QR.html"
+          python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
           grep -q 'Standard Binding QR' "$OUT/BlazeRental-Binding-QR.html"
           ! grep -q 'PROVISIONING_' "$OUT/BlazeRental-Binding-QR.html"
           grep -q 'Device Owner Provisioning QR' "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
