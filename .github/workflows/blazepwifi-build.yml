@@ -300,11 +300,16 @@ jobs:
         run: |
           set -euo pipefail
           ROOT=experiment/openwrt/BlazePwifi
+          VERSION="$(cat "$ROOT/VERSION")"
           sh "$ROOT/tools/build-update-bundle.sh" "$ROOT" "$ROOT/dist/update"
-          cp "$ROOT/tools/BlazePwifi-v0.5.2-update-bootstrap.sh" "$ROOT/dist/update/"
+          case "$VERSION" in
+            0.5.3) BOOTSTRAP="BlazePwifi-v0.5.3-update-bootstrap.sh" ;;
+            *) BOOTSTRAP="BlazePwifi-v0.5.2-update-bootstrap.sh" ;;
+          esac
+          cp "$ROOT/tools/$BOOTSTRAP" "$ROOT/dist/update/"
           (
             cd "$ROOT/dist/update"
-            sha256sum BlazePwifi-v0.5.2-update-bootstrap.sh > BlazePwifi-v0.5.2-update-bootstrap.sh.sha256
+            sha256sum "$BOOTSTRAP" > "$BOOTSTRAP.sha256"
           )
       - uses: actions/upload-artifact@v4
         with:
