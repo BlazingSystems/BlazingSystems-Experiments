@@ -1,17 +1,44 @@
 #!/bin/sh
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-T="$ROOT/tools/BlazeRental-QR-Setup.template.html"
-B="$ROOT/tools/build-rental-qr-tool.py"
+BINDING_T="$ROOT/tools/BlazeRental-Binding-QR.template.html"
+BINDING_B="$ROOT/tools/build-binding-qr-tool.py"
+PROVISION_T="$ROOT/tools/BlazeRental-QR-Setup.template.html"
+PROVISION_B="$ROOT/tools/build-rental-qr-tool.py"
+PROVISION_JSON="$ROOT/tools/make-provisioning.py"
 Q="$ROOT/ui/vendor/qrcode/qrcode.js"
-[ -f "$T" ] && [ -f "$B" ] && [ -f "$Q" ]
-grep -q 'PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME' "$T"
-grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$T"
-grep -q 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$T"
-grep -q 'server_cert_sha256' "$T"
-grep -q 'https://192.168.1.1:8443' "$T"
-grep -q 'PROVISIONING_WIFI_SSID' "$T"
-grep -q '__APK_CHECKSUM__' "$T"
-grep -q '__QRCODE_JS__' "$T"
-grep -q 'server-cert-sha256' "$ROOT/tools/make-provisioning.py"
-echo "BlazeRental PC QR tool source checks passed"
+[ -f "$BINDING_T" ] && [ -f "$BINDING_B" ] && [ -f "$PROVISION_T" ] && [ -f "$PROVISION_B" ] && [ -f "$PROVISION_JSON" ] && [ -f "$Q" ]
+
+# Standard binding QR: existing-install only; never Android enterprise provisioning.
+grep -q 'Standard Binding QR' "$BINDING_T"
+grep -q '"server_url"' "$BINDING_T"
+grep -q '"enrollment_token"' "$BINDING_T"
+grep -q '"device_name"' "$BINDING_T"
+grep -q '"server_cert_sha256"' "$BINDING_T"
+! grep -q 'PROVISIONING_' "$BINDING_T"
+! grep -q '__APK_URL__' "$BINDING_T"
+! grep -q '__APK_CHECKSUM__' "$BINDING_T"
+
+# Device Owner QR: factory-reset enterprise provisioning from exact signed APK.
+grep -q 'Device Owner Provisioning QR' "$PROVISION_T"
+grep -q 'PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME' "$PROVISION_T"
+grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION' "$PROVISION_T"
+grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$PROVISION_T"
+grep -q 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$PROVISION_T"
+! grep -q 'PROVISIONING_SKIP_EDUCATION_SCREENS' "$PROVISION_T"
+grep -q 'server_cert_sha256' "$PROVISION_T"
+grep -q 'https://192.168.1.1:8443' "$PROVISION_T"
+grep -q 'PROVISIONING_WIFI_SSID' "$PROVISION_T"
+grep -q '__APK_CHECKSUM__' "$PROVISION_T"
+grep -q '__QRCODE_JS__' "$PROVISION_T"
+grep -q 'server-cert-sha256' "$PROVISION_JSON"
+
+python3 -m py_compile "$BINDING_B" "$PROVISION_B" "$PROVISION_JSON"
+TMP="$(mktemp)"
+trap 'rm -f "$TMP"' EXIT INT TERM
+python3 "$BINDING_B" --template "$BINDING_T" --qrcode-js "$Q" --out "$TMP" >/dev/null
+grep -q 'Standard Binding QR' "$TMP"
+! grep -q '__QRCODE_JS__' "$TMP"
+! grep -q 'PROVISIONING_' "$TMP"
+
+echo "BlazeRental split binding / Device Owner QR tool checks passed"
