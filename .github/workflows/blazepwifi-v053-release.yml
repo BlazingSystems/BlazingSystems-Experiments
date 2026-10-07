@@ -262,3 +262,5 @@ jobs:
           done
 
           gh api --method PATCH "repos/${{ github.repository }}/releases/$RID"             -F draft=false -F prerelease=false >/dev/null
+
+# End of BlazePwifi v0.5.3 production release workflow.
