@@ -227,7 +227,7 @@ jobs:
           curl -fsSL https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /opt
           echo /opt/gradle-4.4.1/bin >> "$GITHUB_PATH"
-      - name: Build current BlazeRental development APK and frozen v0.5.2 rollback rescue
+      - name: Build current BlazeRental APK and frozen v0.5.2 rollback rescue
         shell: bash
         run: |
           set -euo pipefail
@@ -257,7 +257,12 @@ jobs:
           rm -rf "$RESCUE_ROOT"
           git worktree add --detach "$RESCUE_ROOT" bf2992977fe8504d21b107df02826032c31d3a62
           RESCUE="$RESCUE_ROOT/experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher"
-          sed -i 's/versionCode 50200/versionCode 50299/' "$RESCUE/build.gradle"
+          if [ "$VERSION" = "0.5.3" ]; then
+            RESCUE_VERSION_CODE=50301
+          else
+            RESCUE_VERSION_CODE=50299
+          fi
+          sed -i "s/versionCode 50200/versionCode $RESCUE_VERSION_CODE/" "$RESCUE/build.gradle"
           sed -i "s/versionName \"0.5.2\"/versionName \"0.5.2-rescue-for-$VERSION\"/" "$RESCUE/build.gradle"
           printf 'sdk.dir=/tmp/android-sdk-27\n' > "$RESCUE/local.properties"
           (
