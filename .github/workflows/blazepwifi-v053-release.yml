@@ -123,7 +123,13 @@ jobs:
           cp "$RESCUE_TEST" "$OUT/"
           cp "$RESCUE_UNSIGNED" "$OUT/"
 
-          python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-QR-Setup.html"
+          python3 experiment/openwrt/BlazePwifi/tools/build-binding-qr-tool.py             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-Binding-QR.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-Binding-QR.html"\n          python3 experiment/openwrt/BlazePwifi/tools/build-rental-qr-tool.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --template experiment/openwrt/BlazePwifi/tools/BlazeRental-QR-Setup.template.html             --qrcode-js experiment/openwrt/BlazePwifi/ui/vendor/qrcode/qrcode.js             --out "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
+          grep -q 'Standard Binding QR' "$OUT/BlazeRental-Binding-QR.html"
+          ! grep -q 'PROVISIONING_' "$OUT/BlazeRental-Binding-QR.html"
+          grep -q 'Device Owner Provisioning QR' "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
+          grep -q 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
+          ! grep -q 'PROVISIONING_SKIP_EDUCATION_SCREENS' "$OUT/BlazeRental-DeviceOwner-Provisioning-QR.html"
+
           python3 experiment/openwrt/BlazePwifi/tools/make-provisioning.py             --apk "$OUT/BlazeRental.apk"             --apk-url "https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/download/v0.5.3/BlazeRental.apk"             --server-url "http://192.168.1.1:8080"             --enrollment-token "000000000000.000000000000000000000000000000000000"             --device-name "SAMPLE - generate a real token in admin"             --out "$OUT/BlazeRental-provisioning-SAMPLE.json"
 
           EXPECTED_CHECKSUM="$(python3 - "$OUT/BlazeRental.apk" <<'PY'
@@ -155,7 +161,7 @@ jobs:
           GATE="$(find artifacts/build -type f -name CANDIDATE-GATE.json -print -quit)"
           cp "$GATE" "$OUT/CANDIDATE-GATE.json"
           cp experiment/openwrt/BlazePwifi/releases/0.5.3/README.md "$OUT/README.md"
-          jq -n --arg release "0.5.3" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" --arg fingerprint "$EXPECTED_FP"             '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:true,certificate_lineage:"BlazeRental-production-lineage2",signing_fingerprint:$fingerprint,android_package:"com.blazesystems.blazerental",version_code:50300,rollback_rescue:"0.5.2-rescue-for-0.5.3",rollback_version_code:50301,provisioning_from_signed_apk:true}'             > "$OUT/RELEASE-MANIFEST.json"
+          jq -n --arg release "0.5.3" --arg sha "$SHA" --arg build "$BUILD_RUN" --arg sign "$SIGN_RUN" --arg fingerprint "$EXPECTED_FP"             '{release:$release,commit:$sha,build_run_id:$build,signing_run_id:$sign,candidate_gate:"passed",production_signed:true,certificate_lineage:"BlazeRental-production-lineage2",signing_fingerprint:$fingerprint,android_package:"com.blazesystems.blazerental",version_code:50300,rollback_rescue:"0.5.2-rescue-for-0.5.3",rollback_version_code:50301,binding_qr_tool:"BlazeRental-Binding-QR.html",device_owner_qr_tool:"BlazeRental-DeviceOwner-Provisioning-QR.html",provisioning_from_signed_apk:true}'             > "$OUT/RELEASE-MANIFEST.json"
           (cd "$OUT" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
       - uses: actions/upload-artifact@v4
@@ -185,6 +191,6 @@ jobs:
           R="$(gh api "repos/${{ github.repository }}/releases/tags/$TAG")"
           test "$(printf '%s' "$R" | jq -r .draft)" = false
           test "$(printf '%s' "$R" | jq -r .prerelease)" = false
-          for asset in BlazeRental.apk BlazeRental-v0.5.2-rescue-for-v0.5.3.apk BlazeRental-QR-Setup.html BlazeRental-provisioning-SAMPLE.json RELEASE-MANIFEST.json CANDIDATE-GATE.json SHA256SUMS; do
+          for asset in BlazeRental.apk BlazeRental-v0.5.2-rescue-for-v0.5.3.apk BlazeRental-Binding-QR.html BlazeRental-DeviceOwner-Provisioning-QR.html BlazeRental-provisioning-SAMPLE.json RELEASE-MANIFEST.json CANDIDATE-GATE.json SHA256SUMS; do
             printf '%s' "$R" | jq -e --arg a "$asset" '.assets[] | select(.name==$a)' >/dev/null
           done
