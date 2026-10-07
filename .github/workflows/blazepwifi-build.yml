@@ -65,8 +65,13 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v052_android_source.sh
       - name: Post-v0.5.2 CSRF, QR and coin-window hardening
         run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
-      - name: BlazePwifi v0.5.3 development identity validation
+      - name: BlazePwifi v0.5.3 identity validation
         run: sh experiment/openwrt/BlazePwifi/tests/v053_development.sh
+      - name: BlazePwifi v0.5.3 production-candidate validation
+        run: |
+          if [ "$(cat experiment/openwrt/BlazePwifi/VERSION)" = "0.5.3" ]; then
+            sh experiment/openwrt/BlazePwifi/tests/v053_release_candidate.sh
+          fi
       - name: BlazePwifi v0.5.3 console operations security
         run: sh experiment/openwrt/BlazePwifi/tests/v053_console_ops.sh
       - name: BlazePwifi v0.5.3 WireGuard network-survival validation
