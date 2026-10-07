@@ -161,6 +161,7 @@ bp_remote_wireguard_apply 192.168.1.10
 [ "$(bp_remote_runtime_get last_handshake)" -gt 0 ]
 [ "$(stat -c '%a' "$BP_REMOTE_NETWORK_CONFIG")" = 600 ]
 [ ! -e "$BP_REMOTE_PENDING" ]
+[ -z "$(find "$BP_REMOTE_APPLY_ROOT/snapshots" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]
 [ -e "$ADMIN_STATE" ]
 grep -q 'network.blazewg' "$UCI_LOG"
 grep -q 'network.blazewg_peer' "$UCI_LOG"
@@ -254,11 +255,17 @@ bp_remote_guard_boot
 [ ! -e "$BP_REMOTE_PENDING" ]
 [ ! -e "$ADMIN_STATE" ]
 
-# ZeroTier remains staged-only in dev.3.
+# This WireGuard-only fixture intentionally lacks ZeroTier binaries; the
+# dedicated dev.5 ZeroTier fixture owns that transport's survival coverage.
 bp_remote_save zerotier 1 1 0 BlazePwifi-Test Lab '' 30 120 '' 51820 '' '' '' 25 '' 1420 0123456789abcdef
-if bp_remote_live_supported; then
-  echo "ZeroTier unexpectedly reported live-apply support" >&2
+if bp_remote_zt_live_supported; then
+  echo "ZeroTier unexpectedly available in WireGuard-only fixture" >&2
   exit 1
 fi
 
-echo "v0.5.3-dev.3 WireGuard apply/rollback survival tests passed"
+mkdir -p "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old"
+printf 'secret-old\n' > "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old/network"
+bp_remote_guard_boot
+[ ! -d "$BP_REMOTE_APPLY_ROOT/snapshots/orphan-old" ]
+
+echo "v0.5.3 WireGuard apply/rollback survival tests passed"

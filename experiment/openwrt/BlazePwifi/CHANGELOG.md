@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.3-dev.5 — development
+
+- Enabled transactional **live ZeroTier activation/disable** for Full/Standard BlazePwifi targets while keeping Lite/Ruijie free of the ZeroTier runtime dependency.
+- Added stable on-device ZeroTier identity preparation using `zerotier.global.secret`. The identity secret is never returned to the browser/API/logs; only the public 10-character node ID is exposed after admin re-authentication.
+- Added strict ownership guards for modern OpenWrt ZeroTier UCI: BlazePwifi manages only `zerotier.blazepwifi`; foreign/custom ZeroTier network sections or legacy `.join` layouts are refused instead of overwritten.
+- The untouched stock `earth` example network is pruned only when it is still exactly default, global ZeroTier is disabled and the secret is empty.
+- Blaze-owned ZeroTier uses `allow_managed=1`, `allow_global=0`, `allow_default=0`, and `allow_dns=0`.
+- Live apply succeeds only after the node is ONLINE/TUNNELED, the requested network reports OK, a real interface exists, an IPv4 address is assigned, mesh routes pass overlap/default-route safety validation, the restricted firewall/admin listener succeeds, and existing management/default-route signatures survive.
+- ACCESS_DENIED, missing interface/address, unsafe managed routes, route capture, firewall/admin-listener failures, watchdog expiry, reboot interruption and transaction-ownership loss all fail closed and restore the previous network/firewall/remote/ZeroTier runtime state.
+- ZeroTier and WireGuard cannot be active at the same time; active-transport conflicts are rejected before mutation.
+- ZeroTier disable is allowed only from a local/non-ZeroTier management path and preserves the stable device identity for future re-enable.
+- Rollback snapshots containing ZeroTier secret material are mode-restricted and deleted after successful finalize or rollback.
+- Fixed a real pre-transaction mutation bug: an already-valid ZeroTier identity no longer rewrites/commits `global.secret` before the rollback snapshot. Existing config remains byte-stable until a transaction actually begins.
+- Rebuilt the ZeroTier transaction engine from the last clean sealed source after detecting a malformed duplicate tail; the authoritative engine again has one function set and no content after its EOF seal.
+- Management Console browser flow now covers prepare/show node ID, staged profile save, live ZeroTier apply/status, and safe disable without exposing secret identity material.
+- Exact green application candidate: `29a3815e81c9bd7db54c8f60eb6f579c818f34ad`.
+- Push workflow `37540065074` — PASS; PR #25 merge-tree workflow `37540072921` — PASS, including validation, ZeroTier survival, browser runtime, Android build, Device Owner emulator, x86 QEMU, ESP8266/ESP32, Ruijie, required Orange Pi targets, update bundle and final candidate gate.
+- Development identity: `0.5.3-dev.5` / Android versionCode `50294`.
+- Frozen v0.5.2 production/tag/signing/recovery workflows and `profiles/standalone-rental` remain untouched.
+
 ## 0.5.3-dev.4 — development
 
 - Added a reviewed **Pisonet Members metadata export/import** workflow for migration into BlazePwifi central member authority.

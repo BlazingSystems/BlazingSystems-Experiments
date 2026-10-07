@@ -53,8 +53,9 @@ mock_console_state={
     "terminal_enabled":False,
     "terminal_open":False,
     "remote_runtime":{
-        "activation_state":"staged","apply_supported":True,"public_key":"",
-        "applied_at":0,"last_handshake":0,"last_error":""
+        "activation_state":"staged","transport":"none","apply_supported":True,"public_key":"",
+        "applied_at":0,"last_handshake":0,"last_error":"",
+        "zerotier":{"active":0,"network_id":"","node_id":"","interface":"","address":"","status":"staged"}
     },
     "remote_config":{
         "mode":"disabled","monitoring":1,"management":0,"terminal":0,
@@ -173,7 +174,7 @@ def mock_admin(action, params=None):
         return {"ok":True,"public_key":rt["public_key"]}
     if action == "remote_wireguard_apply":
         rt=mock_console_state["remote_runtime"]
-        rt.update({"activation_state":"active","apply_supported":True,
+        rt.update({"activation_state":"active","transport":"wireguard","apply_supported":True,
                    "public_key":rt["public_key"] or "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
                    "applied_at":int(time.time()),"last_handshake":int(time.time()),"last_error":""})
         cfg=mock_console_state["remote_config"]
@@ -185,13 +186,51 @@ def mock_admin(action, params=None):
         }}
     if action == "remote_wireguard_disable":
         rt=mock_console_state["remote_runtime"]
-        rt.update({"activation_state":"staged","applied_at":int(time.time()),"last_handshake":0,"last_error":""})
+        rt.update({"activation_state":"staged","transport":"none","applied_at":int(time.time()),"last_handshake":0,"last_error":""})
         cfg=mock_console_state["remote_config"]
         return {"ok":True,"remote":{
             "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
             "management":cfg["management"],"terminal":cfg["terminal"],
             "node_name":cfg["node_name"],"site_label":cfg["site_label"],
             "wireguard":"installed","zerotier":"unavailable","runtime":dict(rt)
+        }}
+    if action == "remote_zerotier_identity":
+        rt=mock_console_state["remote_runtime"]
+        zt=rt["zerotier"]
+        zt.update({"node_id":"abcdef1234","status":"staged"})
+        cfg=mock_console_state["remote_config"]
+        return {"ok":True,"node_id":"abcdef1234","remote":{
+            "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
+            "management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"200 info abcdef1234 1.14.2 ONLINE","runtime":dict(rt)
+        }}
+    if action == "remote_zerotier_apply":
+        rt=mock_console_state["remote_runtime"]
+        cfg=mock_console_state["remote_config"]
+        zt=rt["zerotier"]
+        zt.update({"active":1,"network_id":cfg["zt_network_id"],"node_id":"abcdef1234",
+                   "interface":"ztblaze123","address":"10.77.0.2/24","status":"OK"})
+        rt.update({"activation_state":"active","transport":"zerotier","apply_supported":True,
+                   "applied_at":int(time.time()),"last_handshake":0,"last_error":""})
+        return {"ok":True,"remote":{
+            "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
+            "management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"200 info abcdef1234 1.14.2 ONLINE","runtime":dict(rt)
+        }}
+    if action == "remote_zerotier_disable":
+        rt=mock_console_state["remote_runtime"]
+        zt=rt["zerotier"]
+        zt.update({"active":0,"interface":"","address":"","status":"staged"})
+        rt.update({"activation_state":"staged","transport":"none","apply_supported":True,
+                   "applied_at":int(time.time()),"last_handshake":0,"last_error":""})
+        cfg=mock_console_state["remote_config"]
+        return {"ok":True,"remote":{
+            "mode":cfg["mode"],"ready":True,"monitoring":cfg["monitoring"],
+            "management":cfg["management"],"terminal":cfg["terminal"],
+            "node_name":cfg["node_name"],"site_label":cfg["site_label"],
+            "wireguard":"installed","zerotier":"200 info abcdef1234 1.14.2 ONLINE","runtime":dict(rt)
         }}
     if action == "terminal_status":
         return {"ok":True,"enabled":mock_console_state["terminal_enabled"],
@@ -416,6 +455,33 @@ with sync_playwright() as p:
     page.click('button:has-text("Disable live WireGuard")')
     page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
 
+    # dev.5 live ZeroTier: stable identity -> authorization-ready node -> transactional apply -> safe disable.
+    page.select_option("#remoteMode","zerotier")
+    page.fill("#remoteAllowlist","10.77.0.0/24")
+    page.fill("#ztNetworkId","0123456789abcdef")
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Validate & save profile")')
+    page.wait_for_function("document.getElementById('remoteModeState').textContent === 'zerotier'")
+
+    page.fill("#remotePassword","browser-password")
+    page.click('button:has-text("Prepare / show node ID")')
+    page.wait_for_function("document.getElementById('ztNodeId').value === 'abcdef1234'")
+    assert "authorize this node" in page.locator("#ztLiveState").inner_text().lower()
+
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Test & Apply ZeroTier")')
+    page.wait_for_function("document.getElementById('wgActivationState').textContent === 'active'")
+    page.wait_for_function("document.getElementById('ztLiveState').textContent.includes('10.77.0.2/24')")
+    assert "Live ZeroTier active" in page.locator("#remoteReadyState").inner_text()
+    assert "OK" in page.locator("#ztLiveState").inner_text()
+
+    page.fill("#remotePassword","browser-password")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click('button:has-text("Disable live ZeroTier")')
+    page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
+    assert "Identity ready" in page.locator("#ztLiveState").inner_text()
+
     # dev.2 Advanced Terminal: enable -> fresh re-auth -> in-memory session -> bounded command -> close.
     page.click('[data-page="tools"]')
     page.wait_for_selector("#page-tools.active")
@@ -434,6 +500,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('terminalOutput').textContent.includes('closed')")
 
     sensitive_actions={"remote_config_set","remote_wireguard_key","remote_wireguard_apply","remote_wireguard_disable",
+                       "remote_zerotier_identity","remote_zerotier_apply","remote_zerotier_disable",
                        "terminal_set_enabled","terminal_open","terminal_exec","terminal_close"}
     sensitive=[x for x in admin_mutations if x["action"] in sensitive_actions]
     assert sensitive_actions.issubset({x["action"] for x in sensitive})
@@ -537,6 +604,9 @@ result={
         "wireguard_live_apply":True,
         "wireguard_staged_edit":True,
         "wireguard_safe_disable":True,
+        "zerotier_identity_prepared":True,
+        "zerotier_live_apply":True,
+        "zerotier_safe_disable":True,
         "advanced_terminal_session":True,
         "member_metadata_export":True,
         "member_import_preview":True,

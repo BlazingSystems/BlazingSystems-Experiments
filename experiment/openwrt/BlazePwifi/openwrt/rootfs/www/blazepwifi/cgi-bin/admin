@@ -107,14 +107,15 @@ require_role() {
 	bp_fail "unauthorized"
 }
 
-bp_admin_is_wireguard_listener() {
-  wg_ip="$(bp_remote_get wg_address 2>/dev/null | cut -d/ -f1)"
-  [ -n "$wg_ip" ] || return 1
-  [ "${SERVER_ADDR:-}" = "$wg_ip" ]
+bp_admin_is_remote_listener() {
+  remote_listener="$(bp_remote_runtime_get wg_listener 2>/dev/null || true)"
+  remote_ip="${remote_listener%:*}"
+  [ -n "$remote_listener" ] && [ -n "$remote_ip" ] || return 1
+  [ "${SERVER_ADDR:-}" = "$remote_ip" ]
 }
 
 require_remote_terminal_permission() {
-  if bp_admin_is_wireguard_listener; then
+  if bp_admin_is_remote_listener; then
     [ "$(bp_remote_get terminal 0)" = 1 ] || bp_fail "Remote Terminal permission is disabled"
   fi
 }
@@ -652,7 +653,7 @@ EOF
     esac
     bp_auth_audit remote_config_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(bp_remote_get mode disabled)"
     remote="$(bp_remote_status_json)"
-    bp_json "$(printf '{"ok":true,"remote":%s,"apply_supported":false}' "$remote")"
+    bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
     ;;
   remote_wireguard_key)
     require_role admin
@@ -743,6 +744,100 @@ EOF
       *) bp_fail "WireGuard disable failed safely" ;;
     esac
     bp_auth_audit remote_wireguard_disable "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "staged"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
+    ;;
+  remote_zerotier_identity)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    node_id="$(bp_remote_zt_identity_prepare)"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      11) bp_fail "ZeroTier tools are not installed on this target" ;;
+      40) bp_fail "existing ZeroTier configuration is not Blaze-owned modern UCI; refusing to modify it" ;;
+      2) bp_fail "existing ZeroTier identity secret is invalid" ;;
+      *) bp_fail "unable to prepare local ZeroTier identity" ;;
+    esac
+    bp_auth_audit remote_zerotier_identity "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$node_id"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"node_id":"%s","remote":%s}' "$(bp_json_escape "$node_id")" "$remote")"
+    ;;
+  remote_zerotier_apply)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_remote_zerotier_apply "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      10) bp_fail "ZeroTier mode is not selected" ;;
+      11) bp_fail "ZeroTier live apply is unavailable on this target" ;;
+      12) bp_fail "invalid ZeroTier network configuration" ;;
+      17) bp_fail "remote management requires valid IPv4 source CIDRs" ;;
+      20) bp_fail "another remote-access transaction is already pending" ;;
+      22) bp_fail "default route unavailable; refusing ZeroTier apply" ;;
+      23) bp_fail "unable to create remote-access rollback snapshot" ;;
+      29) bp_fail "management/default route changed unexpectedly; previous network restored" ;;
+      30) bp_fail "ZeroTier transaction ownership was lost; rollback guard won" ;;
+      31) bp_fail "apply must be started from a local/non-ZeroTier management path" ;;
+      40) bp_fail "existing ZeroTier configuration is not Blaze-owned modern UCI; refusing to modify it" ;;
+      41) bp_fail "unable to prepare the local ZeroTier identity" ;;
+      43) bp_fail "disable the active WireGuard tunnel before activating ZeroTier" ;;
+      44) bp_fail "unable to write ZeroTier configuration; previous network restored" ;;
+      45) bp_fail "ZeroTier service failed to restart; previous network restored" ;;
+      46) bp_fail "ZeroTier did not reach authorized OK state with an assigned IPv4 address; previous network restored" ;;
+      47) bp_fail "ZeroTier installed unsafe/overlapping routes or the management allowlist is outside the mesh route; previous network restored" ;;
+      48) bp_fail "ZeroTier firewall activation failed; previous network restored" ;;
+      49) bp_fail "ZeroTier remote admin listener failed; previous network restored" ;;
+      *) bp_fail "ZeroTier apply failed safely; previous network restored" ;;
+    esac
+    bp_auth_audit remote_zerotier_apply "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "active"
+    remote="$(bp_remote_status_json)"
+    bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
+    ;;
+  remote_zerotier_disable)
+    require_role admin
+    bp_auth_csrf_ok || bp_fail "csrf validation failed"
+    [ "${BP_AUTH_MUST_CHANGE:-0}" != 1 ] || bp_fail "password change required"
+    password="$(bp_param password)"
+    bp_console_reauth "$password"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      2) bp_fail "account temporarily locked" ;;
+      *) bp_fail "re-authentication failed" ;;
+    esac
+    bp_remote_zerotier_disable "${REMOTE_ADDR:-}"
+    rc=$?
+    case "$rc" in
+      0) ;;
+      20) bp_fail "another remote-access transaction is already pending" ;;
+      22) bp_fail "default route unavailable; refusing ZeroTier disable" ;;
+      23) bp_fail "unable to create remote-access rollback snapshot" ;;
+      29|30|44|45|48|49) bp_fail "ZeroTier disable could not be completed safely; previous network restored" ;;
+      31) bp_fail "disable ZeroTier from a local/non-ZeroTier management path" ;;
+      42) bp_fail "ZeroTier is not currently active" ;;
+      *) bp_fail "ZeroTier disable failed safely" ;;
+    esac
+    bp_auth_audit remote_zerotier_disable "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "staged"
     remote="$(bp_remote_status_json)"
     bp_json "$(printf '{"ok":true,"remote":%s}' "$remote")"
     ;;

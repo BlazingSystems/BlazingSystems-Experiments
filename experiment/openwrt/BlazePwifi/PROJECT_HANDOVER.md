@@ -1,17 +1,17 @@
 # BlazePwifi Project Handover
 
-**Last updated:** 2026-10-06  
+**Last updated:** 2026-10-07  
 **Repository:** BlazingSystems/BlazingSystems-Experiments  
 **Production baseline:** BlazePwifi **v0.5.2** is the frozen production release. BlazeRental production signing lineage `BlazeRental-production-lineage2` is established and must be preserved for all future production upgrades.  
-**Active development:** **v0.5.3-dev.4 member-migration development line** — dev.3 WireGuard + centralized SoftTimer member authority plus reviewed verifier-free member metadata export/import. Exact green application candidate `723c9c2191542e6f6867ee5fbbc31083590b49f2`, workflow `37527877646` — PASS. This remains development-only; no v0.5.3 production tag/signing action has been taken.  
+**Active development:** **v0.5.3-dev.5 ZeroTier live activation**. Exact green application candidate `29a3815e81c9bd7db54c8f60eb6f579c818f34ad`; push workflow `37540065074` — PASS; PR #25 synthetic merge-tree workflow `37540072921` — PASS. This remains development-only; no v0.5.3 production tag/signing action has been taken.  
 **Scope guard:** Full BlazePwifi is the active product. `profiles/standalone-rental` is reference-only and must not be modified by Full BlazePwifi work unless the owner explicitly changes that instruction.
 
 ## Current v0.5.3 development status
 
 The post-v0.5.2 hardening work is implemented and artifact-validated. This is a **development line**, not a production v0.5.3 release.
 
-- Development identity: `0.5.3-dev.4`.
-- Android development versionCode: `50293`.
+- Development identity: `0.5.3-dev.5`.
+- Android development versionCode: `50294`.
 - Reserved development range: `50290–50298`.
 - Frozen v0.5.2 rollback rescue versionCode: `50299`.
 - Reserved final v0.5.3 production versionCode: `50300`.
@@ -78,7 +78,21 @@ The post-v0.5.2 hardening work is implemented and artifact-validated. This is a 
   - the optional-empty-label member-store parsing bug was fixed across CRUD/auth/balance/transfer/public-list/snapshot/export paths;
   - exact application candidate `723c9c2191542e6f6867ee5fbbc31083590b49f2`, workflow `37527877646`, passed validation, migration regression, Playwright, Android build, Device Owner emulator, x86 QEMU, ESP8266/ESP32, Ruijie, required Orange Pi targets, update bundle and final candidate gate;
   - retained browser audit reports `member_metadata_export=true`, `member_import_preview=true`, `member_import_apply=true`, `dual_csrf_transport=true`, and `console_errors=false`.
-- Current Full BlazePwifi dev.4 branch has zero changes under `profiles/standalone-rental`.
+- **dev.5 transactional ZeroTier live activation is green:**
+  - stable ZeroTier identity is generated/stored on-device; browser/API exposes only node ID, never `global.secret`;
+  - only Blaze-owned modern UCI section `zerotier.blazepwifi` is managed; legacy `.join` or foreign/custom network sections are refused safely;
+  - the untouched stock `earth` sample is pruned only when still exactly default and unused;
+  - Blaze network policy remains `allow_managed=1`, `allow_global=0`, `allow_default=0`, `allow_dns=0`;
+  - apply requires ONLINE/TUNNELED node state, network OK, real interface, assigned IPv4, safe mesh routes, firewall/admin-listener success, and management/default-route survival;
+  - ACCESS_DENIED, unsafe/overlapping/default routes, missing interface/address, listener/firewall failure, watchdog/reboot interruption and lost transaction ownership restore the previous state;
+  - WireGuard and ZeroTier active transports are mutually exclusive;
+  - disable is rejected from the ZeroTier path itself and preserves stable identity;
+  - snapshots containing ZeroTier secret material are restrictive and deleted after success/rollback;
+  - an existing valid `global.secret` is now a true no-op before snapshot creation, fixing a pre-transaction UCI mutation/line-reordering defect;
+  - the transaction engine was rebuilt from the last clean sealed source after detecting a malformed duplicate tail; static validation again enforces one valid engine ending at the authoritative EOF marker;
+  - retained browser audit reports `zerotier_identity_prepared=true`, `zerotier_live_apply=true`, `zerotier_safe_disable=true`, `wireguard_live_apply=true`, `member_import_apply=true`, and `console_errors=false`;
+  - exact application candidate `29a3815e81c9bd7db54c8f60eb6f579c818f34ad`, push workflow `37540065074` and PR #25 merge-tree workflow `37540072921` both passed the full matrix.
+- Full BlazePwifi dev.5 has zero changes under `profiles/standalone-rental`.
 - No v0.5.3 production tag/release has been created.
 - No production signing key was rotated or exposed.
 - Frozen v0.5.2 release/tag and dedicated signing/recovery workflows remain unchanged.
