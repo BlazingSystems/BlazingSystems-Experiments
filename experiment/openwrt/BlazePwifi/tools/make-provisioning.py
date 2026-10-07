@@ -11,6 +11,12 @@ p.add_argument("--server-cert-sha256",default="",
                help="optional SHA-256 fingerprint of a self-signed BlazePwifi server certificate")
 p.add_argument("--out",required=True)
 a=p.parse_args()
+if not a.server_url.lower().startswith("https://"):
+    p.error("--server-url must use https:// for Device Owner provisioning")
+if not a.apk_url.lower().startswith("https://"):
+    p.error("--apk-url must use https:// for Device Owner provisioning")
+if "." not in a.enrollment_token or a.enrollment_token.startswith(".") or a.enrollment_token.endswith("."):
+    p.error("--enrollment-token must be a BlazePwifi one-time token")
 pin=a.server_cert_sha256.replace(":","").strip().lower()
 if pin and (len(pin) != 64 or any(ch not in "0123456789abcdef" for ch in pin)):
     p.error("--server-cert-sha256 must be a 64-hex SHA-256 fingerprint")
