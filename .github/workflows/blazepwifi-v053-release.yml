@@ -245,7 +245,7 @@ jobs:
               exit 1
             }
           else
-            gh release create "$TAG" --repo "${{ github.repository }}"               --target "$SHA"               --title "BlazePwifi v0.5.3 — Remote Management, Rental Hardening & Pisonet Authority"               --notes-file "$NOTES"
+            gh release create "$TAG" --repo "${{ github.repository }}"               --target "$SHA"               --title "BlazePwifi v0.5.3 — Remote Management, Rental Hardening & Pisonet Authority"               --notes-file "$NOTES" --draft
           fi
 
           find release-out -maxdepth 1 -type f -print0 |
