@@ -6,7 +6,7 @@ ADMIN="$W/admin.html"
 CGI="$W/cgi-bin/admin"
 PORTAL="$W/index.html"
 
-case "$(cat "$ROOT/VERSION")" in 0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4|0.5.3-dev.5) ;; *) exit 1;; esac
+case "$(cat "$ROOT/VERSION")" in 0.5.0|0.5.1|0.5.2|0.5.3-dev.1|0.5.3-dev.2|0.5.3-dev.3|0.5.3-dev.4|0.5.3-dev.5|0.5.3) ;; *) exit 1;; esac
 test -f "$W/admin/console-v05.js"
 test -f "$W/media.html"
 test -f "$W/games.html"
