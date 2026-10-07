@@ -15,7 +15,7 @@ STORE="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/Rental
 SCANNER="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/QrEnrollmentScannerActivity.java"
 POLICY_CLIENT="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalPolicyClient.java"
 PAGES="$ROOT/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/RentalSystemPages.java"
-QR_TEMPLATE="$ROOT/tools/BlazeRental-QR-Setup.template.html"
+QR_BINDING_TEMPLATE="$ROOT/tools/BlazeRental-Binding-QR.template.html"\nQR_PROVISION_TEMPLATE="$ROOT/tools/BlazeRental-QR-Setup.template.html"
 QR_JSON_TOOL="$ROOT/tools/make-provisioning.py"
 
 sh -n "$ADMIN"
@@ -75,7 +75,7 @@ grep -Fq 'X509TrustManager' "$LEASE"
 grep -Fq 'BlazePwifi TLS certificate pin mismatch' "$LEASE"
 grep -Fq 'MessageDigest.getInstance("SHA-256")' "$LEASE"
 grep -Fq 'LeaseClient.post(context, base, body)' "$POLICY_CLIENT"
-grep -Fq 'server_cert_sha256' "$QR_TEMPLATE"
+grep -Fq 'server_cert_sha256' "$QR_BINDING_TEMPLATE"\n! grep -Fq 'PROVISIONING_' "$QR_BINDING_TEMPLATE"\ngrep -Fq 'server_cert_sha256' "$QR_PROVISION_TEMPLATE"\ngrep -Fq 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$QR_PROVISION_TEMPLATE"\n! grep -Fq 'PROVISIONING_SKIP_EDUCATION_SCREENS' "$QR_PROVISION_TEMPLATE"
 grep -Fq 'server-cert-sha256' "$QR_JSON_TOOL"
 
 echo "hardening: retry-safe one-time Rental enrollment"
