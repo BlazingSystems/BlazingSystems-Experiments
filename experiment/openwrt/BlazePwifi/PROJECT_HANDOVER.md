@@ -21,7 +21,7 @@
 | Full v0.6.0 development | **Draft PR #30; release BLOCKED** | Existing VERSION and Android version metadata still `0.5.3`; no v0.6.0 signer run, release manifest, production APK or upgrade/rescue artifacts |
 | Windows BlazePisonet SoftTimer | **Build verified, not physically field-proven** | Exact pre-documentation SHA `d99f9b7b1ac10f183659c97c156fe4c939863cf8`; [run #37770673126](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673126) SUCCESS: prepaid monotonic timer simulation, native Windows EXE/NSIS install/uninstall |
 | Full BlazePwifi CI | **FAILED at browser regression** | [run #37770673219](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673219) on same code SHA; Playwright still clicks renamed QR button; final candidate gate skipped |
-| Handover synchronization | **IMPLEMENTED / exact-SHA retest pending** | New policy, live ledger, `tests/handover_gate.sh` CI fail-closed freshness check, full-history checkout, source label fix `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e`; current docs checkpointed after source |
+| Handover synchronization | **IMPLEMENTED / exact-SHA retest pending** | Policy + state + ledger + source freshness CI gate (full history); Playwright QR fix `da87ad69...`; always-uploaded non-secret CI run/status artifact `1e92fd13...`; public README correction `500c6d28...`; live docs checkpoint after source. |
 
 **Do not use old dates in the archived text to decide which branch/code is active.** `docs/handover/CURRENT_STATE.md` takes precedence when source + current Action logs corroborate it. If evidence contradicts it, fix this block and the live state immediately instead of inventing a release success.
 
@@ -29,8 +29,8 @@
 
 1. **Implemented, pending CI proof:** `tests/handover_gate.sh` added in `c27593ca4f272432118ac37fe74c5dab755eec08`, early full-history CI step in `2cc802a7c44785aa35fde7079d8e4160b0a1759f`. Check the latest exact HEAD `validate` gate and prove stale source edits would fail.
 2. **Fixed in source, pending CI proof:** `simulation/browser_v04_audit.py` obsolete QR button locators corrected in `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e` without removing Device Owner or Binding assertions. Check `v04_browser_simulation` at the new exact HEAD.
-3. Append `CHANGE_LEDGER.md` and update both this CURRENT STATUS and `CURRENT_STATE.md` after each meaningful step, including failures and new CI; ensure the final documentation checkpoint is at or after the last runtime change.
-4. Run exact-HEAD full CI and Windows CI. Keep PR #30 draft and **do not publish 0.6.0** until versionCode/migration, permanent same-signer APK, firmware, recovery and hardware gates pass.
+3. **Checkpointed after the source changes:** `CURRENT_STATE.md`, `CHANGE_LEDGER.md` and this CURRENT STATUS now reflect the gate, QR browser selector fix, CI evidence artifact and README correction. Any subsequent source/workflow modification requires another synchronized checkpoint.
+4. **NOW:** inspect exact-HEAD full CI, including `Mandatory handover freshness gate`, `v04_browser_simulation`, Android Device Owner emulator and candidate gate; inspect the `BlazePwifi-ci-handover-evidence` artifact and Windows EXE/NSIS result. Log failed, skipped or cancelled runs in all three canonical files. Keep PR #30 draft and **do not publish 0.6.0** until versionCode/migration, permanent same-signer APK, firmware, recovery and hardware gates pass.
 
 ## Copyable next-chat instruction
 
