@@ -87,9 +87,27 @@ public final class RentalSystemPages {
 
     public static View createRentalPage(final Launcher launcher) {
         final LinearLayout root = basePage(launcher);
-        final TextView state = headline(launcher, "BLAZERENTAL");
+        // This is a native Launcher3 view, not a WebView or HTML overlay.
+        final LinearLayout hero = new LinearLayout(launcher);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER_HORIZONTAL);
+        hero.setPadding(dp(launcher, 16), dp(launcher, 22),
+                dp(launcher, 16), dp(launcher, 22));
+        GradientDrawable heroBg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(25, 57, 84), Color.rgb(9, 28, 47)});
+        heroBg.setCornerRadius(dp(launcher, 24));
+        heroBg.setStroke(dp(launcher, 1), Color.rgb(58, 123, 137));
+        hero.setBackground(heroBg);
+        final TextView brand = body(launcher, "BLAZERENTAL  /  PREPAID DEVICE");
+        brand.setTextSize(11f);
+        brand.setTextColor(Color.rgb(119, 234, 219));
+        brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        final TextView state = headline(launcher, "CONNECTING");
+        state.setTextSize(21f);
         final TextView timer = headline(launcher, "00:00:00");
         timer.setTextSize(42f);
+        timer.setTextColor(Color.rgb(116, 237, 217));
         final Handler adminHandler = new Handler();
         final long holdMs = RentalUiPolicy.adminHoldMs(launcher);
         final AdminGestureController adminGesture = new AdminGestureController(holdMs);
@@ -147,11 +165,19 @@ public final class RentalSystemPages {
         final boolean[] coinOpening = new boolean[]{false};
         coinDone.setVisibility(View.GONE);
 
-        root.addView(state);
-        root.addView(timer);
-        root.addView(detail);
+        hero.addView(brand);
+        hero.addView(state);
+        hero.addView(timer);
+        hero.addView(detail);
+        root.addView(hero, rowMargins(launcher));
         root.addView(coinWindow);
         root.addView(coinProgress);
+        final TextView coinHint = body(launcher,
+                "Insert a coin to unlock this phone or extend your time. "
+                + "Your balance is verified by the rental server.");
+        coinHint.setTextSize(13f);
+        root.addView(coinHint);
+        coin.setContentDescription("Open coin payment window");
         root.addView(coin, buttonMargins(launcher));
         root.addView(coinDone, rowMargins(launcher));
 
@@ -202,6 +228,10 @@ public final class RentalSystemPages {
                 if (paid) FloatingTimerService.ensure(launcher);
                 else FloatingTimerService.stop(launcher);
                 setTextIfChanged(timer, formatDuration(remaining));
+                setTextIfChanged(state, coinActive ? "COIN WINDOW OPEN" :
+                        (paid ? "READY TO PLAY" : "INSERT COIN TO UNLOCK"));
+                int timerColor = paid ? Color.rgb(116, 237, 217) : Color.rgb(255, 212, 157);
+                if (timer.getCurrentTextColor() != timerColor) timer.setTextColor(timerColor);
                 setTextIfChanged(detail, coinActive ? "INSERT COIN NOW" :
                         (paid ? "RENTAL ACTIVE" : "TIME FINISHED"));
                 setTextIfChanged(coin, coinOpening[0] ? "OPENING COIN WINDOW…" :
