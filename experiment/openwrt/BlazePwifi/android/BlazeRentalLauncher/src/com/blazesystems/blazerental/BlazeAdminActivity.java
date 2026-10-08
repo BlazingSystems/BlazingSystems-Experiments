@@ -815,7 +815,7 @@ public class BlazeAdminActivity extends Activity {
     private ScrollView wrap(View child) {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(Color.rgb(8, 13, 24));
+        scroll.setBackgroundColor(Color.rgb(7, 18, 30));
         scroll.addView(child);
         return scroll;
     }
@@ -832,18 +832,21 @@ public class BlazeAdminActivity extends Activity {
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.rgb(20, 30, 49));
-        bg.setCornerRadius(dp(12));
+        card.setPadding(dp(18), dp(17), dp(18), dp(17));
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(23, 52, 72), Color.rgb(13, 29, 47)});
+        bg.setCornerRadius(dp(20));
+        bg.setStroke(dp(1), Color.rgb(51, 100, 117));
         card.setBackground(bg);
         return card;
     }
 
     private void section(String name) {
         TextView v = title(name);
-        v.setTextSize(18f);
-        v.setPadding(0, dp(24), 0, dp(8));
+        v.setTextSize(19f);
+        v.setTextColor(Color.rgb(226, 250, 251));
+        v.setPadding(0, dp(25), 0, dp(11));
         content.addView(v);
     }
 
@@ -863,7 +866,11 @@ public class BlazeAdminActivity extends Activity {
         input.setHint(hint);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(Color.rgb(120, 139, 164));
-        input.setBackgroundColor(Color.rgb(15, 23, 42));
+        GradientDrawable fieldBg = new GradientDrawable();
+        fieldBg.setColor(Color.rgb(11, 27, 43));
+        fieldBg.setCornerRadius(dp(12));
+        fieldBg.setStroke(dp(1), Color.rgb(53, 97, 118));
+        input.setBackground(fieldBg);
         input.setPadding(dp(12), dp(10), dp(12), dp(10));
         if (password) input.setInputType(
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
@@ -884,6 +891,7 @@ public class BlazeAdminActivity extends Activity {
         v.setText(text);
         v.setTextColor(Color.WHITE);
         v.setTextSize(25f);
+        v.setLetterSpacing(-0.02f);
         v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return v;
     }
@@ -901,13 +909,24 @@ public class BlazeAdminActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setTextColor(Color.WHITE);
-        b.setBackgroundColor(Color.rgb(70, 95, 255));
+        b.setAllCaps(false);
+        b.setMinHeight(dp(51));
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(12, 152, 150), Color.rgb(57, 89, 207)});
+        bg.setCornerRadius(dp(13));
+        bg.setStroke(dp(1), Color.rgb(90, 211, 206));
+        b.setBackground(bg);
         return b;
     }
 
     private Button secondary(String text) {
         Button b = primary(text);
-        b.setBackgroundColor(Color.rgb(30, 41, 59));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.rgb(29, 47, 68));
+        bg.setCornerRadius(dp(13));
+        bg.setStroke(dp(1), Color.rgb(60, 100, 123));
+        b.setBackground(bg);
         return b;
     }
 
