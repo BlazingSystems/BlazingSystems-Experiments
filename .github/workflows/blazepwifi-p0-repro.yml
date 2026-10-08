@@ -13,6 +13,9 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/common.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo'
 permissions:
   contents: read
 jobs:
@@ -28,6 +31,8 @@ jobs:
         run: |
           sh -n experiment/openwrt/BlazePwifi/tools/v060_journal_fixture.sh
           sh -n experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
+      - name: Refuse ordinary signed-coin false ACK when account storage fails
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh
       - name: Verify native POSIX transaction journal fixture (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: Verify offline synthetic transactional journal oracle (model only)
