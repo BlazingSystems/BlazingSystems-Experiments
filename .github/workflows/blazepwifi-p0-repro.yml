@@ -14,6 +14,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/common.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/vendo'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/api'
@@ -37,6 +38,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh
       - name: Exercise live portal-to-vendo window reuse, write failures and closure
         run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
+      - name: Preserve signed-coin replay receipts throughout the live target window
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh
       - name: Verify native POSIX transaction journal fixture (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: Verify offline synthetic transactional journal oracle (model only)
