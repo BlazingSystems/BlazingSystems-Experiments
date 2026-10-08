@@ -130,6 +130,7 @@ bp_provisioning_validate() {
   apk_channel="$(bp_provisioning_meta_get APK_CHANNEL)"
   production_ready="$(bp_provisioning_meta_get PRODUCTION_READY)"
   gms_dpc_approved="$(bp_provisioning_meta_get GMS_DPC_APPROVED)"
+  target_scope="$(bp_provisioning_meta_get TARGET_SCOPE)"
   [ "$ready" = 1 ] || return 1
   case "$apk_url" in https://*) ;; *) return 1;; esac
   printf '%s' "$apk_url" | grep -q '[[:space:][:cntrl:]]' && return 1
@@ -142,6 +143,15 @@ bp_provisioning_validate() {
   case "$apk_channel" in test|production) ;; *) return 1;; esac
   case "$production_ready" in 0|1) ;; *) return 1;; esac
   case "$gms_dpc_approved" in 0|1) ;; *) return 1;; esac
+  case "$target_scope" in
+    aosp_non_gms_or_explicit_oem_only|gms_and_supported_aosp) ;;
+    *) return 1 ;;
+  esac
+  if [ "$gms_dpc_approved" = 0 ]; then
+    [ "$target_scope" = aosp_non_gms_or_explicit_oem_only ] || return 1
+  else
+    [ "$target_scope" = gms_and_supported_aosp ] || return 1
+  fi
   [ "$apk_channel" != production ] || [ "$production_ready" = 1 ] || return 1
   return 0
 }
@@ -195,8 +205,8 @@ case "$action" in
     if bp_provisioning_validate; then
       gms_warning=false
       [ "$gms_dpc_approved" = 1 ] || gms_warning=true
-      bp_json "$(printf '{"ok":true,"ready":true,"apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"custom_dpc_gms_warning":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
-        "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$gms_warning")"
+      bp_json "$(printf '{"ok":true,"ready":true,"apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"target_scope":"%s","custom_dpc_gms_warning":%s,"dpc_component":"com.blazesystems.blazerental/.BlazeDeviceAdminReceiver"}' \
+        "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$target_scope")" "$gms_warning")"
     else
       bp_json '{"ok":true,"ready":false,"production_ready":false,"error":"exact provisionable BlazeRental APK metadata unavailable"}'
     fi
@@ -241,8 +251,8 @@ case "$action" in
     esac
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$ssid" "$security" "$wifi_password" "$hidden" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s:%s:%s' "$apk_channel" "$apk_version" "$label" | cut -c1-120)"
-    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v2","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"server_cert_sha256":"%s","qr_payload":"%s"}' \
-      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$cert_pin")" "$(bp_json_escape "$qr_payload")")"
+    bp_json "$(printf '{"ok":true,"qr_type":"device_provisioning","schema":"blazerental.provisioning.v2","enrollment_token":"%s","expires_seconds":3600,"server_url":"%s","device_name":"%s","apk_url":"%s","apk_checksum":"%s","apk_sha256":"%s","apk_version":"%s","apk_version_code":%s,"apk_channel":"%s","production_ready":%s,"gms_dpc_approved":%s,"target_scope":"%s","server_cert_sha256":"%s","qr_payload":"%s"}' \
+      "$(bp_json_escape "$token")" "$(bp_json_escape "$server")" "$(bp_json_escape "$label")" "$(bp_json_escape "$apk_url")" "$(bp_json_escape "$apk_checksum")" "$(bp_json_escape "$apk_sha256")" "$(bp_json_escape "$apk_version")" "$apk_code" "$(bp_json_escape "$apk_channel")" "$production_ready" "$gms_dpc_approved" "$(bp_json_escape "$target_scope")" "$(bp_json_escape "$cert_pin")" "$(bp_json_escape "$qr_payload")")"
     ;;
   rental_list|rental_device_list)
     require_role viewer

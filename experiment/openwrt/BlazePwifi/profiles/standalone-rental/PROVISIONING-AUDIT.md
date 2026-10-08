@@ -133,6 +133,15 @@ The release metadata carries `GMS_DPC_APPROVED`. When it is `0`, API and UI requ
 
 Production planning must treat this platform/policy limitation separately from technical correctness of the QR payload.
 
+### Explicit stable target scope
+
+Stable promotion must carry one of two exact target-scope values:
+
+- `aosp_non_gms_or_explicit_oem_only` when `GMS_DPC_APPROVED=0`;
+- `gms_and_supported_aosp` only when `GMS_DPC_APPROVED=1`.
+
+The physical validation evidence must match the release metadata's target scope. When the DPC is not GMS-approved, evidence must explicitly record that no universal GMS compatibility claim is being made. This prevents a technically valid custom-DPC QR from being promoted with a broader platform-support claim than was actually validated.
+
 ## Release/signing boundary
 
 Provisioning changes remain release-candidate work until physical Setup Wizard validation is complete.

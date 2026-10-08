@@ -37,7 +37,7 @@ for raw in meta_path.read_text(encoding="utf-8").splitlines():
 
 required = [
     "PACKAGE_NAME", "APK_VERSION", "APK_VERSION_CODE", "APK_CHANNEL",
-    "PRODUCTION_READY", "GMS_DPC_APPROVED", "APK_SHA256",
+    "PRODUCTION_READY", "GMS_DPC_APPROVED", "TARGET_SCOPE", "APK_SHA256",
     "APK_CHECKSUM", "SIGNER_CERT_SHA256",
 ]
 missing = [k for k in required if k not in meta]
@@ -52,6 +52,15 @@ if meta["PRODUCTION_READY"] not in {"0", "1"}:
     raise SystemExit("invalid production flag")
 if meta["GMS_DPC_APPROVED"] not in {"0", "1"}:
     raise SystemExit("invalid GMS DPC approval flag")
+if meta["TARGET_SCOPE"] not in {
+    "aosp_non_gms_or_explicit_oem_only",
+    "gms_and_supported_aosp",
+}:
+    raise SystemExit("invalid provisioning target scope")
+if meta["GMS_DPC_APPROVED"] == "0" and meta["TARGET_SCOPE"] != "aosp_non_gms_or_explicit_oem_only":
+    raise SystemExit("non-approved custom DPC must use the restricted AOSP/non-GMS target scope")
+if meta["GMS_DPC_APPROVED"] == "1" and meta["TARGET_SCOPE"] != "gms_and_supported_aosp":
+    raise SystemExit("GMS-approved DPC must use the GMS-and-supported-AOSP target scope")
 if not re.fullmatch(r"[0-9]+", meta["APK_VERSION_CODE"]):
     raise SystemExit("invalid version code")
 if not re.fullmatch(r"[a-f0-9]{64}", meta["SIGNER_CERT_SHA256"]):
@@ -81,6 +90,7 @@ out.write_text(
         f"APK_CHANNEL={meta['APK_CHANNEL']}",
         f"PRODUCTION_READY={meta['PRODUCTION_READY']}",
         f"GMS_DPC_APPROVED={meta['GMS_DPC_APPROVED']}",
+        f"TARGET_SCOPE={meta['TARGET_SCOPE']}",
         "",
     ]),
     encoding="utf-8",

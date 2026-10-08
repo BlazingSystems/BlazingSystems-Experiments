@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, re, sys
+import argparse, json, re, subprocess, sys
 from pathlib import Path
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -38,6 +38,7 @@ p.add_argument("--identity", required=True)
 p.add_argument("--metadata", required=True)
 p.add_argument("--evidence", required=True)
 p.add_argument("--apk", required=True)
+p.add_argument("--apksigner", default="apksigner")
 p.add_argument("--expected-package", default="com.blazesystems.blazerental")
 args=p.parse_args()
 
@@ -65,6 +66,17 @@ for k,v in required_meta.items():
     if meta.get(k) != v:
         fail(f"{k} must equal {v!r}, got {meta.get(k)!r}")
 
+gms_approved=meta.get("GMS_DPC_APPROVED")
+target_scope=meta.get("TARGET_SCOPE")
+if gms_approved not in {"0","1"}:
+    fail("GMS_DPC_APPROVED must be 0 or 1")
+if target_scope not in {"aosp_non_gms_or_explicit_oem_only","gms_and_supported_aosp"}:
+    fail("TARGET_SCOPE is missing or invalid")
+if gms_approved == "0" and target_scope != "aosp_non_gms_or_explicit_oem_only":
+    fail("non-approved custom DPC must use restricted AOSP/non-GMS target scope")
+if gms_approved == "1" and target_scope != "gms_and_supported_aosp":
+    fail("GMS-approved DPC must use the GMS-and-supported-AOSP target scope")
+
 apk_sha=meta.get("APK_SHA256","").lower()
 checksum=meta.get("APK_CHECKSUM","")
 signer=norm_fp(meta.get("SIGNER_CERT_SHA256",""))
@@ -87,6 +99,28 @@ if actual_sha != apk_sha:
 if actual_checksum != checksum:
     fail("production APK bytes do not match APK_CHECKSUM")
 
+try:
+    proc=subprocess.run(
+        [args.apksigner,"verify","--print-certs",str(apk)],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, timeout=60,
+    )
+except Exception as exc:
+    fail(f"cannot execute apksigner verification: {exc}")
+if proc.returncode != 0:
+    fail("production APK signature verification failed")
+certs=[]
+for line in proc.stdout.splitlines():
+    m=re.match(r"^Signer #\\d+ certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$", line.strip())
+    if m:
+        certs.append(norm_fp(m.group(1)))
+if len(certs) != 1:
+    fail(f"expected exactly one APK signer certificate, found {len(certs)}")
+if certs[0] != locked_fp:
+    fail("actual APK signer certificate does not match locked Lineage-2 identity")
+if signer != certs[0]:
+    fail("metadata signer certificate does not match actual APK signer certificate")
+
 if evidence.get("passed") is not True:
     fail("physical Setup Wizard validation evidence is not marked passed")
 if evidence.get("package_id") != args.expected_package:
@@ -95,6 +129,14 @@ if evidence.get("apk_sha256","").lower() != apk_sha:
     fail("physical evidence APK SHA-256 does not match production APK")
 if norm_fp(evidence.get("signer_certificate_sha256")) != locked_fp:
     fail("physical evidence signer fingerprint mismatch")
+if evidence.get("target_scope") != target_scope:
+    fail("physical evidence target_scope does not match release metadata")
+if evidence.get("gms_dpc_approved") is not (gms_approved == "1"):
+    fail("physical evidence GMS DPC approval state does not match release metadata")
+if gms_approved == "0" and evidence.get("universal_gms_compatibility_claimed") is not False:
+    fail("non-approved custom DPC must explicitly record no universal GMS compatibility claim")
+if gms_approved == "1" and evidence.get("universal_gms_compatibility_claimed") not in {False, True}:
+    fail("physical evidence must explicitly record universal_gms_compatibility_claimed")
 
 required_true=[
     "factory_reset_setup_wizard_completed",

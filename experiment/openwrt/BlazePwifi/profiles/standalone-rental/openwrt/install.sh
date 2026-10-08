@@ -155,6 +155,7 @@ APK_VERSION_CODE=
 APK_CHANNEL=
 PRODUCTION_READY=0
 GMS_DPC_APPROVED=0
+TARGET_SCOPE=unconfigured
 EOF
 fi
 chmod 644 /usr/share/blazepwifi/rental-provisioning.env

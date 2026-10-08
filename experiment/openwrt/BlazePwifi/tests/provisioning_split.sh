@@ -274,6 +274,8 @@ printf '%s\n' \
   'APK_VERSION_CODE=50208' \
   'APK_CHANNEL=test' \
   'PRODUCTION_READY=0' \
+  'GMS_DPC_APPROVED=0' \
+  'TARGET_SCOPE=aosp_non_gms_or_explicit_oem_only' \
   "APK_SHA256=$RC7_SHA" \
   "APK_CHECKSUM=$RC7_CHECKSUM" \
   "SIGNER_CERT_SHA256=$LOCKED_FP" \
@@ -286,6 +288,102 @@ if python3 "$PROMOTE" \
     --apk "$TMP/rc7-test.apk" >/dev/null 2>&1
 then
   echo "stable promotion gate incorrectly accepted RC/test metadata" >&2
+  exit 1
+fi
+
+# Exercise the stable gate itself with synthetic bytes and a controlled
+# apksigner shim. The gate must use the signer extracted from the APK
+# verification command, not merely trust SIGNER_CERT_SHA256 metadata.
+printf 'synthetic-production-apk' > "$TMP/prod.apk"
+PROD_SHA="$(sha256sum "$TMP/prod.apk" | awk '{print $1}')"
+PROD_CHECKSUM="$(python3 -c 'import base64,hashlib,pathlib,sys; print(base64.urlsafe_b64encode(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).digest()).decode())' "$TMP/prod.apk")"
+
+cat > "$TMP/fake-apksigner-good" <<EOF
+#!/bin/sh
+echo "Signer #1 certificate SHA-256 digest: $LOCKED_FP"
+exit 0
+EOF
+chmod +x "$TMP/fake-apksigner-good"
+
+cat > "$TMP/fake-apksigner-bad" <<'EOF'
+#!/bin/sh
+echo "Signer #1 certificate SHA-256 digest: 0000000000000000000000000000000000000000000000000000000000000000"
+exit 0
+EOF
+chmod +x "$TMP/fake-apksigner-bad"
+
+printf '%s\n' \
+  'READY=1' \
+  'PACKAGE_NAME=com.blazesystems.blazerental' \
+  'APK_VERSION=0.5.2-rental.2' \
+  'APK_VERSION_CODE=50208' \
+  'APK_CHANNEL=production' \
+  'PRODUCTION_READY=1' \
+  'GMS_DPC_APPROVED=0' \
+  'TARGET_SCOPE=aosp_non_gms_or_explicit_oem_only' \
+  "APK_SHA256=$PROD_SHA" \
+  "APK_CHECKSUM=$PROD_CHECKSUM" \
+  "SIGNER_CERT_SHA256=$LOCKED_FP" \
+  > "$TMP/prod-meta.env"
+
+python3 - "$IDENTITY" "$PROD_SHA" "$TMP/prod-evidence.json" <<'PY'
+import json, re, sys
+identity=json.load(open(sys.argv[1],encoding="utf-8"))
+fp=re.sub(r"[^0-9A-Fa-f]","",identity["sha256_fingerprint"]).lower()
+out={
+  "schema":"blazerental.physical-provisioning-validation.v1",
+  "passed":True,
+  "release":"synthetic-gate-test",
+  "package_id":"com.blazesystems.blazerental",
+  "apk_sha256":sys.argv[2],
+  "signer_certificate_sha256":fp,
+  "target_scope":"aosp_non_gms_or_explicit_oem_only",
+  "gms_dpc_approved":False,
+  "universal_gms_compatibility_claimed":False,
+  "factory_reset_setup_wizard_completed":True,
+  "device_owner_confirmed":True,
+  "https_certificate_pin_verified":True,
+  "v2_enrollment_completed":True,
+  "device_visible_on_intended_server":True,
+  "response_loss_retry_same_identity":True,
+  "protocol1_downgrade_rejected":True,
+  "redemption_record_retired_after_authenticated_sync":True,
+  "standard_scanner_rejected_device_provisioning_qr":True,
+  "android_12_plus_path_tested":True,
+  "tested_android_versions":["12","14"]
+}
+json.dump(out,open(sys.argv[3],"w",encoding="utf-8"),indent=2)
+PY
+
+python3 "$PROMOTE" \
+  --identity "$IDENTITY" \
+  --metadata "$TMP/prod-meta.env" \
+  --evidence "$TMP/prod-evidence.json" \
+  --apk "$TMP/prod.apk" \
+  --apksigner "$TMP/fake-apksigner-good" \
+  | grep -q 'PROMOTION GATE: PASS'
+
+if python3 "$PROMOTE" \
+    --identity "$IDENTITY" \
+    --metadata "$TMP/prod-meta.env" \
+    --evidence "$TMP/prod-evidence.json" \
+    --apk "$TMP/prod.apk" \
+    --apksigner "$TMP/fake-apksigner-bad" >/dev/null 2>&1
+then
+  echo "stable promotion gate trusted forged signer metadata" >&2
+  exit 1
+fi
+
+sed 's/^TARGET_SCOPE=.*/TARGET_SCOPE=gms_and_supported_aosp/' \
+  "$TMP/prod-meta.env" > "$TMP/prod-meta-bad-scope.env"
+if python3 "$PROMOTE" \
+    --identity "$IDENTITY" \
+    --metadata "$TMP/prod-meta-bad-scope.env" \
+    --evidence "$TMP/prod-evidence.json" \
+    --apk "$TMP/prod.apk" \
+    --apksigner "$TMP/fake-apksigner-good" >/dev/null 2>&1
+then
+  echo "stable promotion gate accepted an over-broad non-GMS target scope" >&2
   exit 1
 fi
 

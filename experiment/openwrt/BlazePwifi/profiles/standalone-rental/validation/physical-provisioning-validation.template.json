@@ -16,5 +16,8 @@
   "standard_scanner_rejected_device_provisioning_qr": false,
   "android_12_plus_path_tested": false,
   "tested_android_versions": [],
-  "notes": "Template only. Stable promotion must remain blocked until this evidence is completed from physical authorized-device testing using the exact production-signed APK."
+  "notes": "Template only. Stable promotion must remain blocked until this evidence is completed from physical authorized-device testing using the exact production-signed APK.",
+  "target_scope": "aosp_non_gms_or_explicit_oem_only",
+  "gms_dpc_approved": false,
+  "universal_gms_compatibility_claimed": false
 }
