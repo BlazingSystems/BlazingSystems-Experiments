@@ -1,3 +1,9 @@
+## MIG-0621 / P0 — concurrent oracle VERIFIED in staged CI; Full/Windows pending (2026-10-09)
+
+- New `tests/v060_ledger_model.py` concurrent collision/retry test commit `82d3af24b9b04cc1f524c2ce1709fd839787606a`. Staged P0 [#37812069795](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37812069795) exact SHA **COMPLETED SUCCESS** with log asserting one commit+one replay from simultaneous requests, plus rollback, ACK loss, stale window, model invariants. Old source defects still expected RED (evicted ID credit and EIO receipt ACK); patched transfer atomic rename GREEN. Required Full `validate` model step added to `.github/workflows/blazepwifi-build.yml` in `f5dd3a53a3cb6304b46f041ebb5be7928d352fa7`. No OpenWrt money engine migration implemented; model is NOT a router dependency.
+- **Current release gate:** Full 26-job and Windows 2-job on final exact HEAD after these docs pending. Do not treat prior staged pass as production. Keep v0.6 update guard and previous releases unchanged.
+- **NEXT EXACT ACTION:** inspect Actions runs for latest branch head and confirm FULL `validate` (legacy v053 members, sysupgrade, transfer crash, Python ledger oracle), firmware/Android/browser/sim/QEMU and Windows installer jobs. On failure inspect steps and repair only source/test bug. Then implement real journal protocol v2 with bounded per-controller authenticated sequence, atomic receipts, disk-full and physical sync. Current account bank/restore still unsafe to ship.
+
 ## MIG-0621 / P0 — IN PROGRESS: concurrent duplicate oracle + main CI gate (2026-10-09)
 
 - **Current evidence:** Synthetic staged Actions #37811759148, SHA `40fb33338aa5378900d86a95ff4d0b000cb48bc4`, COMPLETED SUCCESS. Log explicitly reports `MIG-0620 synthetic ledger MODEL PASS`, old replay RED, atomic transfer PASS and receipt EIO RED. This establishes only isolated model behavior; no durable OpenWrt journal, controller v2 protocol or recovery migration exists.
