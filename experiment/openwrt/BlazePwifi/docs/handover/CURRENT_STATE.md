@@ -1,3 +1,11 @@
+## PAY-0627 / IN PROGRESS — 2026-10-09 Asia/Manila — live Wi-Fi coin false-ACK containment
+
+- **Priority P0 money loss, branch** `blazepwifi-v0.6.0-audit-foundation`, PR #30. Unlike member/rental paid paths, `openwrt/rootfs/www/blazepwifi/cgi-bin/vendo` ordinary Wi-Fi coin branch calls `bp_account_write` without checking its return and without `bp_paid_begin/bp_paid_commit`. `common.sh` `bp_account_write` also ends in `bp_durable_sync`, masking a failed `awk > tmp` or `mv` when durable_sync=0. A failed rename can therefore return `ok:true` for money not actually credited.
+- **Plan:** explicitly error-propagate account writes while constructing a private chmod-600 replacement before rename; require the existing global paid halt/lock around real coin mutations; abort with no ACK and retain marker on write failure; refuse even duplicate responses while state is uncertain. Add synthetic CGI adversarial `mv` failure test for same signed coin request and confirm no double credit or false ACK. Preserve rental/member routes, legacy version and 0.6 migration refusal.
+- **Hazards:** changes core billing behavior, tests must be exact GitHub Actions at updated SHA, no live deployment or migration; legacy bounded per-account coin receipt IDs and full powercut crash-atomicity remain independent P0 blocks. Rollback only by code revert and operator reconciliation if a device already ran it. **Status IN_PROGRESS, not a success claim.**
+- **NEXT EXACT ACTION:** patch `common.sh` write propagation and `cgi-bin/vendo` Wi-Fi payment branch; add synthetic EIO fault test; run integration, receipt regression, P0 workflow and full exact-SHA with all handover files synchronized.
+
+
 ## SEC-0626 FAST GATE / IN PROGRESS — 2026-10-09 Asia/Manila
 
 - Added dedicated Linux-only regression workflow `.github/workflows/blazepwifi-v060-update-security.yml` at `6ac1086d27f58e59b85b3fdebe8126506f8f544b`. It directly invokes the new malicious-archive test plus legacy v051/v052 update/rollback and v060 migration refusal. This avoids waiting for firmware/ESP/Android matrices to learn whether a shell-policy change fails; full CI also retains `Verify safe tar extraction and manifest target policy`.
