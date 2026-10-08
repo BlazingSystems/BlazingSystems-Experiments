@@ -386,6 +386,13 @@ with sync_playwright() as p:
     page.select_option("#blazeStyleSelect", "fusion")
     assert page.locator("body").get_attribute("data-blaze-style") == "fusion"
     assert page.locator(".nav-btn[data-page='rentals']").get_attribute("data-symbol")
+    # New CoreUI×Metis-inspired operator header must remain within narrow phones.
+    for width in (390, 360):
+        page.set_viewport_size({"width": width, "height": 844})
+        page.wait_for_timeout(100)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 2"), (
+            "BlazeFusion topbar/body overflow at narrow mobile viewport " + str(width))
+    page.set_viewport_size({"width": 1440, "height": 1000})
     # Enrollment and authorization controls remain exposed after a skin change.
 
     page.click('[data-page="rentals"]')
