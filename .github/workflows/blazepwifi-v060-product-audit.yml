@@ -1,0 +1,33 @@
+name: BlazePwifi v0.6 product UI and Rental security
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - blazepwifi-v0.6.0-audit-foundation
+    paths:
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/admin.html'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/admin/**'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/vendor/blazefusion/**'
+      - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/LeaseClient.java'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs'
+      - '.github/workflows/blazepwifi-v060-product-audit.yml'
+permissions:
+  contents: read
+jobs:
+  product-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate lightweight console and accessible offline navigation
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh
+      - name: Validate managed Android TLS pin requirement
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh
+      - name: Simulate actual rental QR browser request lifecycle
+        run: node experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs
+      - name: Validate lower-security binding versus verified managed provisioning QR
+        run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
