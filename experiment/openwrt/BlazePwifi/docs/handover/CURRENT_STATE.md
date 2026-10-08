@@ -1,3 +1,10 @@
+## MIG-0619 / P0 — IN PROGRESS — synthetic receipt-I/O failure reproduction (2026-10-09)
+
+- **Evidence already obtained:** staged accounting workflow #37810785263 at `7bb507f40fc732baa7fae0cd38af09de49eb6f72` COMPLETED SUCCESS: exact log confirms one-file transfer crash test PASS, old ID replay still expected P0 RED. Full/Windows run for canonical checkpoint `249a6a48496b12ded4b1e06d5000ff85467e9df3` not yet completed at last check; those runs do not validate a forthcoming source change.
+- **New bounded test intent:** add fixture-only `tests/v060_member_receipt_failure_repro.sh` to inject a *failed event receipt write* after `bp_member_write`, capturing whether `bp_member_balance_change` still returns success with silently changed banked time. No production code changes or customer secrets. Work item P0 issue #31.
+- **Proof/rollback:** check exact RED signature and exit=1 on original module, not arbitrary test error; no change to live member balance or released assets. Delete isolated test and workflow assertion to roll back. Keep release blocked.
+- **NEXT:** create failure fixture, include it in isolated staged CI as expected RED, synchronize all three canonical handovers, inspect exact job logs. Do not develop a short-lived receipt cache and call it durable idempotency; monetary state and receipts need true crash-atomic design and bounded accepted replay window.
+
 ## MIG-0618 / P0 — TRANSFER SOURCE COMMITTED; EXACT-HEAD CI NOT YET VERIFIED (2026-10-09)
 
 - **Pre-fix reproduction confirmed:** [#37810302638](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37810302638) at `b8184e8a3f231e0d36756fe7057dad5e6a746df4` completed SUCCESS only because runner required both exact P0 RED signatures. Real source demonstrably double credits after bounded replay-history eviction and loses 40 synthetic seconds between two transfer row renames.
