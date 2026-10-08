@@ -62,22 +62,25 @@ public final class RentalLeaseStore {
         String existingServer = p.getString("server", "");
         String existingToken = p.getString("enrollment", "");
         String existingPin = normalizePin(p.getString("server_cert_sha256", ""));
+        String existingDeviceId = p.getString("device_id", "");
+        String existingDeviceSecret = p.getString("device_secret", "");
 
-        if ("device_owner_provisioning".equals(existingSource)
-                && existingServer.equals(server)) {
-            if (existingToken.equals(token)) {
-                // Setup Wizard may deliver the same provisioning extras through
-                // more than one callback. Security-critical identity must be
-                // byte-for-byte stable across those callbacks.
-                if (!existingPin.equals(pin)) return false;
-                return p.edit()
-                        .putString("device_name", name)
-                        .commit();
-            }
-            if (p.getString("device_id", "").length() > 0
-                    || p.getString("device_secret", "").length() > 0) {
-                return false;
-            }
+        if (!ProvisioningStateGuard.canAccept(
+                existingSource, existingServer, existingToken, existingPin,
+                existingDeviceId, existingDeviceSecret,
+                server, token, pin)) {
+            return false;
+        }
+
+        if (ProvisioningStateGuard.isExactReplay(
+                existingSource, existingServer, existingToken, existingPin,
+                server, token, pin)) {
+            // Setup Wizard may deliver the same provisioning extras through
+            // more than one callback. Keep the accepted security identity
+            // byte-for-byte stable and only allow the display label to change.
+            return p.edit()
+                    .putString("device_name", name)
+                    .commit();
         }
 
         return saveEnrollment(context, server, token, name, pin,

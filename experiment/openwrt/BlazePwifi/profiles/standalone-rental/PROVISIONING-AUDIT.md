@@ -1,6 +1,6 @@
 # BlazeRental Provisioning / Enrollment Audit
 
-Audit target: BlazePwifi 0.5.2 Standalone Rental RC8 candidate and the active Launcher3-based BlazeRental DPC.
+Audit target: BlazePwifi 0.5.2 Standalone Rental RC9 candidate and the active Launcher3-based BlazeRental DPC.
 
 ## Security boundary
 
@@ -202,3 +202,25 @@ Stable provisioning metadata must also declare an exact target scope:
 - `gms_and_supported_aosp` when `GMS_DPC_APPROVED=1`.
 
 Physical validation evidence must match that target scope. A non-approved custom DPC must explicitly record `universal_gms_compatibility_claimed=false`. This prevents promotion with a broader Android compatibility claim than the tested and declared platform scope.
+
+
+## RC9 pending-provisioning identity pinning
+
+RC9 closes a callback-state ambiguity that remained in RC8. Once BlazeRental accepts
+Device Owner provisioning extras, the pending provisioning identity is pinned to the
+exact Rental Server origin, one-time enrollment token, and server certificate SHA-256
+pin.
+
+- An exact Setup Wizard callback replay remains idempotent and may update only the
+  display label.
+- A callback with a changed token, server origin, or certificate pin is rejected.
+- A pending Standard Enrollment state cannot be silently overwritten by a Device
+  Provisioning callback.
+- Any partial or complete permanent device identity causes a provisioning callback to
+  fail closed.
+- Clearing/replacing provisioning identity requires the explicit reset/transfer path or
+  a factory reset appropriate to Device Owner provisioning.
+
+The acceptance policy is implemented in pure Java `ProvisioningStateGuard` and is
+covered by JUnit in the same Android build that produces the RC9 provisioning APK.
+RC8 remains immutable; this product delta is released only as RC9.

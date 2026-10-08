@@ -2,6 +2,17 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.9
+
+RC9 supersedes RC8 for further Device Provisioning validation. It pins the first
+accepted pending provisioning identity (server origin + one-time token + certificate
+pin), permits only exact Setup Wizard callback replay, rejects changed callback identity,
+and adds an executable JUnit regression matrix. RC8 remains immutable.
+
+- Android package identity: `0.5.2-rental.2-rc.9`, versionCode `50210`.
+- TEST-signed provisioning APK only; production signing continuity is unchanged.
+- Physical Setup Wizard validation remains required before stable promotion.
+
 ### v0.5.2-rental.2-rc.8
 
 RC8 supersedes RC7 for further provisioning validation without modifying the immutable RC7 tag.

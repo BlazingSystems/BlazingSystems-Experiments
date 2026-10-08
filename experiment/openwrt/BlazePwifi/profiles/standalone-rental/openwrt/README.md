@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.8
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.9
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -87,3 +87,11 @@ Before creating either QR type, the OpenWrt backend now rejects a missing host, 
 RC8 adds an explicit provisioning target scope to release metadata and API responses. A non-GMS-approved custom DPC is restricted to `aosp_non_gms_or_explicit_oem_only`; a GMS-approved production identity may declare `gms_and_supported_aosp`.
 
 The stable-promotion gate verifies the actual APK signer certificate with `apksigner` and requires physical validation evidence to match the exact APK bytes, signer, target scope, and GMS approval state.
+
+
+## RC9 provisioning callback identity
+
+The first valid Device Provisioning callback pins the pending server origin, one-time
+token and certificate pin. Exact Android Setup Wizard callback replays are accepted
+idempotently; any changed security identity is rejected until an explicit reset/transfer
+or appropriate factory reset clears the state.

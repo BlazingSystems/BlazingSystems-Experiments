@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental.2-rc.8
+Version: v0.5.2-rental.2-rc.9
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -68,3 +68,9 @@ RC8 PROMOTION HARDENING:
 - Stable promotion verifies the actual APK signer certificate, not only metadata.
 - Provisioning metadata exposes an explicit target scope.
 - Non-approved custom DPC builds cannot claim universal Google-certified-device compatibility.
+
+
+DEVICE PROVISIONING RC9:
+  The first accepted pending provisioning identity is pinned to the exact server origin,
+  enrollment token and certificate pin. Android may replay the exact same callback, but
+  any changed callback identity is rejected until explicit reset/transfer or factory reset.

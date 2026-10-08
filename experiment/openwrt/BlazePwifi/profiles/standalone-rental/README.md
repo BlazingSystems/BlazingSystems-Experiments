@@ -1,14 +1,14 @@
 # BlazePwifi Standalone Rental Server
 
 Latest stable server line: **v0.5.2-rental.1**  
-Provisioning architecture candidate: **v0.5.2-rental.2-rc.8**
+Provisioning architecture candidate: **v0.5.2-rental.2-rc.9**
 
 The provisioning candidate keeps two independent Android onboarding modes:
 
 - **Standard Enrollment QR** — BlazeRental already installed; scanned inside BlazeRental; server binding only; no Device Owner claim.
 - **Device Provisioning QR** — Android Setup Wizard on a factory-reset phone; exact APK/checksum; Device Owner only where the platform permits that DPC; then server binding.
 
-RC8 carries the RC5 protocol hardening, all RC6 durability/rebind safeguards and RC7 strict-origin parity, and additionally adds:
+RC9 carries the RC5 protocol hardening, all RC6 durability/rebind safeguards, RC7 strict-origin parity and RC8 signer/target-scope promotion hardening. RC9 additionally pins the first accepted pending Device Provisioning identity so a changed Setup Wizard callback cannot replace it.
 
 - idempotent repeated Android provisioning callbacks without resetting in-progress nonce/device state;
 - protection against accidental Standard Enrollment rebinds: an already-bound phone must use the explicit Transfer action first;
