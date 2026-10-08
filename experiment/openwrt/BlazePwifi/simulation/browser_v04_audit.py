@@ -414,6 +414,14 @@ with sync_playwright() as p:
     page.click("#qrReveal")
     assert "0123456789abcdef" in page.locator("#qrToken").inner_text()
 
+    # A hosted HTTP test page is not a valid Device Owner enrollment
+    # origin; validate refusal before setting an explicitly pinned HTTPS host.
+    mutation_count = len(admin_mutations)
+    page.click('button:has-text("Generate Device Owner QR")')
+    assert len(admin_mutations) == mutation_count, (
+        "Managed provisioning must not issue an HTTP-origin request")
+    assert "requires an HTTPS server" in page.locator("#toastHost").inner_text()
+    page.fill("#addRentalServer", "https://192.168.1.1:8443")
     page.click('button:has-text("Generate Device Owner QR")')
     page.wait_for_function(
         "document.getElementById('qrNotice').textContent.includes('MANAGED SETUP')")
