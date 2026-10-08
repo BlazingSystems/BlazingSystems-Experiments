@@ -46,6 +46,41 @@ transfer="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 333
 printf '%s' "$transfer" | grep -q '"replayed":true'
 [ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
 
+# PAY-0635: the very same signed receipt ID with a DIFFERENT amount, or a
+# DIFFERENT recipient, cannot return a successful acknowledgement. A success
+# here would tell the Windows PC that time went to the wrong recipient.
+for collision in bank-amount transfer-amount transfer-recipient; do
+  case "$collision" in
+    bank-amount)
+      response="$(call member_bank 'alice:0123456789abcdef:placeholder' 61 11111111)" ;;
+    transfer-amount)
+      response="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 31 33333333)" ;;
+    transfer-recipient)
+      response="$(call member_transfer 'alice>charlie:0123456789abcdeb:placeholder' 30 33333333)" ;;
+  esac
+  printf '%s' "$response" | grep -q '"ok":false'
+  printf '%s' "$response" | grep -q 'member event payload collision'
+  if printf '%s' "$response" | grep -q '"replayed":true'; then
+    echo "P0 collision falsely acknowledged: $collision" >&2; exit 1
+  fi
+done
+[ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
+
+# Bypass the CGI replay fast path and verify the two underlying core member
+# functions fail with a dedicated collision result instead of applying money.
+set +e
+sh -c '. "$BP_LIB"; . "$BP_MEMBER_LIB"; bp_member_balance_change alice add 61 softtimer:vendo-01 0123456789abcdef' > "$T/core-bank" 2>&1
+bank_rc=$?
+sh -c '. "$BP_LIB"; . "$BP_MEMBER_LIB"; bp_member_transfer alice charlie 30 softtimer:vendo-01 0123456789abcdeb' > "$T/core-transfer" 2>&1
+transfer_rc=$?
+set -e
+[ "$bank_rc" -eq 5 ] && [ "$transfer_rc" -eq 5 ] || {
+  echo "P0 core member replay collision mismatch bank=$bank_rc transfer=$transfer_rc" >&2
+  cat "$T/core-bank" "$T/core-transfer" >&2
+  exit 1
+}
+[ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
+
 # Simulate a disputed mid-transaction crash. From now on, *no* financial
 # replay may appear to resolve the uncertainty or mint a new signed ACK.
 printf 'PENDING\t123\n' > "$BP_STATE/paid-state-uncertain"
