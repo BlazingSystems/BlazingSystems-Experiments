@@ -14,7 +14,8 @@ bp_rental_update_url_ok() {
     case "$1" in https://*) ;; *) return 1;; esac
     [ "$(printf '%s' "$1" | wc -c)" -le 512 ] || return 1
     printf '%s' "$1" | grep -q '[[:space:][:cntrl:]]' && return 1
-    case "$1" in *'#'*|*'\\'*) return 1;; esac
+    case "$1" in *'#'*) return 1;; esac
+    printf '%s' "$1" | grep -Fq '\' && return 1
     authority="${1#https://}"
     authority="${authority%%/*}"
     authority="${authority%%\?*}"
