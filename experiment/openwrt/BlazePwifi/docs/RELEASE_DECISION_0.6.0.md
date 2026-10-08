@@ -1,3 +1,7 @@
+## STATUS UPDATE — 2026-10-09 MIG-0625–0627: partial live-source P0 mitigations (NOT A RELEASE)
+
+**Build code advanced beyond original successful source SHA**, so the earlier full green #37815563919 is HISTORICAL, not proof of latest source. At `member.sh` `8e71dc7...` the paid member event receipt no longer ages out with UI history and quota rejections occur before new credit; targeted #37818384347 and quota #37818772777 PASS. New `common.sh` and member/rental receipt EIO quarantine commits `a5b727d...`, `a31f48b...`, `025dc2e...` passed isolated staged #37819732052 on source `24700c204bb399ceab18d411176c05640ed201f3`. This is **partial safety containment**, not an atomic paid ledger: a changed balance may still await manual reconciliation; auto retry is blocked by persistent quarantine. Full/Windows exact newest SHA pending; physical flash sync/migration, 0.6 Android version/signing and published v0.6 remain blocked. **SUCCESS_REPORT=0**; all original release-blocker declarations below still apply except the old replay and false success-ACK scenarios now have scoped mitigations.
+
 # BlazePwifi v0.6.0 production release decision — 2026-10-09 Asia/Manila
 
 **Decision: BLOCKED — no public GitHub v0.6.0 production release; no installation authorized.**
