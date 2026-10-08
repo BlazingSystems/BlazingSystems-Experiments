@@ -1,3 +1,13 @@
+## MIG-0617 / P0 — IN PROGRESS — 2026-10-09 Asia/Manila
+
+- **Intent:** reproduce prepaid-member replay after bounded history and interrupted two-write transfer using synthetic temporary files, before any production accounting change. Issue #31, draft PR #30.
+- **Affected scope:** next change adds isolated `tests/v060_member_atomicity_repro.sh` only; source `openwrt/rootfs/usr/lib/blazepwifi/member.sh` is read-only reference, no routing/coin/admin/firmware edits in reproduction phase.
+- **Risk:** existing event-history trim and two independent member writes may cause duplicate paid seconds or loss on crash; no actual incident proven. Reproduction MUST NOT execute against `/etc/blazepwifi` or real balances.
+- **Success proof:** deterministic fixture demonstrates truncated duplicate-ID loss and failure injected between sender/receiver writes; captures original failure without changing original records outside tmpdir. New test must be gated as an *expected failure reproduction* until accounting fix is ready; no false green guarantee.
+- **Rollback:** delete isolated test; leave installed state and published releases unchanged. Production v0.6.0 remains blocked.
+- **CI baseline:** head `42675aae156e8d30f5c149f6d12c2ac0eda49ac2`, Full #37807641991 completed SUCCESS (checked 2026-10-09); Windows #37807200137 completed SUCCESS. Any new test/code needs a new exact-head gate.
+- **NEXT EXACT ACTION:** create temporary synthetic shell harness invoking real `bp_member_balance_change` and `bp_member_transfer` with injected helper stubs and sentinel; show the two financial invariants fail on original code, then plan durable journal fix. Synchronize ledger/root handover after source/test creation.
+
 # LIVE STATE — BlazePwifi full ecosystem (AUTHORITATIVE)
 
 ## VERIFIED CURRENT STATUS — 2026-10-08 / supersedes pending notes below
