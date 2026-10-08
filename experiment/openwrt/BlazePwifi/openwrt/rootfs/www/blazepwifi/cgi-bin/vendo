@@ -133,6 +133,8 @@ case "$action" in
     prior="$(bp_member_replay_line "$event_id" "$id" "$user" add)"
     if [ -n "$prior" ]; then
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
+      [ "$result_seconds" -eq "$pulses" ] 2>/dev/null ||
+        bp_fail "member event payload collision"
       revision="$(bp_member_global_revision)"
       balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
       [ -n "$result_seconds" ] || result_seconds=0
@@ -211,6 +213,11 @@ case "$action" in
     prior="$(bp_member_replay_line "$event_id" "$id" "$from" transfer)"
     if [ -n "$prior" ]; then
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
+      receipt_detail="$(printf '%s' "$prior" | cut -f8)"
+      receipt_to="$(printf '%s' "$receipt_detail" | awk -F: 'NF==3 {print $2}')"
+      [ "$result_seconds" -eq "$pulses" ] 2>/dev/null &&
+        [ "$receipt_to" = "$to" ] ||
+        bp_fail "member event payload collision"
       revision="$(bp_member_global_revision)"
       from_balance="$(printf '%s' "$(bp_member_line "$from")" | cut -f8)"
       [ -n "$result_seconds" ] || result_seconds=0
