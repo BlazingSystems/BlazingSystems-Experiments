@@ -29,8 +29,8 @@ grep -q 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$PROVISION_T"
 grep -q 'server_cert_sha256' "$PROVISION_T"
 grep -q 'https://192.168.1.1:8443' "$PROVISION_T"
 grep -q 'Device Owner provisioning requires an HTTPS BlazePwifi server URL.' "$PROVISION_T"
-grep -q -- '--server-url must use https://' "$PROVISION_JSON"
-grep -q -- '--apk-url must use https://' "$PROVISION_JSON"
+grep -q 'require_https(a.server_url, "--server-url")' "$PROVISION_JSON"
+grep -q 'require_https(a.apk_url, "--apk-url")' "$PROVISION_JSON"
 grep -q 'PROVISIONING_WIFI_SSID' "$PROVISION_T"
 grep -q '__APK_CHECKSUM__' "$PROVISION_T"
 grep -q '__QRCODE_JS__' "$PROVISION_T"
@@ -48,6 +48,35 @@ if python3 "$PROVISION_JSON" --apk "$DUMMY_APK" --apk-url "http://example.invali
   echo "Device Owner provisioning JSON tool accepted insecure HTTP APK URL" >&2
   exit 1
 fi
+# HTTPS-only, properly formed Device Owner APK URLs are mandatory for offline QR output.
+if python3 "$PROVISION_B" --apk "$DUMMY_APK" --apk-url 'http://example.invalid/BlazeRental.apk' --template "$PROVISION_T" --qrcode-js "$Q" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner HTML QR accepted HTTP APK URL" >&2
+  exit 1
+fi
+if python3 "$PROVISION_B" --apk "$DUMMY_APK" --apk-url 'https://username:password@example.invalid/BlazeRental.apk' --template "$PROVISION_T" --qrcode-js "$Q" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner HTML QR accepted embedded credentials" >&2
+  exit 1
+fi
+if python3 "$PROVISION_B" --apk "$DUMMY_APK" --apk-url 'https:///' --template "$PROVISION_T" --qrcode-js "$Q" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner HTML QR accepted hostname-free URL" >&2
+  exit 1
+fi
+if python3 "$PROVISION_B" --apk "$DUMMY_APK" --apk-url 'https://example.invalid/BlazeRental.apk#fragment' --template "$PROVISION_T" --qrcode-js "$Q" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Device Owner HTML QR accepted URL fragment" >&2
+  exit 1
+fi
+if python3 "$PROVISION_JSON" --apk "$DUMMY_APK" --apk-url "https://" --server-url "https://192.168.1.1:8443" --enrollment-token "000000000000.000000000000000000000000000000000000" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Provisioning JSON accepted URL with no host" >&2
+  exit 1
+fi
+if python3 "$PROVISION_JSON" --apk "$DUMMY_APK" --apk-url "https://example.invalid/BlazeRental.apk" --server-url "https://admin:password@192.168.1.1:8443" --enrollment-token "000000000000.000000000000000000000000000000000000" --out "$BAD_JSON" >/dev/null 2>&1; then
+  echo "Provisioning JSON accepted URL with embedded credentials" >&2
+  exit 1
+fi
+# JS string serialization must not let URL data become HTML structure.
+python3 "$PROVISION_B" --apk "$DUMMY_APK" --apk-url 'https://example.invalid/a.apk?ref=<test>&ok=1' --template "$PROVISION_T" --qrcode-js "$Q" --out "$BAD_JSON" >/dev/null
+grep -Fq '\u003ctest\u003e' "$BAD_JSON"
+grep -Fq '\u0026ok=1' "$BAD_JSON"
 rm -f "$DUMMY_APK" "$BAD_JSON"
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT INT TERM
