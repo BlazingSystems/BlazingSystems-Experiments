@@ -66,6 +66,15 @@ jobs:
           dotnet build "$env:PROJECT_DIR/src/BlazePisonet.SoftTimer.Watchdog/BlazePisonet.SoftTimer.Watchdog.csproj" -c Release -r win-x64 --no-restore -warnaserror
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify monotonic billing timer (60-minute simulation)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $binary=Join-Path $env:PROJECT_DIR 'src/BlazePisonet.SoftTimer/bin/Release/net8.0-windows/win-x64/BlazePisonet.SoftTimer.exe'
+          if (-not (Test-Path $binary)) { throw 'Compiled SoftTimer EXE missing' }
+          & $binary --verify-timer-math
+          if ($LASTEXITCODE -ne 0) { throw "Timer cadence self-check failed with exit code $LASTEXITCODE" }
+
       - name: Publish self-contained Windows x64 EXEs
         shell: pwsh
         run: |
