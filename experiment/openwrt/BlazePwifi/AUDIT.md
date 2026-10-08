@@ -1,3 +1,7 @@
+## v0.6.0 whole-product risk-based audit (2026-10-09)
+
+Full platform/competitor/feature coverage and open gates: [docs/V060_COMPETITIVE_SYSTEM_AUDIT.md](docs/V060_COMPETITIVE_SYSTEM_AUDIT.md). Below sections preserve historical v0.2 audit results; they are not evidence of a signed v0.6 production release. Current state in PROJECT_HANDOVER and docs/handover/CURRENT_STATE. v0.6 SAFE RELEASE=0 until paid crash atomicity, migration, Android signing and real hardware acceptance.
+
 # BlazePwifi production-readiness audit
 
 Release candidate: 0.2.0-rc.2
