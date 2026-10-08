@@ -1,42 +1,40 @@
 # BlazePwifi Standalone Rental Server
 
 Latest stable server line: **v0.5.2-rental.1**  
-Provisioning architecture candidate: **v0.5.2-rental.2-rc.7**
+Latest audited provisioning candidate: **v0.5.2-rental.2-rc.9**
 
-The provisioning candidate keeps two independent Android onboarding modes:
+> **Source-boundary note:** RC9 is an immutable prerelease on its own tag/release and provisioning branch. The current `main` runtime source is not the RC9 runtime baseline. Use the RC9 release/tag for RC9 testing; this page is a discovery/index page only.
 
-- **Standard Enrollment QR** — BlazeRental already installed; scanned inside BlazeRental; server binding only; no Device Owner claim.
-- **Device Provisioning QR** — Android Setup Wizard on a factory-reset phone; exact APK/checksum; Device Owner only where the platform permits that DPC; then server binding.
+RC9 keeps two intentionally separate Android onboarding contracts:
 
-RC7 carries the RC5 protocol hardening and all RC6 durability/rebind safeguards, and additionally adds:
+- **Standard Enrollment QR** — BlazeRental is already installed; scan inside BlazeRental; server binding only; no Device Owner claim.
+- **Device Provisioning QR** — scan from Android Setup Wizard on a new/factory-reset phone; Android receives the exact DPC APK URL/checksum and provisioning extras, then BlazeRental completes secure server enrollment.
 
-- idempotent repeated Android provisioning callbacks without resetting in-progress nonce/device state;
-- protection against accidental Standard Enrollment rebinds: an already-bound phone must use the explicit Transfer action first;
-- secure enrollment protocol v2: the long-lived device secret is derived independently on server and phone and is never transmitted in the enrollment response;
-- HMAC-authenticated enrollment response before the APK persists device identity;
-- immediate removal of the consumed one-time enrollment token from phone storage;
+Current RC9 security properties include:
 
-- canonical padded Base64URL SHA-256 provisioning checksum;
-- exact signer-certificate and APK digests in release evidence;
-- one metadata builder shared by OpenWrt tar/OneClick and prebuilt firmware images;
-- explicit custom-DPC/GMS compatibility gating;
-- GMS approval state in provisioning metadata and API responses;
-- AOSP/non-GMS / explicit-test warning when the custom DPC is not approved.
+- Standard schema `blazerental.enrollment.v2` and Device Provisioning schema `blazerental.provisioning.v2`;
+- enrollment protocol v2 with retry-safe one-time redemption and no long-lived device secret transported in the enrollment response;
+- HMAC-authenticated enrollment response before permanent identity is committed;
+- HTTPS server certificate pinning and strict origin-only URL validation for Device Provisioning;
+- exact APK SHA-256, Android package checksum, signer fingerprint and version bound into release evidence;
+- Android 12+ provisioning-mode/compliance integration;
+- explicit custom-DPC/GMS scope instead of claiming universal Google-certified-device compatibility;
+- first accepted pending Device Provisioning identity pinned to the exact server origin, one-time token and certificate pin;
+- exact Setup Wizard callback replay is idempotent, while changed token/server/pin callbacks fail closed;
+- stable-promotion gate verifies the actual production APK signer and requires physical Setup Wizard evidence.
 
-Google-certified Android devices can block non-approved DPCs during enterprise Setup Wizard provisioning. The project does not describe this custom-DPC path as universally production-compatible. See [PROVISIONING-AUDIT.md](./PROVISIONING-AUDIT.md).
+RC9 is **TEST-signed** and remains a prerelease. Physical factory-reset Setup Wizard validation and production-signing continuity are still required before stable promotion.
 
-Fresh Standalone Rental console credentials remain `admin / admin`. The Windows package includes the one-click administrator reset tool.
+RC9 Device Provisioning is currently an **OpenWrt Rental Server** feature. ESP8266/ESP32 continue to support their Rental Server / coin-interface roles and manual one-time enrollment, but RC9 does not claim Android Device Provisioning QR parity on ESP.
+
+Fresh Standalone Rental console credentials remain `admin / admin`. The Windows package contains the OneClick installer and the Windows admin-password reset tool.
 
 Standalone OpenWrt installation remains network-neutral: it does not take ownership of `network`, `wireless`, or `firewall`.
 
+## Current candidate
 
-## RC7 target scope
+- Release: https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental.2-rc.9
+- Release notes: [releases/v0.5.2-rental.2-rc.9.md](./releases/v0.5.2-rental.2-rc.9.md)
+- Release history: [releases/README.md](./releases/README.md)
 
-Android Device Provisioning QR is implemented on the **OpenWrt Rental Server** path in RC7.
-
-ESP8266/ESP32 Rental Server mode continues to support manual one-time server/token enrollment, but does not yet render Standard Enrollment QR or Android Device Provisioning QR. The release manifest declares this explicitly rather than implying OpenWrt/ESP feature parity.
-
-
-## RC7 origin-parity hardening
-
-OpenWrt now validates Rental Server authorities before QR creation with the same practical constraints enforced by BlazeRental: non-empty host, numeric 1-65535 port when present, bracketed IPv6, and no userinfo/path/query/fragment/backslash ambiguity. BlazeRental repeats origin and TLS-pin checks inside the persistence boundary, not only in the QR scanner.
+For implementation-level RC9 audit details, inspect `PROVISIONING-AUDIT.md` from the **RC9 tag**, not the older file currently present on `main`.
