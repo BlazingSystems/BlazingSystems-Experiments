@@ -202,9 +202,9 @@ bp_bind_device() {
 		if [ "$create" != 1 ] && [ "$credit" -eq 0 ] 2>/dev/null && { [ -z "$expiry" ] || [ "$expiry" -le "$(bp_now)" ] 2>/dev/null; }; then
 			return 0
 		fi
-		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""
+		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" "" || return 8
 		[ -n "$mac" ] && [ -z "$claimed" ] && bp_remove_legacy_mac "$mac"
-		bp_durable_sync
+		bp_durable_sync || return 8
 		[ "$expiry" -gt "$(bp_now)" ] 2>/dev/null && bp_authorize_mac "$mac"
 		return 0
 	fi
@@ -213,7 +213,7 @@ bp_bind_device() {
 	if bp_pause_limit_expired "$d"; then
 		credit="$(printf '%s' "$line" | cut -f2)"
 		events="$(printf '%s' "$line" | cut -f9)"
-		bp_account_write "$d" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
+		bp_account_write "$d" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events" || return 8
 		bp_deauthorize_mac "$oldmac"
 		return 0
 	fi
@@ -225,7 +225,7 @@ bp_bind_device() {
 		paused="$(printf '%s' "$line" | cut -f5)"
 		ps="$(printf '%s' "$line" | cut -f6)"
 		events="$(printf '%s' "$line" | cut -f9)"
-		bp_account_write "$d" "$credit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$events"
+		bp_account_write "$d" "$credit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$events" || return 8
 		bp_deauthorize_mac "$oldmac"
 		if [ "$paused" != 1 ] && [ "$expiry" -gt "$(bp_now)" ] 2>/dev/null; then bp_authorize_mac "$mac"; fi
 	fi
