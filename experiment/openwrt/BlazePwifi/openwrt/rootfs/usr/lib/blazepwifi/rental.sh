@@ -70,7 +70,10 @@ bp_rental_device_write() {
   tmp="$BP_STATE/.rental-devices.$(bp_tmp_suffix)"
   awk -F '\t' -v OFS='\t' -v d="$id" '$1!=d {print}' "$BP_RENTAL_DEVICES" > "$tmp"
   printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"
-  chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_DEVICES"; bp_durable_sync
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_RENTAL_DEVICES"; then
+    rm -f "$tmp"; return 8
+  fi
+  bp_durable_sync || return 8
 }
 
 bp_rental_list_json() {
@@ -266,8 +269,19 @@ bp_rental_events_json() {
   printf ']'
 }
 
+# Keep receipt append independently mockable for fault-injection tests.
+bp_rental_append_paid_receipt() {
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >> "$BP_RENTAL_EVENTS" || return 8
+  chmod 600 "$BP_RENTAL_EVENTS" || return 8
+  bp_durable_sync || return 8
+}
+
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
+  # Refuse invalid receipt storage before touching a prepaid lease, and never
+  # clear an operator-reconcilable uncertainty marker on an ordinary retry.
+  [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
+  [ ! -e "$BP_STATE/paid-state-uncertain" ] || return 9
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
   old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")"
   if [ -n "$old" ]; then
@@ -286,9 +300,16 @@ bp_rental_apply_coin() {
   base="$lease"
   [ "$base" -gt "$now" ] 2>/dev/null || base="$now"
   newlease=$((base + per * pulses))
-  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"
-  printf '%s\t%s\t%s\t%s\n' "$event" "$did" "$newlease" "$now" >> "$BP_RENTAL_EVENTS"
-  chmod 600 "$BP_RENTAL_EVENTS"
-  bp_durable_sync
+  # A write-ahead halt marker is persisted before the first money-state write.
+  # If a receipt append fails, no success ACK is sent and all subsequent
+  # financial mutation must halt for operator reconciliation (not auto-reset).
+  bp_paid_begin || return 9
+  if ! bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"; then
+    bp_paid_abort; return 8
+  fi
+  if ! bp_rental_append_paid_receipt "$event" "$did" "$newlease" "$now"; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf 'credited\t%s\n' "$newlease"
 }
