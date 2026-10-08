@@ -12,6 +12,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh'
 permissions:
   contents: read
 jobs:
@@ -39,8 +40,9 @@ jobs:
             'experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh|PASS: acknowledged paid member ID retained and replay did not change banked time|0'
             'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh|PASS: paid member quota rejects credit and transfer before mutation, never deletes old receipts|0'
             'experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh|PASS: transfer outcome atomic at tested interruption boundary|0'
-            'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh|P0 RED: balance credited and success returned despite failed event receipt|1'
-            'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh|P0 RED: rental lease credited and ACK succeeded despite unwritable receipt|1'
+            'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh|PASS: member receipt EIO rejects ACK and quarantines all further paid changes|0'
+            'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh|PASS: rejected rental receipt failure without changing lease|0'
+            'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh|PASS: rental late receipt EIO rejects ACK and quarantines further paid mutations|0'
           )
           for item in "${checks[@]}"; do
             file="${item%%|*}"
@@ -61,4 +63,4 @@ jobs:
             echo "CONFIRMED STAGED RESULT: $file, expected rc=$expected_rc (synthetic only)"
             rm -f "$log"
           done
-          echo 'Atomic transfer scenario passes; member replay is GREEN; member receipt and rental receipt remain RED. Not production-safe.'
+          echo 'Legacy replay and receipt-EIO fail-closed containment pass; balance+receipt remain non-atomic and production blocked.'
