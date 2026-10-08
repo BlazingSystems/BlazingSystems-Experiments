@@ -94,3 +94,10 @@ Do not touch standalone rental, frozen release tags, signer or company data.
 Run exact-SHA CI, never confuse build artifacts with signed production assets,
 never call v0.6.0 released while blocked.
 ```
+
+## 2026-10-08 update: documentation checkpoint testing
+
+- Source commit `e02474f150b5ac4be18fb2c05edf4cffa69e4957` adds a temporary Git-history test for complete versus incomplete handover synchronization.
+- Workflow commit `8140a4e1c80d45e61d2612e9a664afea5777cb1c` adds that test to validation.
+- State: committed, awaiting a successful exact-commit CI run. No release decision has changed.
+- Next action: synchronize the change ledger and root handover, then inspect the validation, browser, and candidate-gate jobs.
