@@ -27,6 +27,14 @@ bp_update_current_version() {
 
 bp_update_path_allowed() {
     p="$1"
+    # A path can match an allowlisted prefix yet escape it via /../, /./
+    # or duplicated separators. Never let untrusted manifests do that.
+    case "$p" in /*) ;; *) return 1;; esac
+    printf '%s' "$p" | LC_ALL=C grep -q '[[:cntrl:]]' && return 1
+    printf '%s\n' "$p" | awk -F/ '{
+        if ($1 != "" || NF < 3) exit 1
+        for (i=2; i<=NF; i++) if ($i=="" || $i=="." || $i=="..") exit 1
+    }' || return 1
     if [ -n "${BP_UPDATE_TEST_PREFIX:-}" ]; then
         case "$p" in "$BP_UPDATE_TEST_PREFIX"/*) return 0;; esac
     fi
@@ -68,11 +76,41 @@ bp_update_sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 
 bp_update_safe_archive() {
     bundle="$1"
-    tar -tzf "$bundle" 2>/dev/null | awk '
-      /^\// {bad=1}
-      /(^|\/)\.\.($|\/)/ {bad=1}
+    # Inspect the complete archive BEFORE extracting even into a scratch dir:
+    # tar can follow symlinked parent entries while extracting later members.
+    mkdir -p "$BP_UPDATE_RUN" || return 1
+    names="$(mktemp "$BP_UPDATE_RUN/.archive-names.XXXXXX")" || return 1
+    verbose="$names.types"
+    if ! tar -tzf "$bundle" > "$names" 2>/dev/null ||
+       ! tar -tvzf "$bundle" > "$verbose" 2>/dev/null; then
+        rm -f "$names" "$verbose"
+        return 1
+    fi
+    if ! awk '
+      {
+        path=$0
+        sub(/\/$/, "", path)
+        if (path=="" || path ~ /^\// || path ~ /(^|\/)\.\.?($|\/)/
+            || path ~ /\/\// || path ~ /\\/ || path ~ /[[:cntrl:]]/) bad=1
+        if (path!="release.env" && path!="manifest.tsv" && path!="manifest.sig"
+            && path!="payload" && path !~ /^payload\//) bad=1
+        if (seen[path]++) bad=1
+      }
       END {exit bad?1:0}
-    '
+    ' "$names" || ! awk '
+      {
+        # GNU tar and BusyBox tar both begin verbose lines with the type
+        # character. Reject link (l/h), fifo (p), block/char device (b/c).
+        kind=substr($1,1,1)
+        if (kind!="-" && kind!="d") bad=1
+      }
+      END {exit bad?1:0}
+    ' "$verbose"; then
+        rm -f "$names" "$verbose"
+        return 1
+    fi
+    rm -f "$names" "$verbose"
+    return 0
 }
 
 bp_update_extract_verify() {
@@ -89,6 +127,10 @@ bp_update_extract_verify() {
     rm -rf "$out"; mkdir -p "$out"
     tar -xzf "$bundle" -C "$out" || return 1
     [ -r "$out/release.env" ] && [ -r "$out/manifest.tsv" ] && [ -d "$out/payload" ] || { echo "invalid bundle layout" >&2; return 1; }
+    # The manifest is a mapping, not a sequence of overwrites. A repeated
+    # destination must never silently replace an earlier verified entry.
+    awk -F '\t' 'NF!=3 || $3=="" || seen[$3]++ {bad=1} END {exit bad?1:0}' "$out/manifest.tsv" ||
+        { echo "duplicate or malformed manifest destination" >&2; return 1; }
 
     while IFS="$(printf '\t')" read -r sha mode path; do
         [ -n "$sha" ] || continue
