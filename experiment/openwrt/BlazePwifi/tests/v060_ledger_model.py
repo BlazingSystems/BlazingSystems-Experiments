@@ -4,6 +4,7 @@ Uses a temporary sqlite database to describe expected journal behavior; it
 does NOT implement or validate BusyBox storage, fsync, signer or v1 migration.
 No external paths, secrets, devices or real balance records are accepted.
 """
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import sqlite3
@@ -182,9 +183,24 @@ def test_oracle():
         expect(Rejected, lambda: a.apply("controller1", 1, "unique-bank1",
                                          "add", "alice", "", 40))
         assert a.balances() == before
+        # Two independent writers submit identical authenticated sequence.
+        # SQLite serializes them, yielding exactly one commit and one replay.
+        before_concurrent = a.balances()
+        def simultaneous_retry(_):
+            second = SyntheticLedger(location)
+            try:
+                return second.apply("controller1", 22, "fresh-22",
+                                    "add", "alice", "", 9)[0]
+            finally:
+                second.close()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(simultaneous_retry, range(2)))
+        assert sorted(outcomes) == ["committed", "replay"], outcomes
+        assert a.balances()["alice"] == before_concurrent["alice"] + 9
+        assert a.receipt_count("controller1") <= WINDOW
         a.close()
     print("MIG-0620 synthetic ledger MODEL PASS: atomic money+receipt, ACK replay, "
-          "storage rollback, bounded stale rejection, collisions and transfer invariance")
+          "storage rollback, bounded stale rejection, collisions, concurrent duplicate serialization and transfer invariance")
     print("NOT PRODUCTION: no BusyBox implementation, physical fsync, v1 migration or signer QA")
 
 
