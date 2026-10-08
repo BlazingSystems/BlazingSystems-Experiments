@@ -35,9 +35,40 @@ case "$action" in
   coin_start|redeem) create_account=1 ;;
 esac
 
+# Reject financial actions before even a potentially mutating device binding
+# when prior paid state requires an operator-controlled reconciliation.
+case "$action" in
+  coin_start|connect|pause|resume|disconnect|redeem)
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] ||
+      bp_fail "paid state uncertain; operator reconciliation required"
+    ;;
+esac
+
 bp_lock || bp_fail "accounting busy"
-bp_bind_device "$device" "$mac" "$ipaddr" "$create_account"
+if ! bp_bind_device "$device" "$mac" "$ipaddr" "$create_account"; then
+  bp_unlock
+  bp_fail "account binding storage failed; no payment accepted"
+fi
 bp_unlock
+
+# The caller holds bp_lock; all prepaid account changes share a global
+# financial uncertainty marker with the physical coin/member/rental paths.
+# A failed write must never be followed by a success ACK or network unlock.
+bp_account_paid_write_or_fail() {
+  if ! bp_paid_begin; then
+    bp_unlock
+    bp_fail "paid state uncertain or accounting busy"
+  fi
+  if ! bp_account_write "$@"; then
+    bp_paid_abort
+    bp_unlock
+    bp_fail "paid account write failed; operator reconciliation required"
+  fi
+  if ! bp_paid_commit; then
+    bp_unlock
+    bp_fail "paid account durability failed; operator reconciliation required"
+  fi
+}
 
 case "$action" in
   pause|resume|disconnect)
@@ -173,13 +204,13 @@ case "$action" in
     if [ "$paused" = 1 ]; then
       [ -n "$remaining" ] || remaining=0
       remaining=$((remaining+sec))
-      bp_account_write "$device" "$newcredit" 0 "$remaining" 1 "$ps" "$mac" "$ipaddr" "$events"
+      bp_account_paid_write_or_fail "$device" "$newcredit" 0 "$remaining" 1 "$ps" "$mac" "$ipaddr" "$events"
       newexpiry=0
     else
       [ -n "$expiry" ] || expiry=0
       [ "$expiry" -gt "$now" ] 2>/dev/null || expiry="$now"
       newexpiry=$((expiry+sec))
-      bp_account_write "$device" "$newcredit" "$newexpiry" 0 0 0 "$mac" "$ipaddr" "$events"
+      bp_account_paid_write_or_fail "$device" "$newcredit" "$newexpiry" 0 0 0 "$mac" "$ipaddr" "$events"
     fi
     bp_unlock
 
@@ -203,7 +234,7 @@ case "$action" in
       exit 0
     fi
     if [ -n "$expiry" ] && [ "$expiry" -gt "$now" ] 2>/dev/null; then remaining=$((expiry-now)); else remaining=0; fi
-    bp_account_write "$device" "$credit" 0 "$remaining" 1 "$now" "$mac" "$ipaddr" "$events"
+    bp_account_paid_write_or_fail "$device" "$credit" 0 "$remaining" 1 "$now" "$mac" "$ipaddr" "$events"
     bp_unlock
     bp_deauthorize_mac "$mac"
     bp_json "{\"ok\":true,\"paused\":1,\"remaining_seconds\":$remaining}"
@@ -223,9 +254,9 @@ case "$action" in
       bp_json "{\"ok\":true,\"paused\":0,\"remaining_seconds\":$(bp_remaining "$device")}"
       exit 0
     fi
-    [ "$remaining" -gt 0 ] 2>/dev/null || { bp_account_write "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"; bp_unlock; bp_fail "no paused time remaining"; }
+    [ "$remaining" -gt 0 ] 2>/dev/null || { bp_account_paid_write_or_fail "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"; bp_unlock; bp_fail "no paused time remaining"; }
     now="$(bp_now)"; expiry=$((now+remaining))
-    bp_account_write "$device" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" "$events"
+    bp_account_paid_write_or_fail "$device" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" "$events"
     bp_unlock
     bp_authorize_mac "$mac"
     bp_json "{\"ok\":true,\"paused\":0,\"expiry\":$expiry,\"remaining_seconds\":$remaining}"
@@ -236,7 +267,7 @@ case "$action" in
     line="$(bp_account_line "$device")"
     credit="$(printf '%s' "$line" | cut -f2)"
     events="$(printf '%s' "$line" | cut -f9)"
-    bp_account_write "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
+    bp_account_paid_write_or_fail "$device" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
     bp_unlock
     bp_deauthorize_mac "$mac"
     bp_json '{"ok":true}'
@@ -262,7 +293,7 @@ case "$action" in
     events="$(printf '%s' "$line" | cut -f9)"
     newevents="$(bp_events_push "$events" "$event")"
     newcredit=$((credit+cents))
-    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$newevents"
+    bp_account_paid_write_or_fail "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$newevents"
     bp_unlock
     bp_json "{\"ok\":true,\"credit_cents\":$newcredit}"
     ;;
