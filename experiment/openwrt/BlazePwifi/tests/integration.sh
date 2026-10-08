@@ -98,12 +98,32 @@ echo "$OUT" | grep -q 'client network identity unavailable'
 [ ! -s "$T/state/accounts.tsv" ]
 [ ! -e "$T/state/targets/vendo-01.tsv" ]
 
+# PAY-0628: a failed coin window rename must not advertise payment readiness.
+cat > "$T/bin/mv" <<'MV'
+#!/bin/sh
+case "${2:-}" in
+  */targets/vendo-01.tsv) exit 74;;
+esac
+exec /bin/mv "$@"
+MV
+chmod +x "$T/bin/mv"
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'could not persist coin window'
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
+rm -f "$T/bin/mv"
+
 OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
 echo "integration: coin_start => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
 [ -s "$T/state/targets/vendo-01.tsv" ]
+# A same-device retry/page refresh must return the SAME live controller nonce,
+# not invalidate already-inserted physical coins.
+REPEAT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "$REPEAT" | grep -q '"ok":true'
+echo "$REPEAT" | grep -Fq "\"target_nonce\":\"$TARGET\""
+[ "$(cut -f3 "$T/state/targets/vendo-01.tsv")" = "$TARGET" ]
 
 # Simulate a router reboot/tmpfs loss before the ESP reports the coin.
 rm -rf "$T/run"
@@ -145,6 +165,22 @@ OUT="$(printf 'action=coin&id=vendo-01&nonce=9988776655443322&pulses=1&target=%s
 echo "$OUT" | grep -q 'coin target mismatch'
 
 echo "integration: coin accounting ok"
+# A failed close must not say ok while the physical acceptor can still vend.
+cat > "$T/bin/rm" <<'RM'
+#!/bin/sh
+case "${2:-}" in
+  */targets/vendo-01.tsv) exit 74;;
+esac
+exec /bin/rm "$@"
+RM
+chmod +x "$T/bin/rm"
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'could not close coin window'
+[ -f "$T/state/targets/vendo-01.tsv" ]
+rm -f "$T/bin/rm"
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
 OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"ok":true'
 echo "$OUT" | grep -q '"credit_cents":0'
