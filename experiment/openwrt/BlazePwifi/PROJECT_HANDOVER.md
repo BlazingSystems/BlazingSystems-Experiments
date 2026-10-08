@@ -47,6 +47,23 @@
 
 **NEXT:** run new exact-head CI including preservation test, firmware bundles, Android owner emulator, Ruijie/x86/Orange Pi simulations and Windows EXE; record any failure before another change. Then validate actual OpenWrt `sysupgrade -l` and recovery on supported hardware, and finish v0.6 transaction migration and version/signer release gates. **No signed/published 0.6.0 release.**
 
+## UI-FUSION-0613 — latest source changes; exact-head testing still pending
+
+The user supplied two admin UI ZIP templates and requested that they be reconciled and gradually used on BlazePwifi and subprojects **after** finishing the pending firmware/sysupgrade checkpoint. The previous Full CI [#37777931329](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37777931329) **SUCCESS (26/26)** and Windows [#37777940814](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37777940814) **SUCCESS (2/2)** on `9969958da0e7b590a376dce23c23b32fbf2020db`. That was a safe **source** checkpoint.
+
+Uploaded sources: `coreui-react-v1.0.0.zip` internally CoreUI React admin template 5.7.0 (MIT), and `metis-v1.0.0.zip` internally Metis admin template 3.6.0 (MIT). They are UI templates, **not** interchangeable Wi-Fi vendo/rental engines. Full React+Redux and Alpine+Bootstrap admin runtimes were deliberately not copied to small OpenWrt firmware. No user ZIPs or mock data uploaded to GitHub.
+
+**Implemented on the Full web management console only:** a single self-hosted BlazeFusion responsive UI (Fusion/Compact/Comfort) layered on the secure existing CGI/CSRF shell:
+- CSS `vendor/blazefusion/blaze-fusion.css`, commit `526fa90373352476778f6fb32ed0a5590dae6796`.
+- Presentation-only local preference JS `blaze-fusion.js`, commit `ff4f3af28fe24726a4bed81c31d6e41f3000e45f`.
+- Actual authenticated `admin.html` integration, commit `ba3b40e0dbed9fd488633527b1cee48b93874521`.
+- Browser regression `simulation/browser_v04_audit.py` commit `64b8bfdad4a2688a21f7634f06cd1eabf32ed0a6`, static `tests/v060_ui_fusion.sh` `578a858c0280d13e72c4e4d26f82aedb71551f3d`, workflow gate `0b4dfec666d0ca3b3160c8ad5e8185cb1445d239`.
+- Architecture and honest subsystem rollout matrix: [docs/UI_BLAZEFUSION_0.6.0.md](docs/UI_BLAZEFUSION_0.6.0.md), commit `6b14e46391f793ea870e4386a7b820c6da0e74ff`. Standalone Rental, Lite, EasyMode, Android native, Windows native, ESP and advanced PC React have **not** received production code changes.
+
+**NEXT IMMEDIATE:** inspect new exact-SHA CI `validate` BlazeFusion smoke and `v04_browser_simulation` appearance persistence + binding/Device Owner QR. If failing, log precise cause in `CURRENT_STATE.md` and ledger BEFORE changing code; then retest. Check full candidate gate plus Windows. Update all three canonical handover records at every meaningful transition and hold at a safe source commit.
+
+**P0 remains:** transactional paid-state upgrade/rollback, actual OpenWrt `sysupgrade -l` and private restore on hardware, 0.6.0 version identity, higher-version same-signer APK rescue and manual operator signoff. No production v0.6.0 tag or release.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
