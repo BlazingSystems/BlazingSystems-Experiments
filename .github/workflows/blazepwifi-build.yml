@@ -71,6 +71,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v052_update.sh
       - name: BlazePwifi v0.6 migration preflight and 0.5 rollback safety
         run: sh experiment/openwrt/BlazePwifi/tests/v060_migration_guard.sh
+      - name: BlazePwifi v0.6 OpenWrt sysupgrade preservation safety
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_sysupgrade_preservation.sh
       - name: BlazeRental v0.5.1 update compatibility validation
         run: sh experiment/openwrt/BlazePwifi/tests/v051_android_source.sh
       - name: BlazeRental v0.5.2 branding and alarm validation
