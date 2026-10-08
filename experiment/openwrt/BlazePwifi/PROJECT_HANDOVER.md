@@ -102,6 +102,16 @@ Scoped patch: Standalone HTML CSS commit 52da18e6ea1d314158edd7ffc0daaf909a9d39e
 
 **NEXT NOW:** inspect exact-new-HEAD `validate` (both Full/Standalone theme smoke), `v04_browser_simulation` (360/390px + QR), full firmware/Android candidate gate and Windows EXE/handover. If a layout failure persists, use geometry evidence to fix the responsible element only. Published Full v0.5.2, Standalone Rental RC9 and Windows v0.4.0 assets remain unchanged. No 0.6.0 production release while P0 financial migration/real-device backups remain unresolved.
 
+## UI-FUSION-0615 — opt-in EasyMode R281 offline preview (SOURCE COMMITTED, CI UNVERIFIED)
+
+The independent EasyMode project currently has an existing deployed R281 v4.2.3 source snapshot and a separate 5.0.0-alpha installer. **Neither is modified**. The owner's cross-subsystem request is implemented as a **developer-only staged preview**, not a production firmware install or merger of distinct session/network/billing engines.
+
+- New EasyMode offline BlazeFusion CSS and appearance-only JS: commits `14ea130663fbbd5f2877d4be69616396b770369e` and `ab4e27082fec220a9aec86a5fca02e2614c6e151`. Three modes share only nonsecret browser preference; existing server-side light/dark/accent, UBus session, network/SMS/WAN and administrative controls remain unchanged.
+- `experiment/openwrt/easymode-project/integrations/blazefusion/build-preview.py`, commit `fbff495182023880f5979a1ac7f83f469fd6271d`, can produce a NEW offline directory from audited historical R281 static sources. Refuses an existing output or source marker mismatch. **This is not an OpenWrt installer**.
+- New mandatory BlazePwifi CI static staging/immutability test `tests/v060_easymode_fusion.sh` (`5082b674eb8fa4ced83f312fe9d8402b4960466a`, workflow `896fc66e...`), browser visual-only test `simulation/easymode_fusion_browser.py` (`d9fd3c33...`, workflow `03689bea...`), developer README `e8665abf...`, design contract update `44911c32...`.
+- **NEXT NOW:** check latest exact-head CI `validate` EasyMode staging and real Chromium visual smoke, Full Android/firmware gate, and Windows handover/installer. A Chromium preview that reveals the dashboard without login is NOT an authentication test; production rollback/backup and on-device integration must be separately approved.
+- Prior Full+Standalone source SHA `74623164a808f22d0f1adbf4468b32c19c3cfb69` passed 26 Full jobs and Windows 2 jobs; it predates EasyMode preview. v0.6.0 signed production release remains BLOCKED on financial transaction migration/rollback, physical sysupgrade recovery, permanent Lineage-2 signer and OEM acceptance.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
