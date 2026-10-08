@@ -1,3 +1,11 @@
+## MIG-0625 / IN PROGRESS — 2026-10-09 Asia/Manila — synthetic v2 sequence canonicalization
+
+- **Scope:** LAB-ONLY `tools/v060_journal_fixture.sh` and `tests/v060_journal_native_fixture.sh`, branch `blazepwifi-v0.6.0-audit-foundation` / draft PR #30. No production server money files, admin endpoints, Android signer, installed systems, or released tags affected.
+- **Bug evidence from source:** `seq=025`, `event=controller:025` passes numeric comparison; the AWK ledger serializes receipt sequence as `25` but keeps event as `controller:025`. On the next call, receipt verification demands `controller:25`, so the synthetic ledger can fail closed permanently after a supposedly successful commit. Potentially similar ambiguous leading-zero spellings should be rejected BEFORE any write.
+- **Planned fix:** enforce canonical decimal `seq` (no leading zero), and test refused `025` with unchanged ledger/hash and a subsequent valid `25` command. Preserve conservative replay/stale-sequence checks and explicit nonproduction warnings.
+- **Test/acceptance:** existing native fixture test + new leading-zero regression; exact-HEAD GitHub Actions if triggered, record run ID only after verified. Rollback by reverting two bounded source/test file edits. **State: in_progress; no pass yet.**
+- **NEXT EXACT ACTION:** reject noncanonical positive sequence at the CLI boundary in `tools/v060_journal_fixture.sh`, add explicit no-mutation regression to `tests/v060_journal_native_fixture.sh`, run tests and synchronize all three canonical handover documents. Production `SUCCESS_REPORT=0`, still blocked by authenticated runtime ledger/migration/Lineage-2 signing and real hardware acceptance.
+
 ## V060 ALPHA RELEASE VERIFIED — 2026-10-09 (Asia/Manila)
 
 **ACTUAL GITHUB LAB PRERELEASE PUBLISHED SUCCESSFULLY; PRODUCTION v0.6.0 STILL BLOCKED.**
