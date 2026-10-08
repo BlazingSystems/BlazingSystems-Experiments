@@ -155,4 +155,18 @@ grep -q 'login_failure' "$T/state/audit.tsv"
 grep -q 'lockout' "$T/state/audit.tsv"
 grep -q 'login_success' "$T/state/audit.tsv"
 
+# Rental update endpoint must not record malformed or credential-bearing APK URLs.
+UPDATE_LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/rental_update.sh"
+. "$UPDATE_LIB"
+bp_rental_update_url_ok 'https://example.invalid/releases/BlazeRental.apk'
+for bad in 'http://example.invalid/app.apk' 'https://' 'https:///app.apk' \
+    'https://user:pass@example.invalid/app.apk' \
+    'https://example.invalid/app.apk#fragment' \
+    'https://example.invalid\\app.apk'; do
+    if bp_rental_update_url_ok "$bad"; then
+        echo "rental update URL unexpectedly accepted: $bad" >&2
+        exit 1
+    fi
+done
+echo "Rental APK update source URL filter passed"
 echo "BlazePwifi v0.3 admin security checks passed"
