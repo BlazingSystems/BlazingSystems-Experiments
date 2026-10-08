@@ -26,6 +26,10 @@ if [ "$target" != '-' ]; then
     { echo "invalid target" >&2; exit 2; }
 fi
 case "$seq:$units:$now" in *[!0-9:]*|'') echo "invalid numerics" >&2; exit 2;; esac
+# The receipt's sequence is serialized as an ordinary decimal integer.
+# Accepting 01 and writing 1 with event controller:01 would create a ledger
+# whose own receipt-consistency check rejects every subsequent operation.
+case "$seq" in 0*|'') echo "noncanonical controller sequence" >&2; exit 2;; esac
 [ "$seq" -gt 0 ] 2>/dev/null && [ "$seq" -le 100000000 ] 2>/dev/null &&
 [ "$units" -gt 0 ] 2>/dev/null && [ "$units" -le 31536000 ] 2>/dev/null &&
 [ "$now" -ge 0 ] 2>/dev/null && [ "$now" -le 2000000000 ] 2>/dev/null ||
