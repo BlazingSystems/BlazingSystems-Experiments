@@ -1,3 +1,11 @@
+## V060-ANDROID-TRUST-UI / IN PROGRESS 2026-10-09
+
+- **User request:** make real native BlazeRental Launcher3 admin useful and visually clearer, expose meaningful binding/security state, preserve normal APK vs Device Owner trust distinction. The Android `BlazeAdminActivity.showDashboard()` currently displays only `Security` privilege and a server URL, leaving TLS pin and enrolled state ambiguous. Existing `RentalLeaseStore.serverCertSha256` normalizes a 64-hex pin. `LeaseClient.applyPinnedTls` already rejects unpinned Device Owner as of `faf18f97...`.
+- **Scope:** add a native `Binding trust` panel: enrolled/not bound, verified 64-hex pinned vs unpinned (lower security), HTTPS vs HTTP, managed Device Owner/Device Admin/manual, and short operator guidance to rescan secure QR; never render enrollment token, device secret or full cert pin. Keep app permissions/admin/auth/device policy unchanged. Extend initial setup and dashboard where appropriate, and add required source regression test. New helper does not use network or add runtime dependencies. All on development PR #30 only.
+- **Risks:** extra native UI rows and compilation compatibility; no server state changes; Android Gradle compilation, old source tests and new trust labels must pass; rollback revert source/test commits only. Certification requires signed owner key and physical provisioning, still unavailable.
+- **NEXT:** implement source/test, verify actual Android job, synchronize all handover files after latest source edits. Keep v0.6 production gate blocked until money atomicity/migration/signing/hardware.
+
+
 ## V060-PLAYWRIGHT-QR-2 / IN PROGRESS — 2026-10-09
 
 - Initial operator-browser [Actions #37827622026](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37827622026) at `6860641ba616926e82014884506c502a44d177bc` FAILED (product-contract PASS) because `browser_v04_audit.py:418` timed out waiting for `MANAGED SETUP`. Browser test hosts admin.html at HTTP loopback, so `openAdd()` fills an HTTP origin in server URL, and new secured `generateQr('rental_provisioning_qr')` correctly refuses managed Device Owner generation before API call. Mock managed payload now includes valid SHA pin. The bug is in fixture assumptions, NOT an opportunity to relax HTTPS guard.
