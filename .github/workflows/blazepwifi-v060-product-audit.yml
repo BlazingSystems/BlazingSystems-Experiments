@@ -12,6 +12,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs'
+      - 'experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh'
       - '.github/workflows/blazepwifi-v060-product-audit.yml'
 permissions:
   contents: read
@@ -31,3 +32,5 @@ jobs:
         run: node experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs
       - name: Validate lower-security binding versus verified managed provisioning QR
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
+      - name: Validate inherited v0.5.2 QR/CSRF/coin-window security contracts
+        run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
