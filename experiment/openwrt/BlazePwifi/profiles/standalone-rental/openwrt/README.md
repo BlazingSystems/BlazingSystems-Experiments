@@ -1,4 +1,4 @@
-# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.7
+# OpenWrt Rental Standalone — v0.5.2-rental.2-rc.8
 
 The installer is intentionally **network-neutral**. It does not change WAN, LAN, Wi-Fi, cellular, repeater, DNS, or firewall UCI configuration during Standalone installation.
 
@@ -58,7 +58,7 @@ This release candidate deliberately separates:
 Device Provisioning is fail-closed when exact APK metadata is not installed.
 
 
-## RC7 provisioning boundary
+## RC8 provisioning boundary
 
 Standard Enrollment and Device Provisioning are independent contracts. Device Provisioning uses an exact release APK/checksum and is still a prerelease path.
 
@@ -67,16 +67,23 @@ The provisioning metadata includes `GMS_DPC_APPROVED`. When it is `0`, the serve
 The Setup Wizard package checksum is canonical padded Base64URL SHA-256 and is cross-checked against the exact published APK.
 
 
-## RC7 secure enrollment
+## RC8 secure enrollment
 
-RC7 QR generators use schema v2 and the RC7 APK requests enrollment protocol 2. The server no longer transmits the new long-lived device secret to an RC5 client. Both peers derive it from the one-time enrollment secret, request nonce and server-issued device ID, and the phone verifies the server's HMAC-signed enrollment response before persisting identity.
+RC8 QR generators use schema v2 and the RC8 APK requests enrollment protocol 2. The server no longer transmits the new long-lived device secret to an RC5 client. Both peers derive it from the one-time enrollment secret, request nonce and server-issued device ID, and the phone verifies the server's HMAC-signed enrollment response before persisting identity.
 
 
-## RC7 rebind safety
+## RC8 rebind safety
 
 A phone with an existing permanent Rental identity will not accept a new Standard Enrollment QR directly. The administrator must use the explicit Transfer action first. This prevents a scan or transient enrollment failure from destroying a working device binding.
 
 
-## RC7 strict server-origin contract
+## RC8 strict server-origin contract
 
 Before creating either QR type, the OpenWrt backend now rejects a missing host, nonnumeric or out-of-range port, malformed/unbracketed IPv6 authority, userinfo, paths, queries, fragments, backslashes and control/whitespace forms. BlazeRental independently applies the same origin rules again before enrollment data is committed locally.
+
+
+## RC8 stable-promotion boundary
+
+RC8 adds an explicit provisioning target scope to release metadata and API responses. A non-GMS-approved custom DPC is restricted to `aosp_non_gms_or_explicit_oem_only`; a GMS-approved production identity may declare `gms_and_supported_aosp`.
+
+The stable-promotion gate verifies the actual APK signer certificate with `apksigner` and requires physical validation evidence to match the exact APK bytes, signer, target scope, and GMS approval state.

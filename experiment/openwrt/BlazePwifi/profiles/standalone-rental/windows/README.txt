@@ -1,5 +1,5 @@
 BlazePwifi Standalone Rental Server - Windows One-Click Installer
-Version: v0.5.2-rental.2-rc.7
+Version: v0.5.2-rental.2-rc.8
 
 1. Extract the ZIP completely.
 2. Double-click Install-BlazePwifi-Rental.bat.
@@ -49,16 +49,22 @@ PROVISIONING RC:
   Device Provisioning uses the exact APK/checksum shipped with this release candidate.
 
 
-DEVICE PROVISIONING RC7:
+DEVICE PROVISIONING RC8:
   Standard Enrollment QR and Android Device Provisioning QR are separate.
   Device Provisioning remains a release-candidate feature.
   The APK Setup Wizard checksum uses canonical padded Base64URL SHA-256.
   Google-certified Android may block a custom DPC that is not Android Enterprise approved.
-  RC7 metadata declares that state and the Rental UI requires an explicit warning acknowledgement.
+  RC8 metadata declares that state and the Rental UI requires an explicit warning acknowledgement.
   Use the custom-DPC test path only on AOSP/non-GMS or an explicitly supported test device unless approval is declared.
 
 
-RC7 ORIGIN HARDENING:
+RC8 ORIGIN HARDENING:
 - OpenWrt validates Rental Server authorities before generating either QR type.
 - Android independently re-validates the origin and TLS pin before persisting enrollment state.
 - Missing hosts, nonnumeric/out-of-range ports, malformed IPv6, userinfo, paths, queries, fragments and backslashes are rejected.
+
+
+RC8 PROMOTION HARDENING:
+- Stable promotion verifies the actual APK signer certificate, not only metadata.
+- Provisioning metadata exposes an explicit target scope.
+- Non-approved custom DPC builds cannot claim universal Google-certified-device compatibility.

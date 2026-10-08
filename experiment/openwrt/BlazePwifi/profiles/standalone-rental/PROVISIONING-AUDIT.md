@@ -1,6 +1,6 @@
 # BlazeRental Provisioning / Enrollment Audit
 
-Audit target: BlazePwifi 0.5.2 Standalone Rental RC7 candidate and the active Launcher3-based BlazeRental DPC.
+Audit target: BlazePwifi 0.5.2 Standalone Rental RC8 candidate and the active Launcher3-based BlazeRental DPC.
 
 ## Security boundary
 
@@ -174,7 +174,7 @@ The product does not claim resistance to bootloader unlock, recovery flashing, O
 
 ## Stable promotion gate
 
-RC7 now has an executable fail-closed promotion gate at:
+RC8 retains and hardens the executable fail-closed promotion gate at:
 
 `profiles/standalone-rental/build/check-stable-promotion.py`
 
@@ -190,3 +190,15 @@ production artifact and locked Lineage-2 certificate.
 
 This gate is a promotion control, not a substitute for the physical test.
 RC7 remains a prerelease and its published assets/tags stay immutable.
+
+
+## RC8 signer and target-scope promotion hardening
+
+The stable-promotion gate now runs `apksigner verify --print-certs` against the exact production APK and compares the actual signer certificate SHA-256 with the locked Lineage-2 identity. `SIGNER_CERT_SHA256` metadata is no longer sufficient by itself.
+
+Stable provisioning metadata must also declare an exact target scope:
+
+- `aosp_non_gms_or_explicit_oem_only` when `GMS_DPC_APPROVED=0`;
+- `gms_and_supported_aosp` when `GMS_DPC_APPROVED=1`.
+
+Physical validation evidence must match that target scope. A non-approved custom DPC must explicitly record `universal_gms_compatibility_claimed=false`. This prevents promotion with a broader Android compatibility claim than the tested and declared platform scope.

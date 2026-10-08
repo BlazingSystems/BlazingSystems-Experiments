@@ -2,6 +2,19 @@
 
 ## Provisioning candidate
 
+### v0.5.2-rental.2-rc.8
+
+RC8 supersedes RC7 for further provisioning validation without modifying the immutable RC7 tag.
+
+Additional RC8 hardening:
+- stable-promotion gate verifies the **actual APK signer certificate** through `apksigner verify --print-certs`; signer metadata alone is not trusted;
+- release metadata carries explicit `TARGET_SCOPE`;
+- non-approved custom DPCs are restricted to `aosp_non_gms_or_explicit_oem_only`;
+- GMS-approved DPC metadata must use `gms_and_supported_aosp`;
+- physical validation evidence must match the exact target scope and signer identity;
+- a non-GMS-approved release must explicitly record that no universal GMS compatibility claim is being made;
+- Android package identity is `0.5.2-rental.2-rc.8`, versionCode `50209`.
+
 ### v0.5.2-rental.2-rc.7
 
 RC7 supersedes RC6 for physical provisioning testing without modifying the immutable RC6 tag.

@@ -1,7 +1,7 @@
 {
   "schema": "blazerental.physical-provisioning-validation.v1",
   "passed": false,
-  "release": "v0.5.2-rental.2-rc.7",
+  "release": "v0.5.2-rental.2-rc.8",
   "package_id": "com.blazesystems.blazerental",
   "apk_sha256": "",
   "signer_certificate_sha256": "",
