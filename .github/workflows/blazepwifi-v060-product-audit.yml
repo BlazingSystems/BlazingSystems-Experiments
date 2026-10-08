@@ -9,6 +9,8 @@ on:
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/admin/**'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/vendor/blazefusion/**'
       - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/LeaseClient.java'
+      - 'experiment/openwrt/BlazePwifi/android/BlazeRentalLauncher/src/com/blazesystems/blazerental/BlazeAdminActivity.java'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_android_trust_panel.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs'
@@ -29,6 +31,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh
       - name: Validate managed Android TLS pin requirement
         run: sh experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh
+      - name: Check native rental trust panel and absence of secret disclosure
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_android_trust_panel.sh
       - name: Simulate actual rental QR browser request lifecycle
         run: node experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs
       - name: Validate lower-security binding versus verified managed provisioning QR
