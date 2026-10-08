@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mandatory handover freshness gate
+        run: sh experiment/openwrt/BlazePwifi/tests/handover_gate.sh
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
       - name: v0.3 foundation validation
