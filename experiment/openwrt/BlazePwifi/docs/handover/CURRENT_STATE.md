@@ -1,0 +1,76 @@
+# LIVE STATE — BlazePwifi full ecosystem (AUTHORITATIVE)
+
+**Last reconciled (Asia/Manila):** 2026-10-08 19:43+. **Owner order:** full v0.6.0 audit/research, security and native Android/admin UI enhancement, rigorous release; continuous mandatory handover logging before and after every meaningful change. **Status:** `IN PROGRESS — RELEASE BLOCKED`.
+
+## Identity / current pointers (not historical snapshots)
+
+| Field | Verified value / interpretation |
+|---|---|
+| Repository | `BlazingSystems/BlazingSystems-Experiments` |
+| Active development branch | `blazepwifi-v0.6.0-audit-foundation` |
+| Source baseline before handover-policy documentation | `d99f9b7b1ac10f183659c97c156fe4c939863cf8` |
+| Draft PR | [#30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30), base `blazepwifi-v0.5.3-rc1` |
+| Exact base branch SHA checked | `4879c38f3f0e676f17ac40d73cb59c87ffcb5762` (v0.5.3 RC1 security baseline) |
+| Full project's on-disk VERSION | **`0.5.3`**, not `0.6.0`. Android still has v0.5.3 version metadata. No legitimate production v0.6.0 APK or manifest exists. |
+| Existing frozen full production | [`v0.5.2`](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2) |
+| Existing separate standalone release | [`v0.5.2-rental.2-rc.9`](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental.2-rc.9) — reference only, DO NOT TOUCH |
+| Android signer | `BlazeRental-production-lineage2`, pinned SHA-256 cert `1A:18:D5:8E:1F:95:55:96:89:10:20:71:F5:6C:93:E9:B9:D2:EA:6B:E4:0E:6F:20:70:06:C9:89:62:A1:6A:25`. Never rotate, regenerate or expose private material. |
+| Release state | **No v0.6.0 production tag, release, signed APK, device-owner production QR assets or new firmware assets.** Development code and CI artifacts must not be described as installable production releases. |
+
+*Important:* subsequent handover-only commits will advance the branch HEAD. Before resuming, query GitHub and confirm it; the source baseline SHA above is evidence for the v0.6.0 source **before** those documentation commits. Don't mistake it for the latest branch HEAD.
+
+## Latest exact-source validation results and current blocking failure
+
+- **Full system**: [BlazePwifi build #37770673219](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673219), HEAD `d99f9b7b1ac10f183659c97c156fe4c939863cf8`, **FAILED**. Required validation, Android APK builds, Android Device Owner emulator, ESP8266/ESP32, Ruijie, x86, Orange Pi, updater and hardware simulations completed successfully, but `v04_browser_simulation` failed in `simulation/browser_v04_audit.py` at line 381, `page.click('button:has-text("Bind existing BlazeRental")')`, after 30s timeout. The v0.6.0 UI intentionally renamed this button to **Generate binding QR** and factory provision to **Generate Device Owner QR**. The failure blocks `v04_candidate_gate`, which was skipped. The parallel run #37770667993 failed identically. **Do NOT claim full matrix green.**
+- **Windows PisoNet**: [SoftTimer run #37770673126](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673126), same exact source HEAD `d99f9b7b1ac10f183659c97c156fe4c939863cf8`, **SUCCESS** including warning-as-error compile, `--verify-timer-math`, self-contained Windows x64 EXE and NSIS setup, install/uninstall smoke, portable archive and candidate artifact upload. Production Windows release upload is skipped on a PR. Separate manual electrical/clock tests still required.
+- **Prior compatible baseline**: v0.5.3 security/QR fixes from PR #29 merged to RC1 as `4879c38f3f0e676f17ac40d73cb59c87ffcb5762` after green source CI #37765240497. This is **not** a v0.6.0 release.
+- **Current documentation-policy work:** item HND-0600, in progress. New policy `docs/handover/HANDOVER_POLICY.md` added. CI handover freshness script/gate, comprehensive ledger and canonical root status being applied. No business runtime changed by the policy documentation itself.
+
+## Ongoing work register — no ambiguous "done" claims
+
+| ID / priority | State | Implemented and where | Pending evidence / next |
+|---|---|---|---|
+| HND-0600 / P0 | IN PROGRESS | `HANDOVER_POLICY.md`; live state + ledger + root canonical handover in this transaction | add `tests/handover_gate.sh`, integrate into BlazePwifi CI with full fetch and audit exact head |
+| BROWSE-0601 / P1 | REPRODUCED / NOT FIXED YET | Browser test expects old labels at `simulation/browser_v04_audit.py:381,387` | update selectors to live UI labels, rerun Playwright + exact SHA full CI |
+| BILL-0602 / P0 | IMPLEMENTED / CI GREEN (Windows) | `experiment/windows/BlazePisonet-SoftTimer/src/BlazePisonet.SoftTimer/TimerEngine.cs`, `Program.cs`, workflow | verify native installer operation on actual PCs, suspended timer and 60min electrical cadence, central-slot and 1:1 modes |
+| ID-0603 / P1 | IMPLEMENTED / TEST GREEN in validate | Public `openwrt/rootfs/www/blazepwifi/cgi-bin/api` rejects user-supplied MAC when router ARP lookup unavailable | physical VLAN13 AP bridge/routed/WAN IPv6 identity mapping and denial UX; NEVER restore spoofable MAC fallback |
+| QR-0604 / P1 | IMPLEMENTED / STATIC & CI partial | Separate binding/Device Owner UI, TTL/clear QR, URL validation under admin/rental.js, rental_update.sh | test Android factory reset scanner, permanent signer/hash and local TLS pin; APK not yet 0.6.0 |
+| UI-0605 / P2 | IMPLEMENTED / BROWSER RECHECK BLOCKED | native `BlazeAdminActivity.java`, `RentalSystemPages.java`; operator `admin.html`, `admin/core.js`, `vendor/tailadmin/blaze-tailadmin.css` | browser Playwright, mobile contrast/keyboard, real Android launcher UI and Device Owner policy |
+| RESEARCH-0606 / P1 | DOCUMENTED / NOT COMPETITIVELY BENCHMARKED | `AUDIT.md` includes JuanFi, AdoPiSoft, MikroTik User Manager, OpenNDS, Antamedia, HandyCafe, TrueCafe | compare functionality and lab performance on equal hardware; no superiority claim without measurement |
+| RELEASE-0607 / P0 | BLOCKED | 0.5.3 VERSION and v0.5.3 signer/release workflow are still live in branch | explicit 0.6.0 semver/versionCode/migration, exact green 0.6.0 gate, signed APK+rescue with existing signer, hardware acceptance, checksum manifest and rollback |
+
+## Non-negotiable invariants
+
+1. No transactions are silently duplicated, erased, converted or unaccounted. Concurrent coinslots must not cross-credit sessions, even through ACK loss and power cuts.
+2. Server-authoritative time, pause, membership and rental policy; Windows local/remote mode authority explicitly distinguished. A 250ms callback may never charge an entire second.
+3. No generic universal production admin password, secret logging or source-upload of recovery keys. Secure session/CSRF/rate-limiting and role enforcement must persist across all web routes.
+4. **Binding QR** is an existing-app enrollment token, lower security. **Device Owner QR** is factory setup provisioning plus pinned TLS, signed APK and verified hash; neither is interchangeable. Avoid falsely promising zero bypass.
+5. Dedicated `profiles/standalone-rental` and released tags stay untouched. Both standard and centralized PisoNet modes remain supported by separate Windows source tree.
+6. All firmware/installer builds must use the intended physical revision and safe rollback; preserve Windows EXE as an EXE, not a PowerShell-only handoff.
+7. Run tests on exact head, review complete artifacts, and never claim green/released when critical job is failed, skipped, canceled or pending.
+8. Keep this document, `PROJECT_HANDOVER.md` top status and `CHANGE_LEDGER.md` synchronized **after each meaningful change**. New chat reads this file first after root handover.
+
+## NEXT EXACT ACTION — safe resume sequence
+
+1. Finish HND-0600 by creating `experiment/openwrt/BlazePwifi/tests/handover_gate.sh`, wiring it as the **first** BlazePwifi CI validation step, and ensuring the CI checkout has complete Git history; this must fail when source/workflow changes are newer than the canonical handover checkpoint.
+2. Fix BROWSE-0601: in `simulation/browser_v04_audit.py`, replace the stale button locators at lines 381 and 387 with the current approved UI labels. Keep distinct QR type/token/hash checks; do not weaken assertions.
+3. Create a new checkpoint in `CHANGE_LEDGER.md` and update `PROJECT_HANDOVER.md` + this live state with exact new source commits, test outcomes and NEXT ACTION. The last handover commit must succeed the last implementation commit before CI can be green.
+4. Check the new **exact commit SHA** and its [GitHub Actions branch history](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions?query=branch%3Ablazepwifi-v0.6.0-audit-foundation), diagnose any remaining failures by job logs, and reconcile doc statuses immediately. Keep PR #30 draft and block release while any critical gate is not green.
+5. After these gates, proceed with financial ledger, binding identity, Android Device Owner hardware testing and a separate v0.6.0 version/migration/signing/release train. Do not prematurely tag.
+
+## Audit & Reconcile prompt for the next chat
+
+```text
+@GitHub Reconcile the active full BlazePwifi v0.6.0 branch of
+BlazingSystems/BlazingSystems-Experiments. Begin with
+experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md (CURRENT STATUS at TOP),
+docs/handover/CURRENT_STATE.md, docs/handover/HANDOVER_POLICY.md,
+docs/handover/CHANGE_LEDGER.md, AUDIT.md and the draft PR #30.
+Verify actual branch SHA, base SHA, exact head CI and recent commits.
+Check the latest NEXT EXACT ACTION and unresolved blocker IDs.
+Keep all changes on the isolated branch, log the work BEFORE code edits,
+and synchronize the three handover documents AFTER every meaningful change.
+Do not touch standalone rental, frozen release tags, signer or company data.
+Run exact-SHA CI, never confuse build artifacts with signed production assets,
+never call v0.6.0 released while blocked.
+```
