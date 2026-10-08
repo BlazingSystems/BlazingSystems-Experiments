@@ -1,0 +1,84 @@
+/*
+ * BlazeFusion 0.6 preview — original lightweight UI composition.
+ * Inspired by user-supplied MIT CoreUI React (package 5.7.0), Metis
+ * (package 3.6.0) and the existing TailAdmin-inspired BlazePwifi shell.
+ * Does not incorporate either template's React/Alpine runtime or assets.
+ * No external URLs, network calls, customer data or billing logic.
+ */
+:root {
+  --bf-accent:#4cdbcb;--bf-accent2:#7da1ff;--bf-highlight:#fff;
+  --bf-elevated:#172a3b;--bf-stroke:#345165;--bf-soft:#122638;
+}
+body[data-blaze-style="fusion"] .sidebar,
+body[data-blaze-style="comfort"] .sidebar{border-right-color:var(--bf-stroke)}
+.blaze-style-label{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);white-space:nowrap}
+.blaze-style-label .field{width:158px;padding:7px 12px;min-height:35px;background:#112236;border-color:var(--bf-stroke);font-weight:680}
+.blaze-style-label .field:focus-visible{outline:2px solid #60ead7;outline-offset:2px}
+:focus-visible{outline:3px solid #74f4db;outline-offset:3px}
+body[data-blaze-style] .sidebar .nav-btn{position:relative}
+body[data-blaze-style] .sidebar .nav-btn:before{
+ content:attr(data-symbol);display:inline-flex;align-items:center;justify-content:center;
+ border:1px solid #375168;background:var(--bf-elevated);color:#c5eee9;
+ flex:0 0 29px;height:29px;border-radius:10px;font-size:14px;
+}
+body[data-blaze-style] .sidebar .nav-btn .nav-dot{display:none}
+body[data-blaze-style] .sidebar .nav-btn.active:before{
+ background:linear-gradient(140deg,#107c79,#33419e);color:white;border-color:#55cabc
+}
+body[data-blaze-style] .page-head h2{max-width:800px}
+body[data-blaze-style] .metric-value{color:var(--bf-highlight);text-shadow:0 0 20px #17c8c516}
+body[data-blaze-style] .metric-value,body[data-blaze-style] .mono{font-variant-numeric:tabular-nums}
+body[data-blaze-style] .card,body[data-blaze-style] .modal{border-color:var(--bf-stroke)}
+body[data-blaze-style] .field{border-color:#405a70}
+body[data-blaze-style] .field:hover:not(:disabled){border-color:#649fb2}
+body[data-blaze-style] .badge{letter-spacing:.015em}
+body[data-blaze-style] .nav-label{color:#a4bbce}
+body[data-blaze-style] .sidebar .nav-btn{gap:10px}
+body[data-blaze-style] .table th{background:#17304444;position:sticky;top:0;z-index:1}
+body[data-blaze-style] .table td{border-color:#354b5a}
+body[data-blaze-style] .table tr:focus-within td{background:#214250}
+body[data-blaze-style] .toast{border-color:#4fbeba}
+body[data-blaze-style="fusion"] .metrics .card{
+ border-top:1px solid #4acac555;background:linear-gradient(150deg,#182e42 0%,#0e2030 94%);
+}
+body[data-blaze-style="fusion"] .status-pulse{background:#084e47;color:#b8fff2}
+body[data-blaze-style="fusion"] .card:hover{border-color:#4ac6c6}
+body[data-blaze-style="compact"]{
+ --bf-accent:#8a9dff;--bf-accent2:#4fdacc;--bf-stroke:#344560;
+ --bf-elevated:#1e3046;--bf-soft:#17243a;--radius:10px;--side:258px;
+}
+body[data-blaze-style="compact"] .content{padding:20px}
+body[data-blaze-style="compact"] .topbar{height:65px}
+body[data-blaze-style="compact"] .sidebar{padding:14px 10px}
+body[data-blaze-style="compact"] .sidebar .nav-btn{min-height:36px;padding:6px 10px;margin:1px 0;border-radius:9px}
+body[data-blaze-style="compact"] .sidebar .nav-btn:before{height:25px;flex-basis:25px;border-radius:7px}
+body[data-blaze-style="compact"] .nav-label{padding-top:11px}
+body[data-blaze-style="compact"] .card-body{padding:14px}
+body[data-blaze-style="compact"] .metrics .card{min-height:110px}
+body[data-blaze-style="compact"] .metric-value{font-size:27px}
+body[data-blaze-style="compact"] .table th,body[data-blaze-style="compact"] .table td{padding:8px 10px}
+body[data-blaze-style="comfort"]{
+ --bf-accent:#65ddbb;--bf-accent2:#95b1ff;--bf-stroke:#456479;
+ --bf-elevated:#244056;--bf-soft:#142b3b;--radius:20px;
+}
+body[data-blaze-style="comfort"] .sidebar{background:linear-gradient(175deg,#132d3b,#0c1b30)}
+body[data-blaze-style="comfort"] .card{background:linear-gradient(150deg,#18364a,#11263a)}
+body[data-blaze-style="comfort"] .card-body{padding:24px}
+body[data-blaze-style="comfort"] .btn{border-radius:14px;min-height:45px}
+body[data-blaze-style="comfort"] .field{border-radius:13px;min-height:44px}
+body[data-blaze-style="comfort"] .nav-btn{border-radius:13px;margin:3px 0}
+body[data-blaze-style="comfort"] .metrics .card{min-height:172px}
+@media(max-width:900px){
+ .blaze-style-label{gap:5px;font-size:0}
+ .blaze-style-label .field{width:130px;font-size:12px;padding:7px}
+ body[data-blaze-style="compact"] .content{padding:14px}
+ body[data-blaze-style="compact"] .topbar{height:66px}
+}
+@media(max-width:500px){
+ .blaze-style-label .field{width:105px}
+ .user-chip{gap:6px}
+ body[data-blaze-style="comfort"] .card-body{padding:17px}
+ body[data-blaze-style="comfort"] .metrics .card{min-height:140px}
+ body[data-blaze-style="compact"] .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){body[data-blaze-style] *{transition:none!important;animation:none!important}}
