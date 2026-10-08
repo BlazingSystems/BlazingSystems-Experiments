@@ -19,6 +19,20 @@ grep -Fq 'blazepwifi.console.appearance.v1' "$JS"
 grep -Fq 'localStorage.setItem' "$JS"
 grep -Fq 'localStorage.getItem' "$JS"
 grep -Fq '.nav-btn[data-page]' "$JS"
+# v0.6 operator UX: search is local-only, dashboard health is driven by
+# existing authenticated status responses; no synthetic telemetry or new API.
+grep -Fq 'id="blazeNavSearch"' "$HTML"
+grep -Fq 'id="blazeNavEmpty"' "$HTML"
+grep -Fq 'id="blazeConnection"' "$HTML"
+grep -Fq 'id="blazeLastRefresh"' "$HTML"
+grep -Fq 'blaze-ops-hero' "$HTML"
+grep -Fq 'filterPages()' "$JS"
+grep -Fq "event.key.toLowerCase() === 'k'" "$JS"
+grep -Fq 'setApplianceState(!!x.ok)' "$CORE"
+grep -Fq '#blazeConnection[data-live="no"]' "$CSS"
+grep -Fq 'prefers-reduced-motion:reduce' "$CSS"
+! grep -Fq 'tailadmin.css">\\n<link' "$HTML"
+
 # The skin must not be a second (unsafe) authenticated business backend.
 if grep -Eq '(^|[^[:alnum:]_])(fetch|XMLHttpRequest|eval|Function)\(' "$JS"; then
     echo "BlazeFusion must not contain network/eval logic" >&2

@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BlazePwifi Management Console</title>
-<link rel="stylesheet" href="/vendor/tailadmin/blaze-tailadmin.css">\n<link rel="stylesheet" href="/vendor/blazefusion/blaze-fusion.css">
+<link rel="stylesheet" href="/vendor/tailadmin/blaze-tailadmin.css">
+<link rel="stylesheet" href="/vendor/blazefusion/blaze-fusion.css">
 </head><body>
 <div id="loginView" class="login-wrap"><div class="login-card">
   <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi</span></div>
@@ -15,6 +16,11 @@
 <div id="appView" class="app hidden">
 <aside id="sidebar" class="sidebar">
   <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.6.0 preview</small></span></div>
+  <div class="blaze-nav-search">
+    <label for="blazeNavSearch">QUICK NAVIGATION <kbd>Ctrl K</kbd></label>
+    <input id="blazeNavSearch" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false" aria-label="Search console sections" aria-keyshortcuts="Control+K Meta+K">
+    <div class="blaze-nav-hint" id="blazeNavCount" aria-live="polite">Navigate without leaving the console</div>
+  </div>
   <div class="nav-label">OVERVIEW</div>
   <button class="nav-btn active" data-page="dashboard"><span class="nav-dot"></span>Dashboard</button>
   <button class="nav-btn" data-page="sessions"><span class="nav-dot"></span>Clients & Sessions</button>
@@ -41,6 +47,7 @@
   <button class="nav-btn" data-page="tools"><span class="nav-dot"></span>Tools & Terminal</button>
   <button class="nav-btn" data-page="alerts"><span class="nav-dot"></span>Alerts & Logs</button>
   <button class="nav-btn" data-page="system"><span class="nav-dot"></span>System & Security</button>
+  <p id="blazeNavEmpty" class="blaze-nav-empty" hidden>No matching sections. Try another keyword.</p>
   <div class="sidebar-foot"><div id="sideUser">—</div><div id="sideRole" class="small">—</div></div>
 </aside>
 
@@ -51,6 +58,24 @@
   <div id="passwordChange" class="notice warn hidden"><b>Bootstrap password must be replaced.</b><div class="toolbar" style="margin-top:8px"><input id="newPassword" class="field" type="password" placeholder="New password (12+ characters)" style="max-width:360px"><button id="changePasswordBtn" class="btn primary">Change password</button></div></div>
 
   <section id="page-dashboard" class="section active">
+    <div class="blaze-ops-hero">
+      <div class="blaze-ops-copy">
+        <div class="blaze-ops-kicker"><span class="blaze-ops-beacon" aria-hidden="true"></span> LOCAL-FIRST COMMAND CENTER <span class="blaze-ops-separator">/</span> NETWORK + RENTAL + PISONET</div>
+        <h1>One console.<br><em>Every paid minute.</em></h1>
+        <p>Keep Wi-Fi sessions, coin controllers, PCs and rental phones in view. All figures below come from this appliance, not a demonstration feed.</p>
+        <div class="blaze-ops-actions">
+          <button type="button" class="btn primary" onclick="BlazeCore.openPage('sessions')">Manage sessions <span aria-hidden="true">↗</span></button>
+          <button type="button" class="btn" onclick="BlazeCore.openPage('rentals')">Rental fleet <span aria-hidden="true">↗</span></button>
+          <button type="button" class="btn ghost" onclick="BlazeCore.openPage('controllers')">Controllers <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+      <div class="blaze-ops-status">
+        <span class="blaze-ops-status-title">APPLIANCE LINK</span>
+        <span id="blazeConnection" data-live="pending" role="status" aria-live="polite">Checking appliance…</span>
+        <small id="blazeLastRefresh">Waiting for authenticated server status</small>
+        <div class="blaze-ops-status-foot">Secure session required · No cloud dependency</div>
+      </div>
+    </div>
     <div class="page-head"><div><h2>Operations overview</h2><p>Wi-Fi sessions, rental devices, controllers and network health in one command center. Data is from this appliance.</p></div><button class="btn" onclick="BlazeCore.refreshAll()">Refresh</button></div>
     <div class="grid metrics">
       <div class="card"><div class="card-body"><div class="metric-label">Active sessions</div><div id="metricSessions" class="metric-value">—</div><div class="metric-sub">Hotspot users online</div></div></div>
