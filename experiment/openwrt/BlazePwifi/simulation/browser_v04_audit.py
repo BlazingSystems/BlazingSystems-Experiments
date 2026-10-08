@@ -378,13 +378,13 @@ with sync_playwright() as p:
     page.click('button:has-text("+ Add device")')
     page.wait_for_selector("#addRentalModal:not(.hidden)")
 
-    page.click('button:has-text("Bind existing BlazeRental")')
+    page.click('button:has-text("Generate binding QR")')
     page.wait_for_selector("#qrResult:not(.hidden)")
     page.wait_for_selector("#qrBox svg")
     assert "Standard binding" in page.locator("#qrNotice").inner_text()
     assert "0123456789abcdef" in page.locator("#qrToken").inner_text()
 
-    page.click('button:has-text("Provision factory-reset phone")')
+    page.click('button:has-text("Generate Device Owner QR")')
     page.wait_for_function(
         "document.getElementById('qrNotice').textContent.includes('Device Owner provisioning')")
     page.wait_for_function(
