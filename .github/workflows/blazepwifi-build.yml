@@ -845,3 +845,87 @@ jobs:
             gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "BlazePwifi 0.3.0" --notes-file "$NOTES"
           fi
           gh release upload "$TAG" release-out/* --clobber
+
+
+  # Executable lab-only release, never a production v0.6.0.
+  publish_v060_lab_preview:
+    if: github.ref == 'refs/heads/blazepwifi-v0.6.0-audit-foundation' && contains(github.event.head_commit.message, '[v060-lab-release]')
+    needs: [v04_candidate_gate, firmware_optional]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAB_TAG: v0.6.0-alpha.1
+      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.1/RELEASE_NOTES.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify full candidate and same-SHA Windows completed successfully
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$NOTES"
+          test "$(cat experiment/openwrt/BlazePwifi/VERSION)" = "0.5.3" || { echo "Preview notes/source version mismatch"; exit 1; }
+          test "$GITHUB_REF_NAME" = "blazepwifi-v0.6.0-audit-foundation"
+          if gh release view "$LAB_TAG" >/dev/null 2>&1; then
+            echo "Refusing to overwrite an existing lab release"; exit 1
+          fi
+          gh run download "$GITHUB_RUN_ID" -n BlazePwifi-current-candidate-gate -D gate
+          python3 - <<'PY'
+          import json,os
+          x=json.load(open("gate/CANDIDATE-GATE.json",encoding="utf-8"))
+          assert x.get("status")=="passed" and x.get("commit")==os.environ["GITHUB_SHA"], "Wrong SHA/failed full gate"
+          assert x.get("release")=="0.5.3", "Unexpected artifact source revision"
+          PY
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/blazepisonet-softtimer-release.yml/runs?branch=$GITHUB_REF_NAME&per_page=50" --jq '.workflow_runs[] | [.id,.head_sha,.conclusion] | @tsv')"
+          WINDOWS_RUN="$(printf '%s\n' "$RUNS" | awk -F '\t' -v sha="$GITHUB_SHA" '$2==sha && $3=="success" {print $1; exit}')"
+          [ -n "$WINDOWS_RUN" ] || { echo "Same-SHA Windows installer not green; NO release"; exit 1; }
+          echo "WINDOWS_RUN=$WINDOWS_RUN" >> "$GITHUB_ENV"
+      - name: Download exact CI-built lab artifacts from this run and Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage lab-release
+          for a in BlazePwifi-bundle BlazePwifi-android-current BlazePwifi-esp8266-firmware BlazePwifi-esp32-firmware BlazePwifi-ruijie-firmware BlazePwifi-x86_64-firmware BlazePwifi-orangepi_zero3-firmware BlazePwifi-current-update; do
+            mkdir -p "stage/$a"
+            gh run download "$GITHUB_RUN_ID" -n "$a" -D "stage/$a"
+            find "stage/$a" -type f -size +0c | grep -q . || { echo "Empty/missing artifact $a"; exit 1; }
+            (cd stage && zip -qr "../lab-release/$a-LAB-ONLY.zip" "$a")
+          done
+          win="BlazePisonet-SoftTimer-v0.4.0-win-x64"
+          mkdir -p "stage/$win"
+          gh run download "$WINDOWS_RUN" -n "$win" -D "stage/$win"
+          find "stage/$win" -type f -size +0c | grep -q . || { echo "Windows artifact missing"; exit 1; }
+          (cd stage && zip -qr "../lab-release/$win-LAB-ONLY.zip" "$win")
+          cp "$NOTES" lab-release/RELEASE_NOTES.md
+          (cd lab-release && sha256sum *-LAB-ONLY.zip > SHA256SUMS)
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path("lab-release")
+          assets=[dict(name=p.name,bytes=p.stat().st_size,sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.glob("*-LAB-ONLY.zip"))]
+          assert len(assets)==9 and all(a["bytes"]>0 for a in assets),"Incomplete lab assets"
+          (root/"MANIFEST.json").write_text(json.dumps(dict(
+              tag="v0.6.0-alpha.1",purpose="DISPOSABLE-LAB-ONLY-NOT-PRODUCTION",
+              commit=os.environ["GITHUB_SHA"],build_run_id=os.environ["GITHUB_RUN_ID"],
+              windows_run_id=os.environ["WINDOWS_RUN"],source_version="0.5.3",
+              production_signed=False,hardware_powercut_verified=False,
+              migration_verified=False,customer_install_authorized=False,
+              assets=assets),indent=2)+"\n",encoding="utf-8")
+          PY
+      - name: Publish immutable v0.6 lab-only GitHub prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WINDOWS_RUN"
+          test -s lab-release/MANIFEST.json && test -s lab-release/SHA256SUMS
+          gh release create "$LAB_TAG" lab-release/* \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "BlazePwifi v0.6.0-alpha.1 — LAB ONLY, NOT PRODUCTION" \
+            --notes-file "$NOTES"
+          gh release view "$LAB_TAG" --json tagName,isPrerelease,assets \
+            --jq '{tag:.tagName,prerelease:.isPrerelease,asset_count:(.assets|length)}'
