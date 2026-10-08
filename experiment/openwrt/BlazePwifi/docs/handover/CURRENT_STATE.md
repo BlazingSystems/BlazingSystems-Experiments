@@ -24,13 +24,13 @@
 - **Full system**: [BlazePwifi build #37770673219](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673219), HEAD `d99f9b7b1ac10f183659c97c156fe4c939863cf8`, **FAILED**. Required validation, Android APK builds, Android Device Owner emulator, ESP8266/ESP32, Ruijie, x86, Orange Pi, updater and hardware simulations completed successfully, but `v04_browser_simulation` failed in `simulation/browser_v04_audit.py` at line 381, `page.click('button:has-text("Bind existing BlazeRental")')`, after 30s timeout. The v0.6.0 UI intentionally renamed this button to **Generate binding QR** and factory provision to **Generate Device Owner QR**. The failure blocks `v04_candidate_gate`, which was skipped. The parallel run #37770667993 failed identically. **Do NOT claim full matrix green.**
 - **Windows PisoNet**: [SoftTimer run #37770673126](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673126), same exact source HEAD `d99f9b7b1ac10f183659c97c156fe4c939863cf8`, **SUCCESS** including warning-as-error compile, `--verify-timer-math`, self-contained Windows x64 EXE and NSIS setup, install/uninstall smoke, portable archive and candidate artifact upload. Production Windows release upload is skipped on a PR. Separate manual electrical/clock tests still required.
 - **Prior compatible baseline**: v0.5.3 security/QR fixes from PR #29 merged to RC1 as `4879c38f3f0e676f17ac40d73cb59c87ffcb5762` after green source CI #37765240497. This is **not** a v0.6.0 release.
-- **Current documentation-policy work:** item HND-0600, in progress. New policy `docs/handover/HANDOVER_POLICY.md` added. CI handover freshness script/gate, comprehensive ledger and canonical root status being applied. No business runtime changed by the policy documentation itself.
+- **Current documentation-policy work:** item HND-0600, in progress. Mandatory policy, full live state/ledger and root current-status are committed. `tests/handover_gate.sh` was created in commit `c27593ca4f272432118ac37fe74c5dab755eec08` and `.github/workflows/blazepwifi-build.yml` now runs it before static validation with `fetch-depth: 0` (commit `2cc802a7c44785aa35fde7079d8e4160b0a1759f`). **Implemented, not yet CI-validated.** No business runtime changed by handover-enforcement code.
 
 ## Ongoing work register — no ambiguous "done" claims
 
 | ID / priority | State | Implemented and where | Pending evidence / next |
 |---|---|---|---|
-| HND-0600 / P0 | IN PROGRESS | `HANDOVER_POLICY.md`; live state + ledger + root canonical handover in this transaction | add `tests/handover_gate.sh`, integrate into BlazePwifi CI with full fetch and audit exact head |
+| HND-0600 / P0 | IMPLEMENTED / CI PENDING | New policy, live state, ledger, root status, `tests/handover_gate.sh` and early full-history `validate` step; commits `6af8f4d...`, `464e098e...`, `f94bece0...`, `c692547f...`, `c27593ca...`, `2cc802a7...` | after fixing browser selector and another handover sync, verify gate success on exact head and no bypass under negative test |
 | BROWSE-0601 / P1 | REPRODUCED / NOT FIXED YET | Browser test expects old labels at `simulation/browser_v04_audit.py:381,387` | update selectors to live UI labels, rerun Playwright + exact SHA full CI |
 | BILL-0602 / P0 | IMPLEMENTED / CI GREEN (Windows) | `experiment/windows/BlazePisonet-SoftTimer/src/BlazePisonet.SoftTimer/TimerEngine.cs`, `Program.cs`, workflow | verify native installer operation on actual PCs, suspended timer and 60min electrical cadence, central-slot and 1:1 modes |
 | ID-0603 / P1 | IMPLEMENTED / TEST GREEN in validate | Public `openwrt/rootfs/www/blazepwifi/cgi-bin/api` rejects user-supplied MAC when router ARP lookup unavailable | physical VLAN13 AP bridge/routed/WAN IPv6 identity mapping and denial UX; NEVER restore spoofable MAC fallback |
@@ -50,9 +50,16 @@
 7. Run tests on exact head, review complete artifacts, and never claim green/released when critical job is failed, skipped, canceled or pending.
 8. Keep this document, `PROJECT_HANDOVER.md` top status and `CHANGE_LEDGER.md` synchronized **after each meaningful change**. New chat reads this file first after root handover.
 
+## Live transition — HND-0600 gate implementation checkpoint
+
+- Source/workflow changes: `tests/handover_gate.sh` commit `c27593ca4f272432118ac37fe74c5dab755eec08`; `.github/workflows/blazepwifi-build.yml` commit `2cc802a7c44785aa35fde7079d8e4160b0a1759f`.
+- Gate verifies full-history checkout, current/ledger/policy existence and most recent source/workflow diff does not postdate **any** of the three required handover checkpoints.
+- **Latest CI evidence is still the old baseline:** Windows run #37770673126 PASS, Full build #37770673219 FAIL. No green evidence yet for the newly added handover gate.
+- **NEXT NOW:** update `simulation/browser_v04_audit.py` stale two QR button selectors and add tests for the new two-choice dialog; then synchronize canonical docs again, inspect exact-head CI and carry forward any blockers.
+
 ## NEXT EXACT ACTION — safe resume sequence
 
-1. Finish HND-0600 by creating `experiment/openwrt/BlazePwifi/tests/handover_gate.sh`, wiring it as the **first** BlazePwifi CI validation step, and ensuring the CI checkout has complete Git history; this must fail when source/workflow changes are newer than the canonical handover checkpoint.
+1. **DONE IN SOURCE, NOT YET VERIFIED:** HND-0600 gate created and first BlazePwifi CI step configured with full Git history. After the next documentation checkpoint, confirm an exact-SHA `validate` job passes. Test a negative scenario by changing a source file after a previous checkpoint and confirm the gate fails without weakening it.
 2. Fix BROWSE-0601: in `simulation/browser_v04_audit.py`, replace the stale button locators at lines 381 and 387 with the current approved UI labels. Keep distinct QR type/token/hash checks; do not weaken assertions.
 3. Create a new checkpoint in `CHANGE_LEDGER.md` and update `PROJECT_HANDOVER.md` + this live state with exact new source commits, test outcomes and NEXT ACTION. The last handover commit must succeed the last implementation commit before CI can be green.
 4. Check the new **exact commit SHA** and its [GitHub Actions branch history](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions?query=branch%3Ablazepwifi-v0.6.0-audit-foundation), diagnose any remaining failures by job logs, and reconcile doc statuses immediately. Keep PR #30 draft and block release while any critical gate is not green.
