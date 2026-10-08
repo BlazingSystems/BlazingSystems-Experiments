@@ -73,6 +73,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_migration_guard.sh
       - name: BlazePwifi v0.6 synthetic state backup/restore integrity prototype
         run: sh experiment/openwrt/BlazePwifi/tests/v060_state_fixture.sh
+      - name: BlazePwifi v0.6 synthetic crash-atomic member transfer
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh
       - name: BlazePwifi v0.6 OpenWrt sysupgrade preservation safety
         run: sh experiment/openwrt/BlazePwifi/tests/v060_sysupgrade_preservation.sh
       - name: BlazeFusion offline and authenticated UI integration smoke
