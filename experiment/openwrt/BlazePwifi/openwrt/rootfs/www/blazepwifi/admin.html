@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BlazePwifi Management Console</title>
-<link rel="stylesheet" href="/vendor/tailadmin/blaze-tailadmin.css">
+<link rel="stylesheet" href="/vendor/tailadmin/blaze-tailadmin.css">\n<link rel="stylesheet" href="/vendor/blazefusion/blaze-fusion.css">
 </head><body>
 <div id="loginView" class="login-wrap"><div class="login-card">
   <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi</span></div>
@@ -46,7 +46,7 @@
 
 <main class="main"><header class="topbar">
   <div class="toolbar"><button id="menuBtn" class="btn ghost mobile-menu">☰</button><span id="crumb" class="crumb">Dashboard</span></div>
-  <div class="user-chip"><span class="status-pulse" aria-label="Local management console">LOCAL CONTROL</span><div><div id="topUser">—</div><div id="topRole" class="small muted">—</div></div><span class="avatar">A</span><button id="logoutBtn" class="btn ghost sm">Sign out</button></div>
+  <div class="user-chip"><label class="blaze-style-label" for="blazeStyleSelect">Appearance <select id="blazeStyleSelect" class="field" aria-label="Console appearance"><option value="fusion">BlazeFusion</option><option value="compact">Compact</option><option value="comfort">Comfort</option></select></label><span class="status-pulse" aria-label="Local management console">LOCAL CONTROL</span><div><div id="topUser">—</div><div id="topRole" class="small muted">—</div></div><span class="avatar">A</span><button id="logoutBtn" class="btn ghost sm">Sign out</button></div>
 </header><div class="content">
   <div id="passwordChange" class="notice warn hidden"><b>Bootstrap password must be replaced.</b><div class="toolbar" style="margin-top:8px"><input id="newPassword" class="field" type="password" placeholder="New password (12+ characters)" style="max-width:360px"><button id="changePasswordBtn" class="btn primary">Change password</button></div></div>
 
@@ -285,5 +285,5 @@
 </div><div class="notice" style="margin-top:12px"><b>Before scanning:</b> confirm the server HTTPS certificate pin and APK signer. Each generated token is temporary and must not be shared publicly. Factory-reset provisioning is supported only where the Android device/OEM allows it.</div><div id="qrResult" class="hidden"><div id="qrBox" class="qr-box"></div><div id="qrNotice" class="notice"></div><div id="qrMeta" class="code-box mono small"></div><div id="qrToken" class="code-box mono small"></div></div></div></div></div>
 <div id="toastHost"></div>
 <script src="/vendor/qrcode/qrcode.js"></script>
-<script src="/admin/core.js"></script><script src="/admin/members.js"></script><script src="/admin/rental.js"></script><script src="/admin/controllers.js"></script><script src="/admin/console-v05.js"></script>
+<script src="/admin/core.js"></script><script src="/vendor/blazefusion/blaze-fusion.js"></script><script src="/admin/members.js"></script><script src="/admin/rental.js"></script><script src="/admin/controllers.js"></script><script src="/admin/console-v05.js"></script>
 </body></html>
