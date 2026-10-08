@@ -9,6 +9,7 @@ BP_STATE="$T/state"; BP_RUN="$T/run"; mkdir -p "$BP_STATE" "$BP_RUN"
 printf 'BLAZE-SYNTHETIC-FIXTURE-ONLY\n' > "$T/.blaze-fixture-only"
 BP_RENTAL_DEVICES="$BP_STATE/rental-devices.tsv"
 BP_RENTAL_EVENTS="$BP_STATE/rental-events.tsv"
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 bp_init_dirs() { :; }
 bp_cfg() { [ "$1" = rental_seconds_per_pulse ] && printf '600' || printf ''; }
 bp_tmp_suffix() { printf 'rental-fixture'; }
