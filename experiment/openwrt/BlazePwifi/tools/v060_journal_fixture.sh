@@ -41,14 +41,20 @@ case "$op" in AM|SM|TM|LR) ;; *) echo "invalid operation" >&2; exit 2;; esac
 # Lock file remains in place between invocations (never unlink a live lock).
 exec 8>"$root/.v2-write-lock"
 flock -n 8 || { echo "busy; retry exact same transaction" >&2; exit 8; }
-# The footer is inside the same renamed file as all money and receipt records.
-# SHA-256 detects accidental damage; it is NOT a MAC and cannot prove origin.
+# The checksum footer is in the same file as all monetary balances and receipts.
+# It detects accidental corruption, not tampering by someone with write access.
 footer="$(tail -n 1 "$ledger")"
 case "$footer" in
   H"$(printf '\t')"*) recorded="$(printf '%s\n' "$footer" | cut -f2)" ;;
   *) echo "missing integrity footer" >&2; exit 9 ;;
 esac
-printf '%s\n' "$recorded" | grep -Eq '^[a-f0-9]{64}
+printf '%s\n' "$recorded" | grep -Eq '^[a-f0-9]{64}$' ||
+  { echo "malformed integrity footer" >&2; exit 9; }
+calculated="$(sed '$d' "$ledger" | sha256sum | cut -d' ' -f1)" || exit 9
+[ "$recorded" = "$calculated" ] ||
+  { echo "synthetic ledger SHA-256 mismatch (fail-closed)" >&2; exit 9; }
+# Strictly temp-only and private, no production filesystem paths.
+umask 077
 tmp="$root/.v2-next-$$"
 status="$root/.v2-status-$$"
 trap 'rm -f "$tmp" "$status"' EXIT HUP INT TERM
@@ -329,6 +335,9 @@ case "$read_result" in
     printf '%s\n' "$read_result"
     exit 0 ;;
   COMMIT*)
+    # Footer and balances are committed together in one snapshot.
+    next_hash="$(sha256sum "$tmp" | cut -d' ' -f1)" || exit 69
+    printf 'H\t%s\n' "$next_hash" >> "$tmp" || exit 69
     # Fault injection tests are intentionally sandbox-only.
     case "$BLAZE_TEST_FAULT" in
       before-rename|receipt-eio) echo "injected precommit I/O error" >&2; exit 70 ;;
