@@ -1,3 +1,10 @@
+## SEC-0626 FAST GATE / IN PROGRESS — 2026-10-09 Asia/Manila
+
+- Added dedicated Linux-only regression workflow `.github/workflows/blazepwifi-v060-update-security.yml` at `6ac1086d27f58e59b85b3fdebe8126506f8f544b`. It directly invokes the new malicious-archive test plus legacy v051/v052 update/rollback and v060 migration refusal. This avoids waiting for firmware/ESP/Android matrices to learn whether a shell-policy change fails; full CI also retains `Verify safe tar extraction and manifest target policy`.
+- Existing SEC-0626 implementation: source `1756b412` + AWK correction `303881f1`, fixture `412accfd` + cleanup `cc574076`, Full required step `7d051ed`. New target has not yet returned a verified SUCCESS at the time of this checkpoint. Earlier intermediate Windows handover freshness failures and canceled builds are not evidence of runtime pass/fail.
+- **State:** `IN_PROGRESS / CI pending`. The 0.6 upgrade preflight is unchanged and still blocks all 0.6 upgrades. Source `VERSION=0.5.3`, lab alpha release immutable, no production v0.6 tagged/published. No customer state, secrets or Android signing material was modified.
+- **NEXT EXACT ACTION:** inspect latest dedicated `BlazePwifi v0.6 updater security and rollback` workflow and validate exact SHA and any failing step; repair source/fixture only with handover record. Then verify Full+Windows at synchronized HEAD and continue the real P0 crash-atomic money journal and reversible v1 migration.
+
 ## SEC-0626 / COMMITTED_UNTESTED — 2026-10-09 Asia/Manila — secure overlay extraction
 
 - **Priority P1 security; scope:** Full OpenWrt overlay updater only, no installer, active account, APK or standalone release modified; PR #30 `blazepwifi-v0.6.0-audit-foundation`.
