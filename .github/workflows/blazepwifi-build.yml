@@ -95,6 +95,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh
       - name: Verify managed Android Device Owner TLS pin contract
         run: sh experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh
+      - name: Verify rental browser QR lifecycle and pin requirements
+        run: node experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs
       - name: Standalone Rental BlazeFusion self-contained UI and original secure routes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_fusion.sh
       - name: EasyMode R281 BlazeFusion opt-in staging and frozen-source verification
