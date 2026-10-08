@@ -1,3 +1,11 @@
+
+## 2026-10-09 — MIG-0617 / P0 — committed_unverified (synthetic replay reproduction)
+
+- **Intent:** reproduce duplicate credit after history eviction without accessing any live data; issue #31.
+- **Branch:** `blazepwifi-v0.6.0-audit-foundation`. **Before-code IN PROGRESS:** CURRENT_STATE commit `af576d282b236c90ddab32fde9574e5468d9bb72`.
+- **Exact source/test change:** added `tests/v060_member_replay_repro.sh` commit `8bce9402a0f367cfc4ac574217b6bb63131c10fa`. Uses synthetic temporary ledger, original `member.sh` functions, fills retention with 129 unrelated events, then checks replay cannot add credit twice. Fails exit 1 if vulnerable, exit 2 if setup fails. **Not yet executed in CI**; do not claim reproduced until run evidence exists. Test deliberately not added as a blocking CI step while in red state.
+- **Risk/rollback:** all state under mktemp; no real customer state, runtime source, signing, or released tags changed. Safe rollback: delete reproduction script and revert documentation changes. Production 0.6 updater stays fail closed.
+- **NEXT ACTION:** execute fixture on branch checkout, verify expected RED specifically from doubled credits (not a test setup failure), then write interrupted-transfer failure injection, design durable journal, and convert both to required GREEN CI tests after implementation. Update root/current/ledger with exact test and workflow IDs.
 # BlazePwifi continuous change ledger — v0.6.0+
 
 **Rule:** append meaningful work results; never silently remove or rewrite failures. This is a human-auditable chronology, not proof of production readiness. Timestamps are Asia/Manila unless marked otherwise. `CURRENT_STATE.md` is the authoritative **current** outcome; `PROJECT_HANDOVER.md` is the new-chat entrypoint.
