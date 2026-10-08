@@ -7,6 +7,9 @@ T="$(mktemp -d /tmp/blaze-v2-native-XXXXXX)"
 trap 'rm -rf "$T"' EXIT HUP INT TERM
 printf 'BLAZE-V2-SYNTHETIC-ONLY\n' > "$T/.blaze-v2-fixture-only"
 printf 'V\t2\nA\talice\t100\nA\tbob\t200\nL\tdev01\t0\n' > "$T/ledger.tsv"
+# Integrity footer belongs in the same source snapshot.
+body_hash="$(sha256sum "$T/ledger.tsv" | cut -d' ' -f1)"
+printf 'H\t%s\n' "$body_hash" >> "$T/ledger.tsv"
 chmod 600 "$T/ledger.tsv" "$T/.blaze-v2-fixture-only"
 run() { BLAZE_TEST_FAULT="" sh "$TOOL" "$T" "$@"; }
 account() { awk -F '\t' -v u="$1" '$1=="A"&&$2==u {print $3;exit}' "$T/ledger.tsv"; }
@@ -58,6 +61,40 @@ done
 [ "$(awk -F '\t' '$1=="R"&&$2=="ctrlOne" {n++} END {print n+0}' "$T/ledger.tsv")" -le 8 ]
 reject ctrlOne 1 ctrlOne:1 AM alice - 40 1000
 [ "$(account alice)" -eq 141 ]
+# Two independent clients race for the same sequence. The lock may reject one
+# with BUSY, but a retry of that exact request must replay without new credit.
+(BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel1" 2>&1; echo "$?" >"$T/parallel1.rc") &
+p1=$!
+(BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel2" 2>&1; echo "$?" >"$T/parallel2.rc") &
+p2=$!
+wait "$p1" "$p2"
+[ "$(account alice)" -eq 150 ]
+grep -Eq '^COMMIT[[:space:]]150
+cp "$T/ledger.tsv" "$T/pristine"
+printf 'INVALID\tRECORD\n' >> "$T/ledger.tsv"
+reject ctrlOne 25 ctrlOne:25 AM alice - 1 1000
+[ "$(account alice)" -eq 150 ]
+cmp -s "$T/ledger.tsv" "$T/pristine" && { echo "corruption setup failed" >&2; exit 1; }
+# Unsafe roots must not be accepted even with a valid-looking command.
+if BLAZE_TEST_FAULT="" sh "$TOOL" /etc ctrlOne 25 ctrlOne:25 AM alice - 1 1000 >/dev/null 2>&1; then
+  echo "system path accepted by fixture" >&2; exit 1
+fi
+echo 'MIG-0624 synthetic POSIX journal PASS: checksum, concurrent retry, atomic member/rental+receipt snapshot, retained retry, stale-window refusal, precommit/EIO/lost-ACK and corruption negative cases'
+echo 'NOT PRODUCTION: no real authentication, fsync durability, historical v1 migration, or hardware flash/power-loss validation'
+ "$T/parallel1" "$T/parallel2"
+[ "$(run ctrlRace 1 ctrlRace:1 AM alice - 9 1000)" = "$(printf 'REPLAY\t150')" ]
+[ "$(account alice)" -eq 150 ]
+
+# An otherwise valid numeric record with a stale footer is corruption.
+cp "$T/ledger.tsv" "$T/intact-snapshot"
+awk -F '\t' 'BEGIN {OFS="\t"} $1=="A" && $2=="alice" {$3+=5} {print}' "$T/intact-snapshot" >"$T/modified"
+mv "$T/modified" "$T/ledger.tsv"
+reject ctrlOne 25 ctrlOne:25 AM alice - 1 1000
+grep -Fq 'SHA-256 mismatch' "$T/reject.log"
+[ "$(account alice)" -eq 155 ]
+cp "$T/intact-snapshot" "$T/ledger.tsv"
+[ "$(account alice)" -eq 150 ]
+
 # Strict state parser refuses corrupt ledger and no mutation happens.
 cp "$T/ledger.tsv" "$T/pristine"
 printf 'INVALID\tRECORD\n' >> "$T/ledger.tsv"
