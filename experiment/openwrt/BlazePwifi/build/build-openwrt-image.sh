@@ -85,8 +85,21 @@ if [ "$KIND" = sbc ]; then
   PACKAGES="$PACKAGES gpiod-tools"
 fi
 
-[ -f "$IB" ] || curl -fL "$BASE/$IB" -o "$IB"
-curl -fsSL "$BASE/sha256sums" -o sha256sums
+# OpenWrt mirrors can intermittently abort HTTP/2 transfers. Prefer HTTP/1.1
+# with bounded retries and resumption, and never expose an incomplete archive
+# as a validated ImageBuilder. SHA-256 is verified below before extraction.
+bp_download_large() {
+  url="$1"; target="$2"
+  curl --http1.1 -fL --retry 5 --retry-all-errors --retry-delay 3 \
+    --connect-timeout 30 --continue-at - --output "$target.part" "$url"
+  mv -f "$target.part" "$target"
+}
+if [ ! -f "$IB" ]; then
+  bp_download_large "$BASE/$IB" "$IB"
+fi
+curl --http1.1 -fsSL --retry 5 --retry-all-errors --retry-delay 3 \
+  --connect-timeout 30 "$BASE/sha256sums" -o sha256sums.part
+mv -f sha256sums.part sha256sums
 EXPECTED="$(awk -v f="$IB" '$2=="*"f || $2==f {print $1;exit}' sha256sums)"
 [ -n "$EXPECTED" ] || { echo "checksum entry not found for $IB" >&2; exit 1; }
 echo "$EXPECTED  $IB" | sha256sum -c -
@@ -111,7 +124,7 @@ case "$KIND" in
     BOOTSTRAP="openwrt-$VER-ramips-mt7621-ruijie_rg-ew1200g-pro-v1.1-initramfs-kernel.bin"
     BOOTSTRAP_SHA="$(awk -v f="$BOOTSTRAP" '$2=="*"f || $2==f {print $1;exit}' "$WORK/sha256sums")"
     [ -n "$BOOTSTRAP_SHA" ] || { echo "Official Ruijie bootstrap checksum entry missing" >&2; exit 1; }
-    curl -fL "$BASE/$BOOTSTRAP" -o "$OUT/$BOOTSTRAP"
+    bp_download_large "$BASE/$BOOTSTRAP" "$OUT/$BOOTSTRAP"
     echo "$BOOTSTRAP_SHA  $OUT/$BOOTSTRAP" | sha256sum -c -
     cat > "$OUT/RUIJIE-FLASH-NOTES.txt" <<EOF
 BlazePwifi Ruijie RG-EW1200G Pro v1.1 release set
