@@ -64,6 +64,8 @@ Uploaded sources: `coreui-react-v1.0.0.zip` internally CoreUI React admin templa
 
 **P0 remains:** transactional paid-state upgrade/rollback, actual OpenWrt `sysupgrade -l` and private restore on hardware, 0.6.0 version identity, higher-version same-signer APK rescue and manual operator signoff. No production v0.6.0 tag or release.
 
+**BlazeFusion mobile QA source additions:** CSS commit 375b26f97a94779acb005633d48366fe0c8f59f0 prevents 360–390px topbar crowding without hiding Log out. Browser test commit 41c7e58bf0e4177c33fdf809697df0e85e165429 verifies body width on 360px and 390px before QR tests. Current state and ledger were synchronized after both; this root checkpoint closes that source window. Prior build runs are not exact-source approvals for these commits. **NEXT NOW:** verify latest exact-HEAD validate, v04_browser_simulation, other platform candidate gate and Windows build; log actual outcome before any release claim. Independent Lite/Standalone/Android/Windows/ESP appearance implementations are future work.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
