@@ -8,7 +8,7 @@
 |---|---|
 | Repository | `BlazingSystems/BlazingSystems-Experiments` |
 | Active development branch | `blazepwifi-v0.6.0-audit-foundation` |
-| Source baseline before handover-policy documentation | `d99f9b7b1ac10f183659c97c156fe4c939863cf8` |
+| Original v0.6.0 PR source baseline | `d99f9b7b1ac10f183659c97c156fe4c939863cf8` (historical, not latest HEAD) |
 | Draft PR | [#30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30), base `blazepwifi-v0.5.3-rc1` |
 | Exact base branch SHA checked | `4879c38f3f0e676f17ac40d73cb59c87ffcb5762` (v0.5.3 RC1 security baseline) |
 | Full project's on-disk VERSION | **`0.5.3`**, not `0.6.0`. Android still has v0.5.3 version metadata. No legitimate production v0.6.0 APK or manifest exists. |
@@ -30,7 +30,7 @@
 
 | ID / priority | State | Implemented and where | Pending evidence / next |
 |---|---|---|---|
-| HND-0600 / P0 | IMPLEMENTED / CI PENDING | New policy, live state, ledger, root status, `tests/handover_gate.sh` and early full-history `validate` step; commits `6af8f4d...`, `464e098e...`, `f94bece0...`, `c692547f...`, `c27593ca...`, `2cc802a7...` | after fixing browser selector and another handover sync, verify gate success on exact head and no bypass under negative test |
+| HND-0600 / P0 | IMPLEMENTED / CI PENDING | Policy, three canonical files, fail-closed gate (`c27593ca...`), full-history CI (`2cc802a7...`), exact SHA evidence artifact even on failure (`1e92fd13...`), README continuity repair (`500c6d28...`) | sync checkpoint then verify all jobs on exact HEAD; audit failure-evidence artifact schema and stale-source negative test |
 | BROWSE-0601 / P1 | SOURCE FIX COMMITTED / RETEST PENDING | `simulation/browser_v04_audit.py` selectors fixed to `Generate binding QR` and `Generate Device Owner QR` in `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e` | run Playwright and exact-SHA full CI; verify distinct type and token assertions still pass |
 | BILL-0602 / P0 | IMPLEMENTED / CI GREEN (Windows) | `experiment/windows/BlazePisonet-SoftTimer/src/BlazePisonet.SoftTimer/TimerEngine.cs`, `Program.cs`, workflow | verify native installer operation on actual PCs, suspended timer and 60min electrical cadence, central-slot and 1:1 modes |
 | ID-0603 / P1 | IMPLEMENTED / TEST GREEN in validate | Public `openwrt/rootfs/www/blazepwifi/cgi-bin/api` rejects user-supplied MAC when router ARP lookup unavailable | physical VLAN13 AP bridge/routed/WAN IPv6 identity mapping and denial UX; NEVER restore spoofable MAC fallback |
@@ -62,6 +62,13 @@
 - Gate verifies full-history checkout, current/ledger/policy existence and most recent source/workflow diff does not postdate **any** of the three required handover checkpoints.
 - **Latest CI evidence is still the old baseline:** Windows run #37770673126 PASS, Full build #37770673219 FAIL. No green evidence yet for the newly added handover gate.
 - **NEXT NOW:** update `simulation/browser_v04_audit.py` stale two QR button selectors and add tests for the new two-choice dialog; then synchronize canonical docs again, inspect exact-head CI and carry forward any blockers.
+
+## Live transition — CI evidence + public docs reconciliation
+
+- CI workflow implementation `1e92fd13cbbd997fd33594444705c7d23c371159`: `validate` now emits a non-secret `BlazePwifi-ci-handover-evidence` artifact even if tests fail. It contains canonical handover copies and `CI_HANDOVER.json` (workflow/run attempt/Git SHA/job result/branch/version); **never** treat the `validate` status in that JSON as the overall 26-job gate conclusion.
+- Public `README.md` commit `500c6d281dfe8517fed91891f13b79e122c99221`: corrected stale advertised production 0.3.0 to verified full v0.5.2, distinct standalone RC9, correct active v0.6.0 PR, native Android and TailAdmin-inspired admin paths and Windows EXE integration.
+- **Source changes are committed, full latest CI not yet approved.** The last published production release remains v0.5.2. Handover checkpoint commits advance HEAD without changing implementation.
+- **NEXT NOW:** verify newly synchronized exact HEAD `validate` handover gate, `v04_browser_simulation` repaired QR labels, Android Device Owner emulator and candidate gate; record passed/failed/skipped job IDs, and do not confuse isolated validation with full production release.
 
 ## NEXT EXACT ACTION — safe resume sequence
 
