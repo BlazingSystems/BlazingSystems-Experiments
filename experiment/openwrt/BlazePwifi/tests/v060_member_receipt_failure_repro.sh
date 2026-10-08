@@ -9,6 +9,7 @@ printf 'BLAZE-SYNTHETIC-FIXTURE-ONLY\n' > "$T/.blaze-fixture-only"
 BP_MEMBERS="$BP_STATE/members.tsv"
 BP_MEMBER_EVENTS="$BP_STATE/member-events.tsv"
 BP_MEMBER_REVISION="$BP_STATE/member-revision"
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 bp_init_dirs() { :; }
 bp_cfg() { printf ''; }
 bp_tmp_suffix() { printf 'receipt-repro'; }
@@ -25,13 +26,22 @@ before="$(bp_member_line alice | cut -f8)"
 result="$(bp_member_balance_change alice add 40 softtimer:fixture event-receipt-error-0001)"
 rc=$?
 after="$(bp_member_line alice | cut -f8)"
-if [ "$rc" -eq 0 ] && [ "$before" -eq 100 ] && [ "$after" -eq 140 ]; then
-  echo 'P0 RED: balance credited and success returned despite failed event receipt' >&2
+if [ "$rc" -eq 0 ]; then
+  echo 'P0 FAIL: false member success ACK despite failed event receipt' >&2
   exit 1
 fi
-if [ "$rc" -ne 0 ] && [ "$after" -eq "$before" ]; then
-  echo 'PASS: receipt I/O failure rejected without changing paid balance'
-  exit 0
+if [ "$before" -eq 100 ] && [ "$after" -eq 140 ] && [ -f "$BP_STATE/paid-state-uncertain" ]; then
+  # Ambiguous first write remains visible: reject EVERY new paid mutation.
+  set +e
+  bp_member_balance_change alice add 40 softtimer:fixture event-receipt-error-0001 > "$T/retry" 2>&1
+  retry_rc=$?
+  set -e
+  retry_balance="$(bp_member_line alice | cut -f8)"
+  if [ "$retry_rc" -ne 0 ] && [ "$retry_balance" -eq "$after" ]; then
+    echo 'PASS: member receipt EIO rejects ACK and quarantines all further paid changes'
+    echo 'NOT ATOMIC: first balance mutation still visible pending operator reconciliation'
+    exit 0
+  fi
 fi
-echo "REPRO SETUP FAILURE: unexpected receipt outcome rc=$rc before=$before after=$after" >&2
-exit 2
+echo "P0 FAIL: missing quarantine or unexpected receipt outcome rc=$rc before=$before after=$after" >&2
+exit 1
