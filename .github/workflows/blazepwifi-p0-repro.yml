@@ -1,0 +1,46 @@
+name: BlazePwifi P0 synthetic reproduction (expected RED)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - blazepwifi-v0.6.0-audit-foundation
+    paths:
+      - 'experiment/openwrt/BlazePwifi/tests/v060_member_*_repro.sh'
+      - '.github/workflows/blazepwifi-p0-repro.yml'
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    name: Demonstrate OLD accounting defects only
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify synthetic expected-RED replay and interrupted transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          checks=(
+            'experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh|P0 RED: evicted event ID credited again'
+            'experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh|P0 RED: power loss leaves 40 paid seconds missing'
+          )
+          for item in "${checks[@]}"; do
+            file="${item%%|*}"
+            signature="${item#*|}"
+            log="$(mktemp)"
+            set +e
+            sh "$file" >"$log" 2>&1
+            rc=$?
+            set -e
+            cat "$log"
+            if [[ "$rc" -ne 1 ]] || ! grep -Fq "$signature" "$log"; then
+              echo "::error::Unexpected result for $file (rc=$rc). Inspect setup and source."
+              rm -f "$log"
+              exit 1
+            fi
+            echo "CONFIRMED EXPECTED RED: $file (only temporary fictional records)"
+            rm -f "$log"
+          done
+          echo 'Both synthetic pre-fix defects reproduced. This does NOT validate production safety.'
