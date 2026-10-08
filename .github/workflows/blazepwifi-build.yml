@@ -77,6 +77,12 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh
       - name: BlazePwifi v0.6 receipt store full rejects payment
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh
+      - name: BlazePwifi v0.6 member receipt EIO quarantine
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh
+      - name: BlazePwifi v0.6 rental receipt EIO before mutation
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh
+      - name: BlazePwifi v0.6 rental receipt EIO after lease rename
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh
       - name: BlazePwifi v0.6 synthetic crash-atomic member transfer
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh
       - name: BlazePwifi v0.6 synthetic transactional ledger oracle (model only)
