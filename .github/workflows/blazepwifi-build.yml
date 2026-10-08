@@ -866,8 +866,8 @@ jobs:
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
-      LAB_TAG: v0.6.0-alpha.1
-      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.1/RELEASE_NOTES.md
+      LAB_TAG: v0.6.0-alpha.2
+      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.2/RELEASE_NOTES.md
     steps:
       - uses: actions/checkout@v4
         with:
@@ -918,7 +918,7 @@ jobs:
           assets=[dict(name=p.name,bytes=p.stat().st_size,sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.glob("*-LAB-ONLY.zip"))]
           assert len(assets)==9 and all(a["bytes"]>0 for a in assets),"Incomplete lab assets"
           (root/"MANIFEST.json").write_text(json.dumps(dict(
-              tag="v0.6.0-alpha.1",purpose="DISPOSABLE-LAB-ONLY-NOT-PRODUCTION",
+              tag=os.environ["LAB_TAG"],purpose="DISPOSABLE-LAB-ONLY-NOT-PRODUCTION",
               commit=os.environ["GITHUB_SHA"],build_run_id=os.environ["GITHUB_RUN_ID"],
               windows_run_id=os.environ["WINDOWS_RUN"],source_version="0.5.3",
               production_signed=False,hardware_powercut_verified=False,
@@ -933,7 +933,7 @@ jobs:
           test -s lab-release/MANIFEST.json && test -s lab-release/SHA256SUMS
           gh release create "$LAB_TAG" lab-release/* \
             --target "$GITHUB_SHA" --prerelease \
-            --title "BlazePwifi v0.6.0-alpha.1 — LAB ONLY, NOT PRODUCTION" \
+            --title "BlazePwifi v0.6.0-alpha.2 — LAB ONLY, NOT PRODUCTION" \
             --notes-file "$NOTES"
           gh release view "$LAB_TAG" --json tagName,isPrerelease,assets \
             --jq '{tag:.tagName,prerelease:.isPrerelease,asset_count:(.assets|length)}'
