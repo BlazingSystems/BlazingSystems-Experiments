@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse, base64, hashlib, json, pathlib
+from urllib.parse import urlsplit
 
 p=argparse.ArgumentParser()
 p.add_argument("--apk",required=True)
@@ -11,10 +12,19 @@ p.add_argument("--server-cert-sha256",default="",
                help="optional SHA-256 fingerprint of a self-signed BlazePwifi server certificate")
 p.add_argument("--out",required=True)
 a=p.parse_args()
-if not a.server_url.lower().startswith("https://"):
-    p.error("--server-url must use https:// for Device Owner provisioning")
-if not a.apk_url.lower().startswith("https://"):
-    p.error("--apk-url must use https:// for Device Owner provisioning")
+def require_https(value, flag):
+    try:
+        url = urlsplit(value)
+    except ValueError:
+        p.error(flag + " must be a valid HTTPS URL")
+    if (url.scheme.lower() != "https" or not url.hostname
+            or url.username is not None or url.password is not None
+            or url.fragment
+            or any(c.isspace() or ord(c) < 0x20 for c in value)):
+        p.error(flag + " requires HTTPS and a hostname, without credentials or fragment")
+
+require_https(a.server_url, "--server-url")
+require_https(a.apk_url, "--apk-url")
 if "." not in a.enrollment_token or a.enrollment_token.startswith(".") or a.enrollment_token.endswith("."):
     p.error("--enrollment-token must be a BlazePwifi one-time token")
 pin=a.server_cert_sha256.replace(":","").strip().lower()
