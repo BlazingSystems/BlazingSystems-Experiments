@@ -14,7 +14,7 @@
 
 <div id="appView" class="app hidden">
 <aside id="sidebar" class="sidebar">
-  <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.5.1</small></span></div>
+  <div class="logo"><span class="logo-mark">B</span><span>BlazePwifi <small class="muted">v0.6.0 preview</small></span></div>
   <div class="nav-label">OVERVIEW</div>
   <button class="nav-btn active" data-page="dashboard"><span class="nav-dot"></span>Dashboard</button>
   <button class="nav-btn" data-page="sessions"><span class="nav-dot"></span>Clients & Sessions</button>
@@ -46,12 +46,12 @@
 
 <main class="main"><header class="topbar">
   <div class="toolbar"><button id="menuBtn" class="btn ghost mobile-menu">☰</button><span id="crumb" class="crumb">Dashboard</span></div>
-  <div class="user-chip"><div><div id="topUser">—</div><div id="topRole" class="small muted">—</div></div><span class="avatar">A</span><button id="logoutBtn" class="btn ghost sm">Sign out</button></div>
+  <div class="user-chip"><span class="status-pulse" aria-label="Local management console">LOCAL CONTROL</span><div><div id="topUser">—</div><div id="topRole" class="small muted">—</div></div><span class="avatar">A</span><button id="logoutBtn" class="btn ghost sm">Sign out</button></div>
 </header><div class="content">
   <div id="passwordChange" class="notice warn hidden"><b>Bootstrap password must be replaced.</b><div class="toolbar" style="margin-top:8px"><input id="newPassword" class="field" type="password" placeholder="New password (12+ characters)" style="max-width:360px"><button id="changePasswordBtn" class="btn primary">Change password</button></div></div>
 
   <section id="page-dashboard" class="section active">
-    <div class="page-head"><div><h2>Dashboard</h2><p>First-glance operating health for the whole BlazePwifi appliance.</p></div><button class="btn" onclick="BlazeCore.refreshAll()">Refresh</button></div>
+    <div class="page-head"><div><h2>Operations overview</h2><p>Wi-Fi sessions, rental devices, controllers and network health in one command center. Data is from this appliance.</p></div><button class="btn" onclick="BlazeCore.refreshAll()">Refresh</button></div>
     <div class="grid metrics">
       <div class="card"><div class="card-body"><div class="metric-label">Active sessions</div><div id="metricSessions" class="metric-value">—</div><div class="metric-sub">Hotspot users online</div></div></div>
       <div class="card"><div class="card-body"><div class="metric-label">Rental phones</div><div id="metricRentals" class="metric-value">—</div><div id="metricPaidRentals" class="metric-sub">—</div></div></div>
