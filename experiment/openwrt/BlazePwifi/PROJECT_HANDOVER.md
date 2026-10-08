@@ -35,6 +35,18 @@
 - **Migration contract:** [docs/RELEASE_0.6.0_MIGRATION.md](docs/RELEASE_0.6.0_MIGRATION.md) `46e4f73a05516b9d1d100ddebba823b241529e8a`: actual persistent-state inventory, migration journal/snapshot/recovery, post-transaction rollback constraints and v0.6 identity gates.
 - **NEXT IMMEDIATE:** check new exact HEAD `validate` and full matrix for the new preflight regression. Keep previous exact-source green run #37774312541 and Windows #37774312533 as historical proof **only for prior SHA `d1e7fb41...`**. If a test fails, log and fix before continuing. After tests, implement transaction snapshot and recovery, **not** production signing yet.
 
+## P0 active SYS-0612 — preserve paid state and TLS pins through full firmware upgrade
+
+**This is distinct from v0.6 overlay migration MIG-0610.** OpenWrt sysupgrade restores only declared config/data. Missing backup declarations could lose customer balances, prepaid device identities and TLS pin continuity during full firmware replacement.
+
+- `openwrt/rootfs/lib/upgrade/keep.d/blazepwifi` commit `9bdd8196d811226ca4feccc963b398b6ade59cee`: narrowly includes operator config, `state` paid ledger/credentials, portal and HTTPS cert/key; deliberately excludes huge update snapshots.
+- `openwrt/rootfs/usr/lib/blazepwifi/update.sh` allow-list commit `e7ac3d55a9c71b92b8e6039287ba3c5a0ba6077f` permits only BlazePwifi's keep.d path in transactional overlay bundles, no generic sysupgrade.conf replacement. Existing 0.6 transaction-migration block remains active.
+- `tests/v060_sysupgrade_preservation.sh` commit `d16ce84af7cd1958ef7a2feb87d983ad8438728d`; required workflow step `3537df27ea66caa2969951c2a510b5bd8fbc4f5c`. **Committed, not yet verified on new exact source.**
+- `docs/RELEASE_0.6.0_MIGRATION.md` commit `d675773097fe51629946ba24fedebd6b86ce6f10` includes physical `sysupgrade -l`, encrypted backup size/restore, router pin certificate continuity, and Android same-signer rescue version code higher than installed current APK.
+- **Prior verified checkpoint:** full #37776446840 passed 26 jobs and Windows #37776446835 passed 2 on **earlier** source SHA `541282869753dc2b64058c45a162ab4b96e83be9`. These runs do not validate the new keep.d source.
+
+**NEXT:** run new exact-head CI including preservation test, firmware bundles, Android owner emulator, Ruijie/x86/Orange Pi simulations and Windows EXE; record any failure before another change. Then validate actual OpenWrt `sysupgrade -l` and recovery on supported hardware, and finish v0.6 transaction migration and version/signer release gates. **No signed/published 0.6.0 release.**
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
