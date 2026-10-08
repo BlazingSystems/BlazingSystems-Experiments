@@ -12,6 +12,7 @@ BP_MEMBER_EVENTS="$BP_STATE/member-events.tsv"
 BP_MEMBER_REVISION="$BP_STATE/member-revision"
 export BP_STATE BP_RUN BP_MEMBERS BP_MEMBER_EVENTS BP_MEMBER_REVISION
 # Use exact production member code, with only machine dependencies stubbed.
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 bp_init_dirs() { :; }
 bp_cfg() { printf ''; }
 bp_tmp_suffix() { printf 'transfer-repro'; }
@@ -26,6 +27,7 @@ cat > "$T/crash-worker.sh" <<'WORKER'
 #!/bin/sh
 set -u
 ROOT="$1"
+. "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
 bp_init_dirs() { :; }
 bp_cfg() { printf ''; }
 bp_tmp_suffix() { printf 'transfer-crash'; }
