@@ -1,6 +1,6 @@
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
-**As reconciled:** 2026-10-08 19:43+ Asia/Manila; policy gate, browser selector fix and history regression now committed, exact-head CI recheck pending. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
+**As reconciled:** 2026-10-08 19:43+ Asia/Manila; policy gate, browser fix, history regression and immutable Windows release guard now committed; exact-head CI recheck pending. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
 
 ## AUTHORITATIVE LIVE LINKS
 
@@ -24,6 +24,8 @@
 | Handover synchronization | **IMPLEMENTED / exact-SHA retest pending** | Policy + state + ledger + source freshness CI gate (full history); Playwright QR fix `da87ad69...`; always-uploaded non-secret CI run/status artifact `1e92fd13...`; public README correction `500c6d28...`; live docs checkpoint after source. |
 
 **Do not use old dates in the archived text to decide which branch/code is active.** `docs/handover/CURRENT_STATE.md` takes precedence when source + current Action logs corroborate it. If evidence contradicts it, fix this block and the live state immediately instead of inventing a release success.
+
+**New business protection:** Windows workflow commit `326d67e88db690ad9e83e855fc3136d2498cbb61` now requires the same handover gate before building and will not overwrite published SoftTimer v0.4.0 assets. Verified existing release contains NSIS setup EXE, portable ZIP and checksums; no released assets changed. Verify the Windows two-job CI and full BlazePwifi CI on this checkpoint.
 
 ## NEXT EXACT ACTION / safe resume
 
