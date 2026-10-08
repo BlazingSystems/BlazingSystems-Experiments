@@ -291,7 +291,10 @@ case "$action" in
     paused="$(printf '%s' "$line" | cut -f5)"
     ps="$(printf '%s' "$line" | cut -f6)"
     events="$(printf '%s' "$line" | cut -f9)"
-    newevents="$(bp_events_push "$events" "$event")"
+    if ! newevents="$(bp_events_push "$events" "$event")"; then
+      bp_unlock
+      bp_fail "paid receipt history unavailable; voucher not applied"
+    fi
     newcredit=$((credit+cents))
     bp_account_paid_write_or_fail "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$newevents"
     bp_unlock
