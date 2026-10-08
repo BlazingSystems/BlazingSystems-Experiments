@@ -12,6 +12,11 @@ NEXT EXACT ACTION: first GitHub compare source SHA 74623164a808f22d0f1adbf4468b3
 ---
 **Last reconciled (Asia/Manila):** 2026-10-08 19:43+. **Owner order:** full v0.6.0 audit/research, security and native Android/admin UI enhancement, rigorous release; continuous mandatory handover logging before and after every meaningful change. **Status:** `HANDOVER POLICY VERIFIED / DEVELOPMENT CI GREEN / RELEASE BLOCKED`.
 
+### EasyMode source routing correction — READ BEFORE NEXT GUI EDIT
+
+Read-only repository audit found experiment/openwrt/easymode-project/VERSION = 5.0.0-alpha.1, shared core under core/, modules/ and editions/. The repository README identifies preserved R281 v4.2.3 installed experiment source in releases/v4.2.3-r281-experiment/root/www/easy/, with independent light/dark CSS and native OpenWrt account/ubus login. Numbered releases/ folders are immutable snapshots, NOT a place for new BlazeFusion implementation. v4.2.1 mentioned in earlier next-actions is obsolete as the integration target.
+NEXT EXACT ACTION for EasyMode: read v5 alpha architecture/installer, inspect the latest preserved 4.2.3 UI as reference only, and implement an opt-in dependency-free skin under a NEW versioned v5 alpha modules/ui or staging path, with own static+real browser, auth/ubus, config rollback, 360px/390px and six-edition capability tests. Leave 4.2.1/4.2.2/4.2.3 snapshots unchanged. Prove no default credential change, network/routing rewrite, or mock status data.
+v0.6.0 production still BLOCKED by money-ledger migration, real sysupgrade restoration and current/rescue same-signer Android signing/hardware acceptance.
 ## Identity / current pointers (not historical snapshots)
 
 | Field | Verified value / interpretation |
