@@ -47,7 +47,7 @@ The archive titles say `v1.0.0` but internal project versions are **5.7.0** and 
 | Target | Planned integration | Status / release gate |
 |---|---|---|
 | Full OpenWrt Ruijie, x86, Orange Pi | BlazeFusion CSS + selector + existing authorized CGI | **Development implementation; exact CI and browser regression pending** |
-| Lite/EasyMode (other OpenWrt devices) | Reuse subset of design tokens/card/nav CSS; omit heavy graphics, adapt to available ports and hardware controls | **Not yet applied** to their independent repos/profiles; require capability matrix and router resource tests |
+| Lite/EasyMode (other OpenWrt devices) | Share Fusion/Compact/Comfort visual tokens while retaining EasyMode's native UBus, R281 light/dark and per-device networking controls | **EasyMode R281 v4.2.3 opt-in offline PREVIEW builder/test implemented; NOT installed or published.** Other five editions and BlazePwifi Lite remain unmodified |
 | Standalone Rental / R281 firmware | Self-contained BlazeFusion themes in `profiles/standalone-rental/openwrt/rental-standalone.html`; separate rental CGI and installer unchanged | **Implemented on development source, CI pending**. Published RC9 remains frozen; Device Owner versus standard QR workflows unchanged and require separate security work |
 | PC/Orange Pi advanced console | Optional CoreUI React build generated in CI and served as immutable static assets; secure same-origin API/role adapter, CSP, bundle size budget, and safe fallback to low-resource local console | **Design candidate, not yet built/shipped**; do not deploy raw ZIP `node_modules` onto firmware |
 | BlazeRental Android APK | Translate theme colors, typography, cards and spacing into native Java resources/screens; retain Launcher3 Device Owner security, same permanent signing cert and higher-code rescue | **Visual design handoff only**; existing Android v0.5.3-dev candidate unchanged by this frontend integration |
@@ -62,6 +62,15 @@ The archive titles say `v1.0.0` but internal project versions are **5.7.0** and 
 - **Trust boundaries intact:** Standalone `/cgi-bin/blaze-rental-admin`, `blaze-rental-profile`, login/session/CSRF and rental event ledger remain unchanged. This is not permission to use the Full CGI on rental-only appliances. No upgrade-to-Full event, network mutation or rent extension is performed by a theme change.
 - **Evidence:** `tests/v060_standalone_fusion.sh` asserts local installation, JS syntax, authorized CGI routes and style mode existence; `simulation/standalone_fusion_browser.py` runs a real Chromium test on a **mocked HTTPS origin**, uses only read-only rental-list/controller-list responses, checks mobile 360/390px overflow, operator sign-out visibility and generated desktop/mobile screenshots. The full existing authenticated Playwright QR test stays in CI.
 - **Deployment status:** source development only. Real Standalone UI/Android provisioning, multi-device rental operations, installer and enrollment security must be tested independently before issuing a new published Standalone release. Frozen RC9 assets are unchanged.
+
+## EasyMode R281 staged preview — no deployed upgrade
+
+The independent project [EasyMode](../../easymode-project/) contains a preserved R281 v4.2.3 web snapshot and a separate 5.0.0 alpha installer. Modifying either directly would make historical release comparisons unreliable or risk installed WAN, modem, repeater and SMS functions. This integration therefore stays **under** `experiment/openwrt/easymode-project/integrations/blazefusion/` as an off-device overlay build.
+
+- `blazefusion.css` uses EasyMode's own CSS variables, respects its server-owned `data-theme` light/dark and `--accent` controls. `blazefusion.js` shares the same appearance-only preference key used by Full and Standalone, with no UBus access or credentials.
+- `build-preview.py --output NEW_DIRECTORY` copies only the R281 v4.2.3 static `root/www` tree and inserts appearance controls alongside the unchanged Logout button. It rejects unknown anchors and existing output; **it is not a router installer**.
+- `tests/v060_easymode_fusion.sh` verifies source immutability, no new API authority, staged local assets and fail-closed destination safety. `simulation/easymode_fusion_browser.py` uses Chromium on a loopback-only preview; it reveals the operator shell **without actually logging in** to check theme modes and mobile responsiveness.
+- No 4.2.4 firmware, 5.0 alpha runtime, OpenWrt network configuration, credentials, modem/SMS controls or billing features are updated. Source and tests must pass exact-head CI before contemplating separately authorized hardware rollout.
 
 ## Security, accessibility and performance gates
 
