@@ -93,3 +93,11 @@ html,body{background:radial-gradient(ellipse 1100px 520px at 87% -11%,#12395d66,
 @media(max-width:820px){.sidebar{box-shadow:18px 0 50px #0008}.topbar{height:67px;padding:0 14px}.content{padding:17px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metrics .card{min-height:132px}.card-body{padding:16px}.device-card{padding:16px}}
 @media(max-width:440px){.metrics{gap:10px}.metrics .card{min-height:122px}.metric-value{font-size:28px}.metric-label{font-size:10px}.status-pulse{font-size:11px;padding:6px 8px}.crumb{font-size:14px}.user-chip .avatar{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+/* Distinct Android enrollment methods: no misleading equivalence. */
+.qr-choices{align-items:stretch;gap:12px}
+.qr-method{border:1px solid #456077;border-radius:17px;padding:17px;background:#0b1d2c;display:flex;flex-direction:column;align-items:flex-start;gap:9px}
+.qr-method.preferred{border-color:#239989;background:linear-gradient(150deg,#103b39,#112540)}
+.qr-method h3{margin:2px 0 0;font-size:17px;color:#eafaff;letter-spacing:-.02em}
+.qr-method p{flex:1;font-size:13px;line-height:1.6;color:#aac4d2;margin:0 0 6px}
+.qr-method .btn{width:100%}
