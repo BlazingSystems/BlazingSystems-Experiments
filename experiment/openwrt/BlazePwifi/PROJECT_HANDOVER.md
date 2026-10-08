@@ -66,6 +66,16 @@ Uploaded sources: `coreui-react-v1.0.0.zip` internally CoreUI React admin templa
 
 **BlazeFusion mobile QA source additions:** CSS commit 375b26f97a94779acb005633d48366fe0c8f59f0 prevents 360–390px topbar crowding without hiding Log out. Browser test commit 41c7e58bf0e4177c33fdf809697df0e85e165429 verifies body width on 360px and 390px before QR tests. Current state and ledger were synchronized after both; this root checkpoint closes that source window. Prior build runs are not exact-source approvals for these commits. **NEXT NOW:** verify latest exact-HEAD validate, v04_browser_simulation, other platform candidate gate and Windows build; log actual outcome before any release claim. Independent Lite/Standalone/Android/Windows/ESP appearance implementations are future work.
 
+## UI-FUSION-0614 — Standalone Rental source integration (test approval pending)
+
+New independent Standalone Rental page integration is limited to offline presentation. This edition installs a SINGLE HTML file; do not load Full admin assets by absolute path or alter its separate rental CGI. Inline BlazeFusion theme selector (Fusion/Compact/Comfort) shares only the non-sensitive local appearance key. No coin, rental lease, QR, CSRF or permissions logic was changed.
+
+Evidence and exact commits: Standalone HTML e885b5ba8ddf5392cf56f0b55aba6a1ce8bf71d3; static installer/auth test 9970b2c6b1a55658ec9b1391ffb5a5c8aea2a5d5; mocked HTTPS real Chromium test 39c3317396110eb6ca3b494fe1647f7ca941ee9f; CI wiring 5bcaefd93e750cb3e083cdbda800e363d166b6e5; UI architecture af4e80d3fdeac2eeeb295feae5070e769272ced6. Current state/ledger were synchronized after the above commits.
+
+PR #30 stays DRAFT. Previous Full CI #37796743126 and #37796759105 were canceled when the branch advanced; earlier Windows #37796759250 was green on the previous source b24fe37. Do not treat those as full success on the newest Standalone code. Frozen published Standalone v0.5.2-rental.2-rc.9 unchanged.
+
+NEXT: check exact-head Full CI validate and Playwright standalone browser test (mobile 360/390px, login read-only mock, appearance persistence, no external calls) and Windows CI; log failure details, fix narrowly, resync all three canonical handovers, rerun. New v0.6.0 production tag remains blocked by financial migration/recovery and real hardware/device validation.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
