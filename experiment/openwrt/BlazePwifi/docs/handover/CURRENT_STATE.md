@@ -1,6 +1,6 @@
 # LIVE STATE — BlazePwifi full ecosystem (AUTHORITATIVE)
 
-**Last reconciled (Asia/Manila):** 2026-10-08 19:43+. **Owner order:** full v0.6.0 audit/research, security and native Android/admin UI enhancement, rigorous release; continuous mandatory handover logging before and after every meaningful change. **Status:** `IN PROGRESS — RELEASE BLOCKED`.
+**Last reconciled (Asia/Manila):** 2026-10-08 19:43+. **Owner order:** full v0.6.0 audit/research, security and native Android/admin UI enhancement, rigorous release; continuous mandatory handover logging before and after every meaningful change. **Status:** `HANDOVER POLICY IMPLEMENTED / EXACT-SHA RETEST PENDING / RELEASE BLOCKED`.
 
 ## Identity / current pointers (not historical snapshots)
 
@@ -31,7 +31,7 @@
 | ID / priority | State | Implemented and where | Pending evidence / next |
 |---|---|---|---|
 | HND-0600 / P0 | IMPLEMENTED / CI PENDING | New policy, live state, ledger, root status, `tests/handover_gate.sh` and early full-history `validate` step; commits `6af8f4d...`, `464e098e...`, `f94bece0...`, `c692547f...`, `c27593ca...`, `2cc802a7...` | after fixing browser selector and another handover sync, verify gate success on exact head and no bypass under negative test |
-| BROWSE-0601 / P1 | REPRODUCED / NOT FIXED YET | Browser test expects old labels at `simulation/browser_v04_audit.py:381,387` | update selectors to live UI labels, rerun Playwright + exact SHA full CI |
+| BROWSE-0601 / P1 | SOURCE FIX COMMITTED / RETEST PENDING | `simulation/browser_v04_audit.py` selectors fixed to `Generate binding QR` and `Generate Device Owner QR` in `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e` | run Playwright and exact-SHA full CI; verify distinct type and token assertions still pass |
 | BILL-0602 / P0 | IMPLEMENTED / CI GREEN (Windows) | `experiment/windows/BlazePisonet-SoftTimer/src/BlazePisonet.SoftTimer/TimerEngine.cs`, `Program.cs`, workflow | verify native installer operation on actual PCs, suspended timer and 60min electrical cadence, central-slot and 1:1 modes |
 | ID-0603 / P1 | IMPLEMENTED / TEST GREEN in validate | Public `openwrt/rootfs/www/blazepwifi/cgi-bin/api` rejects user-supplied MAC when router ARP lookup unavailable | physical VLAN13 AP bridge/routed/WAN IPv6 identity mapping and denial UX; NEVER restore spoofable MAC fallback |
 | QR-0604 / P1 | IMPLEMENTED / STATIC & CI partial | Separate binding/Device Owner UI, TTL/clear QR, URL validation under admin/rental.js, rental_update.sh | test Android factory reset scanner, permanent signer/hash and local TLS pin; APK not yet 0.6.0 |
@@ -50,6 +50,12 @@
 7. Run tests on exact head, review complete artifacts, and never claim green/released when critical job is failed, skipped, canceled or pending.
 8. Keep this document, `PROJECT_HANDOVER.md` top status and `CHANGE_LEDGER.md` synchronized **after each meaningful change**. New chat reads this file first after root handover.
 
+## Live transition — BROWSE-0601 source fix
+
+- Committed `simulation/browser_v04_audit.py` UI selectors repair at SHA `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e`. The original Playwright check still asserts distinct **binding** and **device_owner** QR results, valid token metadata and signed APK details; no assertion was disabled.
+- Validation **pending on a new exact SHA**; older #37770673219 failure remains historical evidence only.
+- **Next now:** after the three handover documents are synchronized, review the newest BlazePwifi Actions run's `validate` handover gate and `v04_browser_simulation`. If green, verify final `v04_candidate_gate`; if failed, log step/error before another source write.
+
 ## Live transition — HND-0600 gate implementation checkpoint
 
 - Source/workflow changes: `tests/handover_gate.sh` commit `c27593ca4f272432118ac37fe74c5dab755eec08`; `.github/workflows/blazepwifi-build.yml` commit `2cc802a7c44785aa35fde7079d8e4160b0a1759f`.
@@ -60,7 +66,7 @@
 ## NEXT EXACT ACTION — safe resume sequence
 
 1. **DONE IN SOURCE, NOT YET VERIFIED:** HND-0600 gate created and first BlazePwifi CI step configured with full Git history. After the next documentation checkpoint, confirm an exact-SHA `validate` job passes. Test a negative scenario by changing a source file after a previous checkpoint and confirm the gate fails without weakening it.
-2. Fix BROWSE-0601: in `simulation/browser_v04_audit.py`, replace the stale button locators at lines 381 and 387 with the current approved UI labels. Keep distinct QR type/token/hash checks; do not weaken assertions.
+2. **DONE IN SOURCE, NOT YET VERIFIED:** BROWSE-0601 selector repair in `simulation/browser_v04_audit.py` commit `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e`; verify both existing binding and factory-reset Device Owner flows actually run in the new exact-SHA browser CI. Keep QR type/token/hash checks intact.
 3. Create a new checkpoint in `CHANGE_LEDGER.md` and update `PROJECT_HANDOVER.md` + this live state with exact new source commits, test outcomes and NEXT ACTION. The last handover commit must succeed the last implementation commit before CI can be green.
 4. Check the new **exact commit SHA** and its [GitHub Actions branch history](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions?query=branch%3Ablazepwifi-v0.6.0-audit-foundation), diagnose any remaining failures by job logs, and reconcile doc statuses immediately. Keep PR #30 draft and block release while any critical gate is not green.
 5. After these gates, proceed with financial ledger, binding identity, Android Device Owner hardware testing and a separate v0.6.0 version/migration/signing/release train. Do not prematurely tag.
