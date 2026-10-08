@@ -1,3 +1,9 @@
+## RELEASE-GATE-060 / P0 — 2026-10-09: verified green build / release denied
+
+**Branch:** `blazepwifi-v0.6.0-audit-foundation` draft PR #30, exact previously validated SHA `21670d3cf1fe9af8910c712a8b257f5f1061d63f`. Full #37815563919 COMPLETE SUCCESS, Windows #37815571724 COMPLETE SUCCESS; the Full `v04_candidate_gate` succeeded but production signing/publishing were skipped. Build artifacts are developer/test candidates only. Current `VERSION` 0.5.3, Android versionCode 50300 and versionName 0.5.3; no v0.6 tag (404). Tests/v060_migration_guard.sh rejects 0.6-family installs. Synthetic journal test passes, but actual member and rental paid runtime still fails replay/receipt crash safety (P0 #31 and #32) and no physical flash/outage signoff. **Release decision SUCCESS_REPORT=0; no release, no tag, no customer deployment.** Full gate rationale: `docs/RELEASE_DECISION_0.6.0.md`. No code or released artifacts changed by this release audit.
+
+**NEXT EXACT ACTION:** implement v2 authenticated crash-durable ledger integration behind safe migration with controller compatibility and fail-closed storage, then turn P0 expected-RED source tests GREEN; verify platform-specific power cut and signed Android lineage, real device install/rollback and full exact-head CI; only then publish genuine versioned v0.6.0. Preserve existing tags/signers and update all handovers on each source change.
+
 ## MIG-0624-STFIX / P0 — TARGETED SYNTAX+ACCOUNTING CI GREEN (2026-10-09)
 
 - Historical issue: Full validate [#37815137752](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37815137752) at `10cb4e913fbb8d7bca58591e0adceffcb5d43cbe` FAILED static `sh -n` due duplicate tail after final `esac` in sandbox `tools/v060_journal_fixture.sh`. Source fix `73c9ba6d4cc4cd3ea6f4006bbfa42371585db427` removed only that duplicated text. New `sh -n` targeted CI guard `52b92e23d80db7acadc622458c1ad54f02b17971` ensures syntax runs before any functional test.
