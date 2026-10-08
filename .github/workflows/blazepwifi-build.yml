@@ -925,15 +925,53 @@ jobs:
               migration_verified=False,customer_install_authorized=False,
               assets=assets),indent=2)+"\n",encoding="utf-8")
           PY
-      - name: Publish immutable v0.6 lab-only GitHub prerelease
+      - name: Upload and verify draft lab artifacts before publication
         shell: bash
         run: |
           set -euo pipefail
           test -n "$WINDOWS_RUN"
           test -s lab-release/MANIFEST.json && test -s lab-release/SHA256SUMS
+          # A partial asset upload must remain unpublished as a draft, never
+          # appear as a successful lab release with missing checksum evidence.
           gh release create "$LAB_TAG" lab-release/* \
-            --target "$GITHUB_SHA" --prerelease \
+            --target "$GITHUB_SHA" --draft --prerelease \
             --title "BlazePwifi v0.6.0-alpha.2 — LAB ONLY, NOT PRODUCTION" \
             --notes-file "$NOTES"
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$LAB_TAG" > published-draft.json
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          release=json.load(open("published-draft.json",encoding="utf-8"))
+          manifest=json.load(open("lab-release/MANIFEST.json",encoding="utf-8"))
+          assert release["draft"] is True and release["prerelease"] is True,"Expected draft prerelease"
+          assert release["tag_name"]==os.environ["LAB_TAG"],"Wrong release tag"
+          assert release["target_commitish"]==os.environ["GITHUB_SHA"],"Release source SHA mismatch"
+          assert manifest["tag"]==os.environ["LAB_TAG"] and manifest["commit"]==os.environ["GITHUB_SHA"]
+          assert not manifest["customer_install_authorized"] and not manifest["production_signed"]
+          remote={a["name"]:a for a in release["assets"]}
+          local={p.name:p for p in pathlib.Path("lab-release").iterdir() if p.is_file()}
+          assert len(local)==12 and set(remote)==set(local),"Missing or additional uploaded assets"
+          for name,p in local.items():
+              a=remote[name]
+              assert a["state"]=="uploaded" and a["size"]==p.stat().st_size and a["size"]>0,name
+              actual=hashlib.sha256(p.read_bytes()).hexdigest()
+              digest=a.get("digest")
+              if digest:
+                  assert digest=="sha256:"+actual,"Upload digest mismatch for "+name
+          print("LAB DRAFT REMOTE VERIFIED: 12 full-size assets, exact source, sha256 where exposed.")
+          PY
+      - name: Publish verified lab-only prerelease and verify visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$LAB_TAG" --draft=false --prerelease
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$LAB_TAG" > published-final.json
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open("published-final.json",encoding="utf-8"))
+          assert r["tag_name"]==os.environ["LAB_TAG"] and r["target_commitish"]==os.environ["GITHUB_SHA"]
+          assert r["draft"] is False and r["prerelease"] is True
+          assert len(r["assets"])==12 and all(a["state"]=="uploaded" for a in r["assets"])
+          print("VERIFIED ACTUAL LAB PRERELEASE",r["html_url"],len(r["assets"]),"assets")
+          PY
           gh release view "$LAB_TAG" --json tagName,isPrerelease,assets \
             --jq '{tag:.tagName,prerelease:.isPrerelease,asset_count:(.assets|length)}'
