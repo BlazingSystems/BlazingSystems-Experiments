@@ -69,7 +69,6 @@ refuse hardlink "$T/hardlink.tar.gz"
 # Duplicate manifest paths are ambiguous even when each line has valid SHA.
 DUP="$T/duplicate-manifest"
 mkdir -p "$DUP/payload$(dirname "$TARGET")"
-cp "$GOOD/release.env" "$GOOD/payload$TARGET" /dev/null 2>/dev/null || true
 cp "$GOOD/release.env" "$DUP/release.env"
 cp "$GOOD/payload$TARGET" "$DUP/payload$TARGET"
 cat "$GOOD/manifest.tsv" "$GOOD/manifest.tsv" > "$DUP/manifest.tsv"
