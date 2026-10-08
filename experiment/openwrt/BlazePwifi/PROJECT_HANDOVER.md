@@ -1,3 +1,57 @@
+# BlazePwifi — CURRENT STATUS (READ FIRST)
+
+**As reconciled:** 2026-10-08 19:43+ Asia/Manila. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
+
+## AUTHORITATIVE LIVE LINKS
+
+- **Live work, blockers, source baseline, exact tests and NEXT EXACT ACTION:** [docs/handover/CURRENT_STATE.md](docs/handover/CURRENT_STATE.md).
+- **Mandatory policy:** [docs/handover/HANDOVER_POLICY.md](docs/handover/HANDOVER_POLICY.md).
+- **Append-only audit/change ledger with exact commits:** [docs/handover/CHANGE_LEDGER.md](docs/handover/CHANGE_LEDGER.md).
+- **Reviewed system and competitor audit:** [AUDIT.md](AUDIT.md).
+- **Active PR:** [v0.6.0 foundation draft #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30).
+- **Active branch:** `blazepwifi-v0.6.0-audit-foundation`, started at exact pre-documentation implementation HEAD `d99f9b7b1ac10f183659c97c156fe4c939863cf8`; **HEAD advances with each documentation/code sync**. Re-query before action.
+
+## Verified CURRENT state — this block OVERRIDES the old "v0.5.3-dev.5" header below
+
+| Subsystem | State | Evidence / condition |
+|---|---|---|
+| Production full BlazePwifi | **Frozen v0.5.2** | [Production tag](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2); preserve permanent Android Lineage-2 signing identity |
+| Separate Standalone Rental | **Frozen latest RC9** | [Standalone tag](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental.2-rc.9); not part of Full v0.6.0 source edits |
+| Full v0.5.3 security baseline | **Merged / source validated** | RC1 branch head `4879c38f3f0e676f17ac40d73cb59c87ffcb5762`; not a v0.5.3 published production tag |
+| Full v0.6.0 development | **Draft PR #30; release BLOCKED** | Existing VERSION and Android version metadata still `0.5.3`; no v0.6.0 signer run, release manifest, production APK or upgrade/rescue artifacts |
+| Windows BlazePisonet SoftTimer | **Build verified, not physically field-proven** | Exact pre-documentation SHA `d99f9b7b1ac10f183659c97c156fe4c939863cf8`; [run #37770673126](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673126) SUCCESS: prepaid monotonic timer simulation, native Windows EXE/NSIS install/uninstall |
+| Full BlazePwifi CI | **FAILED at browser regression** | [run #37770673219](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37770673219) on same code SHA; Playwright still clicks renamed QR button; final candidate gate skipped |
+| Handover synchronization | **IN PROGRESS** | New policy/live ledger creation; CI enforcement and browser UI test reconciliation must be completed and recorded before calling the checkpoint validated |
+
+**Do not use old dates in the archived text to decide which branch/code is active.** `docs/handover/CURRENT_STATE.md` takes precedence when source + current Action logs corroborate it. If evidence contradicts it, fix this block and the live state immediately instead of inventing a release success.
+
+## NEXT EXACT ACTION / safe resume
+
+1. Finish new handover policy gate in `tests/handover_gate.sh` and wire it as a required BlazePwifi `validate` check (complete checkout history).
+2. Correct `simulation/browser_v04_audit.py` obsolete QR button locators **without removing any Device Owner or Binding functional assertion**.
+3. Append `CHANGE_LEDGER.md` and update both this CURRENT STATUS and `CURRENT_STATE.md` after each meaningful step, including failures and new CI; ensure the final documentation checkpoint is at or after the last runtime change.
+4. Run exact-HEAD full CI and Windows CI. Keep PR #30 draft and **do not publish 0.6.0** until versionCode/migration, permanent same-signer APK, firmware, recovery and hardware gates pass.
+
+## Copyable next-chat instruction
+
+```text
+@GitHub Open BlazingSystems/BlazingSystems-Experiments.
+Read experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md TOP CURRENT STATUS,
+then docs/handover/CURRENT_STATE.md, HANDOVER_POLICY.md, CHANGE_LEDGER.md,
+AUDIT.md and draft PR #30. Verify the current branch head, recent commits,
+Actions HEAD SHAs/conclusions, release tags and all active blockers.
+Continue ONLY the exact NEXT ACTION in CURRENT_STATE.md; record work IN
+PROGRESS before editing and update live state + change ledger + canonical
+handover after each meaningful code/test/failure change. Keep existing
+production tags/standalone rental/signing lineage untouched and fail closed
+on financial/security data until tested. Do not claim a signed 0.6.0 release
+without exact-SHA comprehensive gates, migration and hardware evidence.
+```
+
+---
+
+# ARCHIVED HANDOVER — historical decisions, *not* current operational status
+
 # BlazePwifi Project Handover
 
 **Last updated:** 2026-10-07  
