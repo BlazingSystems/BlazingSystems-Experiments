@@ -135,7 +135,7 @@ async function generateQr(action){
     C().toast('Enrollment QR mode mismatch. No token displayed.',true);
     return;
   }
-  renderQrResult(x);
+  if(!renderQrResult(x))clearQr();
 }
 async function generateBindingQr(){return generateQr('rental_binding_qr')}
 async function generateProvisioningQr(){return generateQr('rental_provisioning_qr')}
