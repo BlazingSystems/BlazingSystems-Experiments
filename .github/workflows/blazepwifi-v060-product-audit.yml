@@ -13,6 +13,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs'
       - 'experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh'
+      - 'experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py'
       - '.github/workflows/blazepwifi-v060-product-audit.yml'
 permissions:
   contents: read
@@ -34,3 +35,26 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/qr_setup.sh
       - name: Validate inherited v0.5.2 QR/CSRF/coin-window security contracts
         run: sh experiment/openwrt/BlazePwifi/tests/post_v052_hardening.sh
+
+  operator-browser:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install headless Chrome for real admin DOM simulation
+        run: |
+          python -m pip install --disable-pip-version-check playwright
+          python -m playwright install --with-deps chromium
+      - name: Exercise console browser and enrollment QR visibility
+        run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlazePwifi-v060-operator-browser
+          path: simulation-out/browser/
+          if-no-files-found: warn
