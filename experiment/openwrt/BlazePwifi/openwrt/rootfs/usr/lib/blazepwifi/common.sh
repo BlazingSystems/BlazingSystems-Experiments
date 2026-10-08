@@ -250,10 +250,37 @@ bp_events_has() {
 	printf ',%s,' "$events" | grep -Fq ",$event,"
 }
 
+# v0.6 development bridge: the older c:<hash> format has no target
+# identity, so it MUST be quiesced during migration. New c:<target>.<sha256>
+# receipts can be retained for the entire active payment window, preventing
+# a delayed valid ACK from being counted twice after history rollover.
+bp_coin_event_is_live() {
+	case "$1" in c:*.*) ;; *) return 1;; esac
+	coin_body="${1#c:}"
+	coin_window="${coin_body%%.*}"
+	coin_digest="${coin_body#*.}"
+	printf '%s' "$coin_window" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || return 1
+	printf '%s' "$coin_digest" | grep -Eq '^[a-f0-9]{64}$' || return 1
+	for coin_target_file in "$BP_TARGET_DIR"/*.tsv; do
+		[ -f "$coin_target_file" ] && [ ! -L "$coin_target_file" ] || continue
+		IFS="$(printf '\t')" read -r coin_did coin_mac coin_target coin_expires coin_controller coin_kind < "$coin_target_file"
+		if [ "$coin_target" = "$coin_window" ] &&
+		   [ "${coin_kind:-hotspot}" = hotspot ] &&
+		   [ "$coin_expires" -gt "$(bp_now)" ] 2>/dev/null; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 bp_events_push() {
 	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=64
+	case "$max" in ''|*[!0-9]*) max=64;; esac
+	[ "$max" -gt 0 ] 2>/dev/null || max=64
 	out="$event"; coin_count=0
-	case "$event" in c:*) coin_count=1;; esac
+	case "$event" in
+		c:*) if ! bp_coin_event_is_live "$event"; then coin_count=1; fi ;;
+	esac
 	oldIFS="$IFS"; IFS=','
 	for e in $events; do
 		[ -n "$e" ] || continue
@@ -261,13 +288,22 @@ bp_events_push() {
 		case "$e" in
 			v:*) out="$out,$e" ;;
 			c:*)
-				[ "$coin_count" -ge "$max" ] && continue
-				out="$out,$e"; coin_count=$((coin_count+1))
+				# Historical/expired coins are display-bounded. Active
+				# target coins may NOT be forgotten while ACKs can retry.
+				if bp_coin_event_is_live "$e"; then
+					out="$out,$e"
+				else
+					[ "$coin_count" -ge "$max" ] && continue
+					out="$out,$e"; coin_count=$((coin_count+1))
+				fi
 				;;
 			*) out="$out,$e" ;;
 		esac
 	done
 	IFS="$oldIFS"
+	# High active-window volume must fail closed, not prune replay IDs.
+	bytes="$(printf '%s' "$out" | wc -c)" || return 8
+	[ "$bytes" -le 131072 ] 2>/dev/null || return 8
 	printf '%s' "$out"
 }
 
