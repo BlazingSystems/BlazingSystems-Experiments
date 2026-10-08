@@ -315,6 +315,36 @@ public sealed class TimerEngine : IDisposable
         UpdatedUtc = m.UpdatedUtc
     };
 
+    // Deterministic, unit-testable portion of the billable elapsed-time logic.
+    internal static long DebitWholeSeconds(ref double carry, double elapsed)
+    {
+        if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed <= 0)
+            return 0;
+        carry += elapsed;
+        long whole = (long)Math.Floor(carry);
+        carry -= whole;
+        return whole;
+    }
+
+    internal static int VerifyTimerMath()
+    {
+        double carry = 0;
+        for (int i = 0; i < 14400; i++)
+        {
+            long billed = DebitWholeSeconds(ref carry, 0.25); // 60 min at 250-ms cadence
+            if (billed != (i % 4 == 3 ? 1L : 0L)) return 1;
+        }
+        if (Math.Abs(carry) > 0.000001) return 2;
+        carry = 0;
+        if (DebitWholeSeconds(ref carry, 0.375) != 0) return 3;
+        if (DebitWholeSeconds(ref carry, 0.125) != 0) return 4;
+        if (DebitWholeSeconds(ref carry, 0.625) != 1) return 5;
+        if (Math.Abs(carry - 0.125) > 0.000001) return 6;
+        if (DebitWholeSeconds(ref carry, -100) != 0) return 7;
+        if (DebitWholeSeconds(ref carry, double.NaN) != 0) return 8;
+        return 0;
+    }
+
     private static double ElapsedSince(long now, long previous)
     {
         if (previous == 0) return double.PositiveInfinity;
@@ -345,10 +375,8 @@ public sealed class TimerEngine : IDisposable
 
             // Timer callback cadence is 250 ms. Debit only whole *elapsed*
             // seconds; carry fractions forward instead of billing 1s per tick.
-            _fractionalSeconds += elapsed;
-            long secondsToDebit = (long)Math.Floor(_fractionalSeconds);
+            long secondsToDebit = DebitWholeSeconds(ref _fractionalSeconds, elapsed);
             if (secondsToDebit <= 0) return;
-            _fractionalSeconds -= secondsToDebit;
 
             long old = _state.RemainingSeconds;
             _state.RemainingSeconds = Math.Max(0, old - secondsToDebit);
