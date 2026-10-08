@@ -8,6 +8,8 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_*_repro.sh'
       - '.github/workflows/blazepwifi-p0-repro.yml'
       - 'experiment/openwrt/BlazePwifi/tests/v060_ledger_model.py'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh'
+      - 'experiment/openwrt/BlazePwifi/tools/v060_journal_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh'
 permissions:
   contents: read
@@ -20,6 +22,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify native POSIX transaction journal fixture (synthetic only)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: Verify offline synthetic transactional journal oracle (model only)
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_ledger_model.py
       - name: Verify synthetic expected-RED replay and interrupted transfer
