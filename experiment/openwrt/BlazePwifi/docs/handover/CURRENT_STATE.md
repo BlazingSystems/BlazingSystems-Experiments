@@ -1,3 +1,9 @@
+## MIG-0617 — synthetic RED test committed; EXECUTION PENDING (2026-10-09)
+
+- Before-change IN PROGRESS record commit `af576d282b236c90ddab32fde9574e5468d9bb72`; test commit `8bce9402a0f367cfc4ac574217b6bb63131c10fa` adds `tests/v060_member_replay_repro.sh` on PR #30 branch. It sources real member.sh but overrides machine integration and uses only mktemp fixture paths. It checks whether a previous event ID trimmed from bounded history can credit again; deliberate RED exits 1 when duplicate occurs; setup error exits 2.
+- **Unverified:** script has NOT yet been executed; absence of test execution means this is not a reproduced failure or regression pass. Nothing from original member.sh modified. Existing earlier Full #37807641991 SUCCESS was prior to this test commit; cannot validate it.
+- **NEXT EXACT ACTION:** run `sh experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh` in isolated checkout and investigate the actual exit/log; next build injected interrupted transfer fixture; then design durable journal and update all handovers before further source changes. 0.6 production gate remains BLOCKED.
+
 ## MIG-0617 / P0 — IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Intent:** reproduce prepaid-member replay after bounded history and interrupted two-write transfer using synthetic temporary files, before any production accounting change. Issue #31, draft PR #30.
