@@ -27,6 +27,14 @@
 
 **New business protection:** Windows workflow commit `326d67e88db690ad9e83e855fc3136d2498cbb61` now requires the same handover gate before building and will not overwrite published SoftTimer v0.4.0 assets. Verified existing release contains NSIS setup EXE, portable ZIP and checksums; no released assets changed. Both workflows have now passed on the exact source SHA above; hardware acceptance and production release remain outstanding.
 
+## Current P0 activity — MIG-0610 migration safety (committed, CI not yet verified)
+
+- **Audited blocker:** existing overlay `update.sh` ignored `update-migrate.sh` failure and its manifest-based rollback does not cover mutable financial/account/rental state or UCI configuration. A v0.6 release without transactional migration risks unrecoverable partial balances and identities.
+- **Code fix committed:** `openwrt/rootfs/usr/lib/blazepwifi/update.sh` commit `20fc51350fa1b6de11c695f70cde83b73d2e786b` explicitly refuses 0.6-family updates **before any persistent change**. This is a deliberate temporary release blocker; do not disable it merely to publish 0.6.0.
+- **Tests committed:** `tests/v060_migration_guard.sh` `e25e95602fbddf39c8d8844778cb2e20adc17eeb`; mandatory CI `ca36f2e17df5e3ef5b339f341a5aefdc5d994022`. Tests simulate rejecting 0.6 updates without modifying code or account state, plus successful legacy 0.5 apply/rollback. **Exact-head CI unverified at the time of this checkpoint**.
+- **Migration contract:** [docs/RELEASE_0.6.0_MIGRATION.md](docs/RELEASE_0.6.0_MIGRATION.md) `46e4f73a05516b9d1d100ddebba823b241529e8a`: actual persistent-state inventory, migration journal/snapshot/recovery, post-transaction rollback constraints and v0.6 identity gates.
+- **NEXT IMMEDIATE:** check new exact HEAD `validate` and full matrix for the new preflight regression. Keep previous exact-source green run #37774312541 and Windows #37774312533 as historical proof **only for prior SHA `d1e7fb41...`**. If a test fails, log and fix before continuing. After tests, implement transaction snapshot and recovery, **not** production signing yet.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
