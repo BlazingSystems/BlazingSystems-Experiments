@@ -20,6 +20,11 @@ reject() { if run "$@" >"$T/reject.log" 2>&1; then echo "unexpected accepted com
 [ "$(run ctrlOne 1 ctrlOne:1 AM alice - 40 1000)" = "$(printf 'COMMIT\t140')" ]
 [ "$(run ctrlOne 1 ctrlOne:1 AM alice - 40 1000)" = "$(printf 'REPLAY\t140')" ]
 [ "$(account alice)" = 140 ]
+# The event name must use the same canonical decimal sequence as its receipt.
+# A legacy 02 spelling must fail before write, not corrupt the next read.
+before_noncanonical="$(sha256sum "$T/ledger.tsv" | cut -d' ' -f1)"
+reject ctrlOne 02 ctrlOne:02 TM alice bob 50 1000
+[ "$(sha256sum "$T/ledger.tsv" | cut -d' ' -f1)" = "$before_noncanonical" ]
 reject ctrlOne 1 ctrlOne:1 AM alice - 60 1000
 reject ctrlOne 3 ctrlOne:3 AM alice - 10 1000
 reject ctrlOne 2 ctrlOne:9 AM alice - 10 1000
