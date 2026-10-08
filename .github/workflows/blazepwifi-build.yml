@@ -949,7 +949,7 @@ jobs:
           release=matches[0]
           assert isinstance(release.get("id"),int),"Missing new release ID"
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
-              env.write(f'LAB_DRAFT_RELEASE_ID={release["id"]}\\n')
+              env.write(f'LAB_DRAFT_RELEASE_ID={release["id"]}\n')
           manifest=json.load(open("lab-release/MANIFEST.json",encoding="utf-8"))
           assert release["draft"] is True and release["prerelease"] is True,"Expected draft prerelease"
           assert release["tag_name"]==os.environ["LAB_TAG"],"Wrong release tag"
