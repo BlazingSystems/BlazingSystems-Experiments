@@ -58,6 +58,16 @@
       <div class="card"><div class="card-body"><div class="metric-label">Controllers online</div><div id="metricControllers" class="metric-value">—</div><div class="metric-sub">Last 30 seconds</div></div></div>
       <div class="card"><div class="card-body"><div class="metric-label">Memory available</div><div id="metricMemory" class="metric-value">—</div><div id="metricLoad" class="metric-sub">Load —</div></div></div>
     </div>
+    <div class="card activity-trend" style="margin-top:16px">
+      <div class="card-body">
+        <div class="device-top"><div><div class="card-title">Live Wi-Fi session activity</div><p id="sessionTrendCaption" class="small muted">Collecting router readings in this browser. No sample or fabricated data.</p></div><span id="sessionLastUpdated" class="badge">Not refreshed</span></div>
+        <svg id="sessionTrendGraph" role="img" aria-label="Recent active Wi-Fi session counts" viewBox="0 0 460 98" preserveAspectRatio="none" style="width:100%;height:100px;display:block;margin-top:12px">
+          <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#27d7c5" stop-opacity=".35"/><stop offset="100%" stop-color="#27d7c5" stop-opacity="0"/></linearGradient></defs>
+          <path id="sessionTrendArea" fill="url(#trendFill)" d="M0 98 L460 98 Z"></path>
+          <polyline id="sessionTrendLine" fill="none" stroke="#43e5d4" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        </svg>
+      </div>
+    </div>
     <div class="grid two" style="margin-top:16px">
       <div class="card"><div class="card-body"><div class="card-title">Quick actions</div><p class="muted">Common operator tasks.</p><div class="toolbar"><button class="btn primary" onclick="BlazeCore.openPage('rentals');BlazeRental.openAdd()">Add rental phone</button><button class="btn" onclick="BlazeCore.openPage('tools')">Diagnostics</button><a class="btn" href="/portal-editor.html">Portal editor</a></div></div></div>
       <div class="card"><div class="card-body"><div class="card-title">Hardware</div><div id="systemSummary" class="muted">Detecting device capabilities…</div></div></div>
