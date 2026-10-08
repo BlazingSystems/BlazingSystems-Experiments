@@ -91,6 +91,13 @@ echo "$OUT" | grep -q '"credit_cents":0'
 echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
 [ ! -s "$T/state/accounts.tsv" ]
 
+# A client may not forge a MAC fallback when the router has no ARP entry.
+# This must fail before opening a coin window or creating an account.
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01&mac=aa:bb:cc:dd:ee:ff' "$DEVICE" | TEST_MAC= sh "$API")"
+echo "$OUT" | grep -q 'client network identity unavailable'
+[ ! -s "$T/state/accounts.tsv" ]
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
+
 OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
 echo "integration: coin_start => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"ok":true'
