@@ -1,3 +1,22 @@
+# BlazePwifi — ACTIVE BRANCH ROUTING (READ THIS FIRST)
+
+**As of 2026-10-08, this default-branch handover is a historical snapshot, not the active v0.6.0 development state.** The active product is developed on `blazepwifi-v0.6.0-audit-foundation`, draft [PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30).
+
+**For every new ChatGPT conversation or developer handoff, read the ACTIVE branch files before touching any source:**
+1. [Current development handover](https://github.com/BlazingSystems/BlazingSystems-Experiments/blob/blazepwifi-v0.6.0-audit-foundation/experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md) — current status at top.
+2. [Current state and next exact action](https://github.com/BlazingSystems/BlazingSystems-Experiments/blob/blazepwifi-v0.6.0-audit-foundation/experiment/openwrt/BlazePwifi/docs/handover/CURRENT_STATE.md).
+3. [Mandatory continuous handover policy](https://github.com/BlazingSystems/BlazingSystems-Experiments/blob/blazepwifi-v0.6.0-audit-foundation/experiment/openwrt/BlazePwifi/docs/handover/HANDOVER_POLICY.md).
+4. [Change/evidence ledger](https://github.com/BlazingSystems/BlazingSystems-Experiments/blob/blazepwifi-v0.6.0-audit-foundation/experiment/openwrt/BlazePwifi/docs/handover/CHANGE_LEDGER.md).
+5. [Cross-platform audit and open issues](https://github.com/BlazingSystems/BlazingSystems-Experiments/blob/blazepwifi-v0.6.0-audit-foundation/experiment/openwrt/BlazePwifi/AUDIT.md).
+
+**Production is still frozen at full v0.5.2; Standalone Rental RC9 is separately frozen.** No v0.6.0 signed release or approved 0.6.0 firmware is implied. Do not merge untested branch code to `main`, overwrite the Windows `softtimer-v0.4.0` release, expose signing secrets, or assume that an earlier green CI run covers the new branch head.
+
+**Canonical policy:** the above *active-branch* live records are synchronized at every meaningful source/test/blocker transition. This default-branch pointer is deliberately stable; it does not mirror every changing build result. Cross-check exact branch HEAD, draft PR and GitHub Actions at resume time.
+
+---
+
+# Archived main-branch handover — older operational snapshot
+
 # BlazePwifi Project Handover
 
 **Last updated:** 2026-10-07  
