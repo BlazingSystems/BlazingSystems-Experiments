@@ -1,3 +1,11 @@
+## MIG-0620 / P0 — IN PROGRESS — isolated journal reference model (2026-10-09)
+
+- **Goal:** test v2 transactional ACK/idempotency semantics in a synthetic off-device implementation before OpenWrt source integration. The authoritative v1 member.sh remains operational only as a blocked-release development reference. New test `tests/v060_ledger_model.py` uses *in-memory/private temporary SQLite* to exercise atomic balance+receipt transaction, authenticated controller-scoped increasing sequences, bounded replay window with stale rejection, EIO/failed-receipt rollback and crash after commit before ACK. This is NOT a router runtime, migration tool, or production SQLite dependency.
+- **Hazards:** false parity with BusyBox, flash sync, physical power loss, real protocol; test wording and docs must mark model-only. No customer state, network, signing, live balances or published artifacts. SQLite is a testing oracle, not a confirmed target dependency.
+- **Success:** deterministic fixture asserts exactly-one balance effect after retry, conservative stale rejection, all-or-nothing transfer, failure rollback and bounded history. Require separate staged CI step, inspect actual logs; no release approval.
+- **Rollback:** remove isolated Python test + CI step, no production runtime changes. Keep journal acceptance contract `docs/LEDGER_TRANSACTION_V060.md` active.
+- **NEXT:** implement test, execute via isolated Actions, synchronize root/current/ledger, inspect failing jobs and fix fixture only, then design feasible POSIX/OpenWrt write-ahead implementation with target-verified durability and SoftTimer protocol migration.
+
 ## MIG-0619 / P0 — verified receipt failure reproduction + transaction contract (2026-10-09)
 
 - **Canonical status:** Staged CI [#37811179871](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37811179871) completed SUCCESS on `1abdc6eae64c9b06359f177258f7512b31eb75e2`: transfer crash fixture now PASS (one-rename change), but evicted event replay and injected receipt EIO remain VERIFIED EXPECTED RED. This is proof of two remaining defects, not a passing financial subsystem. New receipt test `tests/v060_member_receipt_failure_repro.sh` commit `fff1e248247e9fee1202b8b4acd27c17bf947396`. Original transfer source fix `5782937deeb1651d45204d446a9851179be9d6c3` unchanged since.
