@@ -31,7 +31,7 @@ bp_update_path_allowed() {
         case "$p" in "$BP_UPDATE_TEST_PREFIX"/*) return 0;; esac
     fi
     case "$p" in
-        /usr/lib/blazepwifi/*|/usr/sbin/blazepwifi-*|/usr/sbin/blazepwifi-core|/www/blazepwifi/*|/etc/init.d/blazepwifi*|/usr/share/blazepwifi/*|/etc/uci-defaults/99-blazepwifi)
+        /usr/lib/blazepwifi/*|/usr/sbin/blazepwifi-*|/usr/sbin/blazepwifi-core|/www/blazepwifi/*|/etc/init.d/blazepwifi*|/usr/share/blazepwifi/*|/etc/uci-defaults/99-blazepwifi|/lib/upgrade/keep.d/blazepwifi)
             return 0 ;;
         *) return 1 ;;
     esac
