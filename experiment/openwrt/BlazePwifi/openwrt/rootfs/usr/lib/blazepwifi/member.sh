@@ -161,12 +161,32 @@ bp_member_set_password() {
   printf '%s' "$rev"
 }
 
+# Paid receipts cannot be retained in a rolling display-history window:
+# doing so re-accepts an old, previously successful controller event ID.
+# This cap is a fail-closed bridge for legacy random v1 event IDs, NOT a
+# substitute for an authenticated v2 sequence journal or lost-ACK recovery.
+bp_member_financial_receipt_capacity_ok() {
+  [ -f "$BP_MEMBER_EVENTS" ] && [ ! -L "$BP_MEMBER_EVENTS" ] || return 1
+  case "$BP_MEMBER_EVENTS" in /dev/*) return 1;; esac
+  bytes="$(wc -c < "$BP_MEMBER_EVENTS" 2>/dev/null)" || return 1
+  case "$bytes" in ''|*[!0-9]*) return 1;; esac
+  # Keep headroom for an appended record and a future defensive snapshot.
+  [ "$bytes" -le 4190208 ] 2>/dev/null || return 1
+}
+
+bp_member_financial_kind() {
+  case "$1" in add|subtract|set|restore_all|transfer) return 0;; esac
+  return 1
+}
+
 bp_member_balance_change() {
   user="$(bp_member_norm "$1")" || return 2
   mode="$2"; seconds="$3"; source="$(bp_member_clean "$4")"; event_id="$5"
   case "$seconds" in ''|*[!0-9]*) return 2;; esac
   [ "$seconds" -le 31536000 ] 2>/dev/null || return 2
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
+  # Do not accept paid credits if the legacy receipt file cannot retain IDs.
+  bp_member_financial_receipt_capacity_ok || return 7
 
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$user" -v k="$mode" -v s="$source" '$1==e && $3==u && $4==k && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
@@ -211,6 +231,7 @@ bp_member_transfer() {
   [ "$from" != "$to" ] || return 2
   case "$seconds" in ''|*[!0-9]*) return 2;; esac
   [ "$seconds" -gt 0 ] 2>/dev/null && [ "$seconds" -le 31536000 ] 2>/dev/null || return 2
+  bp_member_financial_receipt_capacity_ok || return 7
 
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$from" -v s="$source" '$1==e && $3==u && $4=="transfer" && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
@@ -277,10 +298,23 @@ bp_member_event_record() {
   case "$max" in ''|*[!0-9]*) max=2048;; esac
   [ "$max" -ge 128 ] 2>/dev/null || max=128
   [ "$max" -le 10000 ] 2>/dev/null || max=10000
-  count="$(wc -l < "$BP_MEMBER_EVENTS" 2>/dev/null || echo 0)"
-  if [ "$count" -gt "$max" ] 2>/dev/null; then
+  # Only NONFINANCIAL audit entries are age-trimmed. Paid add,
+  # subtract, restore, set and transfer receipts remain retained so a
+  # successfully acknowledged legacy ID cannot be silently reaccepted.
+  nonfin="$(awk -F '\t' '$4!="add" && $4!="subtract" && $4!="set" && $4!="restore_all" && $4!="transfer" {c++} END {print c+0}' "$BP_MEMBER_EVENTS")" || return 1
+  if [ "$nonfin" -gt "$max" ] 2>/dev/null; then
+    skip=$((nonfin-max))
     tmp="$BP_STATE/.member-events.$(bp_tmp_suffix)"
-    tail -n "$max" "$BP_MEMBER_EVENTS" > "$tmp" && chmod 600 "$tmp" && mv "$tmp" "$BP_MEMBER_EVENTS"
+    if ! awk -F '\t' -v skip="$skip" '
+      $4=="add" || $4=="subtract" || $4=="set" || $4=="restore_all" || $4=="transfer" {print; next}
+      skip>0 {skip--; next}
+      {print}
+    ' "$BP_MEMBER_EVENTS" > "$tmp"; then
+      rm -f "$tmp"; return 1
+    fi
+    if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBER_EVENTS"; then
+      rm -f "$tmp"; return 1
+    fi
   fi
   bp_durable_sync
 }
