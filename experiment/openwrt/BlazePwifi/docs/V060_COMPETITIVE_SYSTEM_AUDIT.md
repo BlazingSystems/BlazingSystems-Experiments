@@ -1,3 +1,7 @@
+## 2026-10-09 native rental trust UI and Playwright contract extension
+
+On-device managed vs manual, binding and cert pin **read-only** dashboard added to `BlazeAdminActivity.java` (source `5e7e713e27b1487b47abeca8403dbef3041db301`), source privacy test `tests/v060_android_trust_panel.sh` mandatory in Full and fast workflow. HTTPS-only managed QR browser Playwright validates invalid HTTP request is denied and correct HTTPS pinned QR is rendered, with token hidden/reveal semantics (`simulation/browser_v04_audit.py` `cda9ec6b3b707284bd542ec2f29017357f3c196f`). [Fast #37828319441](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37828319441) PASSED both product-contract and operator-browser jobs. No physical Android or production APK signing evidence. The core P0 money durability and migration remain UNRESOLVED.
+
 # BlazePwifi v0.6.0 — cross-platform competition, product and security audit
 
 **Date:** 2026-10-09 (Asia/Manila). **Status:** design and source-evidence audit, NOT an installed/hardware signoff or permission to publish a production 0.6.0 image. **Working branch:** blazepwifi-v0.6.0-audit-foundation (draft PR #30). **Scope:** OpenWrt, x86/Orange Pi, ESP coin controllers, Windows PisoNet SoftTimer, rental Android Launcher3, Wi-Fi captive portal, administrator console, installation, migration and backups.
