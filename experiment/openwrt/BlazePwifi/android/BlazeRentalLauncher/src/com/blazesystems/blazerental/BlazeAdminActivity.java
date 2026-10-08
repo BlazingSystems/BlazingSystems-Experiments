@@ -119,6 +119,7 @@ public class BlazeAdminActivity extends Activity {
         });
 
         section("3 · BlazePwifi binding");
+        addBindingTrustPanel();
         addStatus("Server", emptyAs(RentalLeaseStore.server(this), "Not bound"));
         addStatus("Enrollment", RentalLeaseStore.isEnrolled(this)
                 ? "ENROLLED" : RentalLeaseStore.hasEnrollmentConfig(this)
@@ -210,6 +211,35 @@ public class BlazeAdminActivity extends Activity {
         setContentView(wrap(root));
     }
 
+    // Only display a trust summary, never the one-time token/device secret or
+    // full certificate fingerprint. No network requests occur in this view.
+    private void addBindingTrustPanel() {
+        final boolean owner = ManagedPolicyController.isDeviceOwner(this);
+        final boolean admin = ManagedPolicyController.isAdminActive(this);
+        final boolean enrolled = RentalLeaseStore.isEnrolled(this);
+        final String server = RentalLeaseStore.server(this);
+        final String pin = RentalLeaseStore.serverCertSha256(this);
+        final boolean https = server != null && server.startsWith("https://");
+        final boolean pinned = pin != null && pin.length() == 64;
+        addStatus("Device management", owner ? "FULLY MANAGED · Device Owner" :
+                admin ? "DEVICE ADMIN · limited protection" :
+                        "MANUAL INSTALL · lower bypass protection");
+        addStatus("Binding status", enrolled ? "ENROLLED · device identity available" :
+                "NOT ENROLLED · scan a one-time QR to bind this device");
+        addStatus("Server transport", server == null || server.length() == 0 ?
+                "NOT CONFIGURED" : https ? "HTTPS server configured" :
+                        "INSECURE SERVER URL · use HTTPS");
+        addStatus("Server certificate", https && pinned ?
+                "SHA-256 CERTIFICATE PIN INSTALLED" :
+                owner ? "MANAGED SYNC BLOCKED · HTTPS certificate pin required" :
+                        "UNPINNED · lower security; rebind using a pinned HTTPS QR");
+        if (owner && (!https || !pinned)) {
+            content.addView(label("Managed rental protection requires a pinned HTTPS "
+                    + "certificate. Scan a valid Device Owner enrollment QR or ask the "
+                    + "authorized operator to repair the binding."), full());
+        }
+    }
+
     private void showDashboard() {
         content = page();
         addBrandHeader();
@@ -234,6 +264,7 @@ public class BlazeAdminActivity extends Activity {
         });
 
         section("Binding");
+        addBindingTrustPanel();
         Button scan = secondary("SCAN NEW BLAZEPWIFI QR");
         content.addView(scan, full());
         scan.setOnClickListener(new View.OnClickListener() {
