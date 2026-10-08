@@ -370,6 +370,24 @@ with sync_playwright() as p:
     assert page.locator("#page-dashboard").is_visible()
     assert "BlazePwifi" in page.locator("body").inner_text()
 
+    # BlazeFusion (CoreUI×Metis-inspired) is presentation only.
+    # Appearance choices may persist locally but must not grant access or
+    # mutate customer accounts, session credits, or the admin API.
+    page.wait_for_function(
+        "document.body.getAttribute('data-blaze-style') === 'fusion'")
+    page.select_option("#blazeStyleSelect", "compact")
+    assert page.locator("body").get_attribute("data-blaze-style") == "compact"
+    assert page.evaluate("localStorage.getItem('blazepwifi.console.appearance.v1')") == "compact"
+    page.reload(wait_until="networkidle")
+    page.wait_for_selector("#appView:not(.hidden)")
+    assert page.locator("#blazeStyleSelect").input_value() == "compact"
+    page.select_option("#blazeStyleSelect", "comfort")
+    assert page.locator("body").get_attribute("data-blaze-style") == "comfort"
+    page.select_option("#blazeStyleSelect", "fusion")
+    assert page.locator("body").get_attribute("data-blaze-style") == "fusion"
+    assert page.locator(".nav-btn[data-page='rentals']").get_attribute("data-symbol")
+    # Enrollment and authorization controls remain exposed after a skin change.
+
     page.click('[data-page="rentals"]')
     page.wait_for_selector("#page-rentals.active")
     page.wait_for_selector('[data-device="0123456789abcdef01234567"]')
