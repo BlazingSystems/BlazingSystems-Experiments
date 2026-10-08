@@ -1,5 +1,20 @@
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
+## LATEST VERIFIED DEVELOPMENT CODE — 2026-10-08 (MIG-0616)
+
+**Source/document SHA `b66100d42085c77bdda4e83ef39cd79beaf8eb56`: Full [Actions #37805684343](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37805684343) COMPLETED SUCCESS — 26 jobs passed, 0 failures, `v04_candidate_gate` SUCCESS; the new synthetic money/state backup/restore test and earlier migration guard, sysupgrade preservation, Android Device Owner, real browser, ESP, Ruijie, Orange Pi and x86 simulation all passed. Four production signing/import/publish jobs were intentionally skipped. Verified artifacts: candidate gate `11562848151`, browser simulation `11562124474`, non-secret handover evidence `11561969907`. Same SHA [Windows SoftTimer #37805690414](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37805690414) COMPLETED SUCCESS: both `handover` and `build-windows` (native EXE/installer smoke).
+
+**What was actually added:** `tools/state-fixture.py` and `tests/v060_state_fixture.sh` with required CI and migration contract. **Synthetic-only**, marker-required off-device snapshot/manifest SHA checks/new-directory restore, tamper/unsafe path/mode tests. It is **not encrypted**, cannot migrate real customers, and is **NOT approval to remove the 0.6.0 upgrade block**. Full, Standalone and EasyMode BlazeFusion work is covered by the same green matrix. Published v0.5.2 Full, Standalone Rental RC9, Windows SoftTimer v0.4.0 and Android permanent Lineage-2 identity remain untouched.
+
+**New critical business risk, not yet fixed:** [P0 issue #31](https://github.com/BlazingSystems/BlazingSystems-Experiments/issues/31): bounded `member-events.tsv` retention may permit very old paid-event replay after eviction, and member transfers update two balances in separate writes before logging the event. Power loss or I/O failure could leave partial credit movement. Rental and PisoWiFi coin deduplication across restarts also need review. This is source audit, not a confirmed field incident.
+
+**NEXT EXACT ACTION:** On the `blazepwifi-v0.6.0-audit-foundation` draft [PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30), implement a **synthetic-only negative reproduction** for issue #31: an event evicted from `member-events.tsv` then replayed; a transfer interrupted between sender/recipient writes. Add required CI and document precise failing original behavior before changing accounting code. Design a durable replay/tombstone index and a single crash-recoverable transaction journal with flash-safe recovery and per-event idempotency, then retest at every injected power-loss boundary. Do not tag/sign/publish v0.6.0 until real encrypted backup + power-cut/money hardware + sysupgrade restoration, current/higher-code same-signer Android rescue and product version identity gates pass.
+
+**Checkpoint precision:** the documentation-only commit after `b66100d4...` is NOT the SHA directly run by CI; compare the diff and verify no source/workflow changes before reusing the green result. Keep continuous root/live/ledger synchronization.
+
+---
+
+
 ## LATEST VERIFIED CODE + LIVE P0 WORK — 2026-10-08
 
 **Last completed exact-HEAD development validation:** commit `7fde42bbd8692158c8c52066a1f01b73a513a0f2`, Full BlazePwifi Actions [#37802942602](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37802942602) **26/26 SUCCESS** plus Windows [#37802942611](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37802942611) **2/2 SUCCESS**. CoreUI×Metis-inspired BlazeFusion Full, Standalone, and off-device EasyMode R281 preview passed. All published releases remain unchanged. This green code does **not** verify subsequent changes.
