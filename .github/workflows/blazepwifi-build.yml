@@ -399,6 +399,7 @@ jobs:
           python -m playwright install --with-deps chromium
       - run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
       - run: python experiment/openwrt/BlazePwifi/simulation/standalone_fusion_browser.py simulation-out/browser
+      - run: python experiment/openwrt/BlazePwifi/simulation/easymode_fusion_browser.py simulation-out/browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
