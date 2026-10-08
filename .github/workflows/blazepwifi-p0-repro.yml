@@ -25,6 +25,7 @@ jobs:
           checks=(
             'experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh|P0 RED: evicted event ID credited again|1'
             'experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh|PASS: transfer outcome atomic at tested interruption boundary|0'
+            'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh|P0 RED: balance credited and success returned despite failed event receipt|1'
           )
           for item in "${checks[@]}"; do
             file="${item%%|*}"
@@ -45,4 +46,4 @@ jobs:
             echo "CONFIRMED STAGED RESULT: $file, expected rc=$expected_rc (synthetic only)"
             rm -f "$log"
           done
-          echo 'Atomic transfer scenario passes; replay remains RED. This does NOT validate production safety.'
+          echo 'Atomic transfer scenario passes; replay and receipt-I/O defects remain RED. Not production-safe.'
