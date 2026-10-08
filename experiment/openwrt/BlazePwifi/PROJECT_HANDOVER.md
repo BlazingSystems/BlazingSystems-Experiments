@@ -1,3 +1,11 @@
+## MIG-0625 — 2026-10-09 Asia/Manila — LAB synthetic ledger sequence hardening, COMMITTED_UNTESTED
+
+- **Priority/scope:** P1 synthetic financial-integrity prototype, not production runtime. Real fixture bug: event `ctrlOne:02` with `seq=02` passed the numeric gate; serialized receipt sequence becomes `2`, making its retained ID `ctrlOne:02` inconsistent and blocking subsequent operations after ACK.
+- **Actual source commits:** `489d067c9f4707e446a2505dc7ba06e27bfce02f` changed `tools/v060_journal_fixture.sh` to reject noncanonical leading-zero sequences BEFORE the first write. `d3e532adc9620060aa7246c7c5daf97bdde3bdfb` added `tests/v060_journal_native_fixture.sh` negative regression and unchanged-ledger SHA assertion. Both on `blazepwifi-v0.6.0-audit-foundation` PR #30. Initial IN PROGRESS handover commit: `912017625a27487198f18409e1948a248588d7f8`.
+- **Test status:** `committed_untested` until test execution/CI result is actually inspected. Earlier Full #37830623243 and Windows #37830623115 succeeded only at `bd1777e`, not at this change. Neither release, production version, signer, customer balances nor installed firmware were touched.
+- **Rollback:** revert the fixture/test edits if observed incompatibility; old behavior is not safe for leading-zero sequences. Main production blocker remains real authenticated crash-atomic paid journal, v1 migration, signed native Android/rescue and physical 30-device testing. `SUCCESS_REPORT_PRODUCTION=0`.
+- **NEXT EXACT ACTION:** run `sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh` on exact SHA `d3e532a...`, inspect exact-head Actions run after final handover synchronization, log failed step/fix or verified pass. Do not ship to customers.
+
 ## V060 ALPHA RELEASE VERIFIED — 2026-10-09 (Asia/Manila)
 
 **ACTUAL GITHUB LAB PRERELEASE PUBLISHED SUCCESSFULLY; PRODUCTION v0.6.0 STILL BLOCKED.**
