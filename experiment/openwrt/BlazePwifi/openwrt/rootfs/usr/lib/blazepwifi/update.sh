@@ -90,10 +90,10 @@ bp_update_safe_archive() {
       {
         path=$0
         sub(/\/$/, "", path)
-        if (path=="" || path ~ /^\// || path ~ /(^|\/)\.\.?($|\/)/
-            || path ~ /\/\// || path ~ /\\/ || path ~ /[[:cntrl:]]/) bad=1
-        if (path!="release.env" && path!="manifest.tsv" && path!="manifest.sig"
-            && path!="payload" && path !~ /^payload\//) bad=1
+        if (path=="" || path ~ /^\// || path ~ /(^|\/)\.\.?($|\/)/ ||
+            path ~ /\/\// || path ~ /\\/ || path ~ /[[:cntrl:]]/) bad=1
+        if (path!="release.env" && path!="manifest.tsv" && path!="manifest.sig" &&
+            path!="payload" && path !~ /^payload\//) bad=1
         if (seen[path]++) bad=1
       }
       END {exit bad?1:0}
