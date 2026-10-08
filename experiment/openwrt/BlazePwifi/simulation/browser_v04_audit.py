@@ -278,7 +278,8 @@ def mock_admin(action, params=None):
             "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
                 "server_url": "https://192.168.1.1:8443",
                 "enrollment_token": "fedcba9876543210.0123456789abcdef",
-                "device_name": "Rental phone"
+                "device_name": "Rental phone",
+                "server_cert_sha256": "a"*64
             }
         }
         return {"ok": True, "qr_type": "device_owner",
@@ -406,21 +407,30 @@ with sync_playwright() as p:
     page.click('button:has-text("Generate binding QR")')
     page.wait_for_selector("#qrResult:not(.hidden)")
     page.wait_for_selector("#qrBox svg")
-    assert "Standard binding" in page.locator("#qrNotice").inner_text()
+    assert "STANDARD BINDING" in page.locator("#qrNotice").inner_text()
+    assert "One-time token hidden" in page.locator("#qrToken").inner_text()
+    assert "0123456789abcdef" not in page.locator("#qrToken").inner_text()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#qrReveal")
     assert "0123456789abcdef" in page.locator("#qrToken").inner_text()
 
     page.click('button:has-text("Generate Device Owner QR")')
     page.wait_for_function(
-        "document.getElementById('qrNotice').textContent.includes('Device Owner provisioning')")
+        "document.getElementById('qrNotice').textContent.includes('MANAGED SETUP')")
     page.wait_for_function(
         "document.getElementById('qrMeta').textContent.includes('APK 0.5.2 (50200)')")
-    page.wait_for_function(
-        "document.getElementById('qrToken').textContent.includes('fedcba9876543210')")
     page.wait_for_selector("#qrBox svg")
-    assert "Device Owner provisioning" in page.locator("#qrNotice").inner_text()
+    assert "MANAGED SETUP" in page.locator("#qrNotice").inner_text()
     assert "APK 0.5.2 (50200)" in page.locator("#qrMeta").inner_text()
+    assert "Server TLS pin: included" in page.locator("#qrMeta").inner_text()
+    assert "One-time token hidden" in page.locator("#qrToken").inner_text()
+    assert "fedcba9876543210" not in page.locator("#qrToken").inner_text()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#qrReveal")
     assert "fedcba9876543210" in page.locator("#qrToken").inner_text()
     page.click('#addRentalModal button:has-text("✕")')
+    assert not page.locator("#qrToken").inner_text()
+    assert not page.locator("#qrBox svg").count()
 
     assert admin_mutations
     assert all(x["csrf_body"] == "browser-audit-csrf" for x in admin_mutations)
