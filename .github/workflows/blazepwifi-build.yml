@@ -120,6 +120,53 @@ jobs:
             BlazePwifi-*.tar.gz
             BlazePwifi-*.sha256
 
+      # Evidence is emitted even when a validation test fails. This record
+      # is not a release gate and is never a substitute for the Actions result.
+      - name: Record exact-SHA handover CI evidence
+        if: always()
+        shell: bash
+        env:
+          BLAZE_VALIDATE_RESULT: ${{ job.status }}
+        run: |
+          mkdir -p handover-ci
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path('experiment/openwrt/BlazePwifi')
+          payload = {
+              "schema": "blazepwifi-handover-evidence-v1",
+              "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+              "commit_sha": os.environ.get("GITHUB_SHA", ""),
+              "ref": os.environ.get("GITHUB_REF", ""),
+              "job": "validate",
+              "job_status": os.environ.get("BLAZE_VALIDATE_RESULT", "unknown"),
+              "source_version": (root / "VERSION").read_text().strip() if (root / "VERSION").exists() else "unavailable",
+              "production_signed": False,
+              "production_released": False,
+              "handover_root": str(root / "PROJECT_HANDOVER.md"),
+              "live_state": str(root / "docs/handover/CURRENT_STATE.md"),
+              "change_ledger": str(root / "docs/handover/CHANGE_LEDGER.md"),
+          }
+          pathlib.Path("handover-ci/CI_HANDOVER.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          echo "BlazePwifi validate status: $BLAZE_VALIDATE_RESULT at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Authoritative repo handover: experiment/openwrt/BlazePwifi/docs/handover/CURRENT_STATE.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive handover state and evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-ci-handover-evidence
+          path: |
+            handover-ci/CI_HANDOVER.json
+            experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md
+            experiment/openwrt/BlazePwifi/docs/handover/CURRENT_STATE.md
+            experiment/openwrt/BlazePwifi/docs/handover/CHANGE_LEDGER.md
+            experiment/openwrt/BlazePwifi/docs/handover/HANDOVER_POLICY.md
+          if-no-files-found: warn
+
   esp8266:
     runs-on: ubuntu-latest
     steps:
