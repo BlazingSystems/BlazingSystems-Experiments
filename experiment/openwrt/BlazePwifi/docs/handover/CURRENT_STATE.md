@@ -1,3 +1,9 @@
+## V060-UI-QA-01 IN PROGRESS — 2026-10-09
+
+- Targeted [Actions #37825011547](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37825011547) at `2a9fc9cd547d7aa2a16ac9c1145460c954a96847` **FAILED** early in `tests/v060_ui_fusion.sh:50`: `W: parameter not set`. Audit: test script defines ROOT/HTML/CSS/JS/CORE but new QR assertions introduced `$W/admin/rental.js` without defining W. No production code failure claimed; no business or paid data touched.
+- Bounded fix: add `W="$ROOT/openwrt/rootfs/www/blazepwifi"` to the test setup (or equivalent), then the fast product GitHub workflow will run actual QR/browser/TLS tests; record all new failures and fix in isolated source. No reduced assertions, no skipped production gate. Rollback revert test-only variable insertion.
+- NEXT EXACT ACTION: fix missing test var, inspect next fast run, sync canonical handovers. Release v0.6 remains BLOCKED (atomic receipts/migration/signer/hardware).
+
 ## V060-PRODUCT-RECON / UX+Rental security — 2026-10-09 (full-system risk-based reconciliation)
 
 - **User objective RESTORED:** BlazePwifi v0.6.0 is a *complete* prepaid Wi-Fi + Windows PisoNet + Android Launcher3 rental + ESP/Linux coin-controller + Orange Pi/x86/OpenWrt administration and install system, not only a journal. User's CoreUI React and Metis archive contents were inspected: CoreUI 5.7.0 MIT React/Bootstrap/Chart.js, Metis 3.6.0 MIT Bootstrap/Alpine/Apexcharts. Use original, self-hosted no-runtime dependency designs for low-RAM Lite; rich libraries optional only after profiling Full edition. Preserve license notices for any reused code, never ship untracked proprietary assets.
