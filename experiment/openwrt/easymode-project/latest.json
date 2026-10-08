@@ -1,1 +1,15 @@
-{"stable_baseline":"4.1.4","development":"5.0.0-alpha.1","status":"Static Tested / Hardware Verification Required","path":"releases/v5.0.0-alpha.1/"}
+{
+  "stable_baseline": "4.1.4",
+  "development": "5.0.0-alpha.1",
+  "status": "Installed R281 is the functional reference; universal installer parity unfinished",
+  "path": "releases/v4.2.5-theme-update/",
+  "installed_reference": "4.2.5",
+  "installed_reference_kind": "incremental R281 source update; not firmware",
+  "source_layers": [
+    "releases/v4.2.3-r281-experiment/",
+    "releases/v4.2.4-access-update/",
+    "releases/v4.2.5-theme-update/"
+  ],
+  "development_path": ".",
+  "version_policy": "Identifiers, not feature rankings"
+}
