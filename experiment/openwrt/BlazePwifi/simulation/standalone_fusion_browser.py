@@ -88,8 +88,22 @@ with sync_playwright() as playwright:
         page.wait_for_timeout(100)
         assert page.locator("#blazeStyleStandalone").is_visible()
         assert page.locator('button:has-text("Sign out")').is_visible()
-        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 2"), (
-            "Standalone rental page overflows mobile viewport " + str(width))
+        geometry = page.evaluate("""() => ({
+            viewport: window.innerWidth,
+            document: document.documentElement.scrollWidth,
+            offenders: [...document.querySelectorAll('body *')]
+              .filter(e => {
+                const r = e.getBoundingClientRect();
+                return r.width > 0 && r.right > window.innerWidth + 2 &&
+                  getComputedStyle(e).display !== 'none';
+              })
+              .slice(0, 12).map(e => ({
+                tag: e.tagName.toLowerCase(), id: e.id, className: String(e.className).slice(0, 90),
+                right: Math.round(e.getBoundingClientRect().right)
+              }))
+          })""")
+        assert geometry["document"] <= geometry["viewport"] + 2, (
+            "Standalone rental mobile horizontal overflow: " + str(geometry))
         if width == 360:
             page.screenshot(path=str(OUT / "standalone-blazefusion-mobile.png"), full_page=True)
     assert set(mutations) == {"rental_device_list", "controller_list"}, mutations
