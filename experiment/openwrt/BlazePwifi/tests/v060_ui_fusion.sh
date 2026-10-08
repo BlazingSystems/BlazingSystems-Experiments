@@ -46,6 +46,12 @@ fi
 grep -Fq 'X-Blaze-CSRF' "$CORE"
 grep -Fq 'generateBindingQr()' "$HTML"
 grep -Fq 'generateProvisioningQr()' "$HTML"
+grep -Fq 'id="qrReveal"' "$HTML"
+grep -Fq 'qrGeneration++' "$W/admin/rental.js"
+grep -Fq 'request!==qrGeneration' "$W/admin/rental.js"
+grep -Fq 'One-time token hidden' "$W/admin/rental.js"
+grep -Fq "hasPin=typeof pin==='string'" "$W/admin/rental.js"
+grep -Fq "Managed QR is missing certificate pin" "$W/admin/rental.js"
 grep -Fq '/admin/core.js' "$HTML"
-if command -v node >/dev/null 2>&1; then node --check "$JS"; fi
+if command -v node >/dev/null 2>&1; then node --check "$JS"; node --check "$W/admin/rental.js"; fi
 echo "BlazeFusion presentation-only integration smoke tests passed"
