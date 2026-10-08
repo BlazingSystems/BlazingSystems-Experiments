@@ -63,7 +63,7 @@
 - **Latest CI evidence is still the old baseline:** Windows run #37770673126 PASS, Full build #37770673219 FAIL. No green evidence yet for the newly added handover gate.
 - **NEXT NOW:** update `simulation/browser_v04_audit.py` stale two QR button selectors and add tests for the new two-choice dialog; then synchronize canonical docs again, inspect exact-head CI and carry forward any blockers.
 
-## Live transition — CI evidence + public docs reconciliation
+## Live transition — CI evidence, README and handover regression changes
 
 - CI workflow implementation `1e92fd13cbbd997fd33594444705c7d23c371159`: `validate` now emits a non-secret `BlazePwifi-ci-handover-evidence` artifact even if tests fail. It contains canonical handover copies and `CI_HANDOVER.json` (workflow/run attempt/Git SHA/job result/branch/version); **never** treat the `validate` status in that JSON as the overall 26-job gate conclusion.
 - Public `README.md` commit `500c6d281dfe8517fed91891f13b79e122c99221`: corrected stale advertised production 0.3.0 to verified full v0.5.2, distinct standalone RC9, correct active v0.6.0 PR, native Android and TailAdmin-inspired admin paths and Windows EXE integration.
