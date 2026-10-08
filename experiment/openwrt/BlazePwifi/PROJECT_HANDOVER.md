@@ -1,5 +1,20 @@
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
+## LATEST VERIFIED CONTINUITY CHECKPOINT — 2026-10-08
+
+Development source SHA: 74623164a808f22d0f1adbf4468b32c19c3cfb69. Draft PR #30, branch blazepwifi-v0.6.0-audit-foundation, base blazepwifi-v0.5.3-rc1.
+Full BlazePwifi GitHub Actions #37799976600: COMPLETED SUCCESS, 26 required jobs passed, zero failures; four intentionally skipped production import/sign/publish gates. Includes early policy/ledger freshness, standalone/full Fusion static tests, Real Chromium browser (360px and 390px, full admin QR, Standalone appearance), native Android Device Owner emulator, Ruijie, Orange Pi, ESP, x86 QEMU and candidate gate. Browser artifact ID 11561130056, candidate gate artifact 11560821092, handover evidence artifact 11560535720.
+Windows SoftTimer GitHub Actions #37799992623: COMPLETED SUCCESS, two jobs (handover prerequisite and native Windows EXE/NSIS installer/billing smoke). EXACT SAME source SHA.
+Failed historical Standalone test: #37799066752 job 113386892960, 390px overflow, on prior SHA 75d88c87...; fixed without hiding overflow in CSS commit 52da18e6... and retained diagnostic/assertions in d616c16b...; later browser #37799976600 SUCCESS. Do not confuse the original failure with current status.
+New UX: Full BlazePwifi and separate single-file Standalone Rental console both have offline BlazeFusion/Compact/Comfort selectors using a nonsecret browser preference only. CoreUI React and Metis templates are references; the two SPAs were not deployed into firmware. Previously published Full v0.5.2, Standalone Rental RC9, and Windows SoftTimer v0.4.0 release assets and permanent Lineage-2 Android identity remain UNCHANGED.
+THIS IS NOT V0.6.0 PRODUCTION: on-disk VERSION/Android code still 0.5.3; full financial migration/rollback, real sysupgrade backup/restore, physical concurrent-coin acceptance and 0.6.0 same-signer rescue/signature gates remain BLOCKED. Do not tag, merge into main or publish 0.6.0 from this source.
+NEXT EXACT ACTION after this documentation-only checkpoint: (1) verify that the branch HEAD differs from the green source SHA ONLY in the three handover docs; (2) audit independent EasyMode UI path experiment/openwrt/easymode-project/releases/v4.2.1-r281-experiment/root/www/easy/style.css, but DO NOT edit the published release snapshot; prepare separate new version/branch and low-memory Fusion token adapter with its own source, rollback and tests; (3) prioritize P0 transactional paid-state migration + real hardware restore before production; (4) register IN PROGRESS before edits, append exact commits, failures and CI evidence to all three canonical handovers and rerun exact-head validation.
+
+### New-chat Audit & Reconcile prompt
+
+Open GitHub repository BlazingSystems/BlazingSystems-Experiments, draft PR #30. Read THIS TOP CURRENT CHECKPOINT, docs/handover/CURRENT_STATE.md, CHANGE_LEDGER.md, HANDOVER_POLICY.md, docs/UI_BLAZEFUSION_0.6.0.md and AUDIT.md. Verify code SHA 74623164a808f22d0f1adbf4468b32c19c3cfb69 passed Full #37799976600 (26/26) and Windows #37799992623 (2/2); verify any later commits are DOCS ONLY. Next evaluate EasyMode independent edition versus finished BlazeFusion Full/Standalone UI, never touching frozen release snapshots. Continue P0 money migration/recovery before claiming a signed v0.6.0 release. Update handovers with exact evidence for every step.
+
+---
 **As reconciled:** 2026-10-08 19:43+ Asia/Manila; policy gate, browser fix, history regression and immutable Windows release guard now committed; full 26-job and Windows 2-job development CI green; production v0.6.0 release remains BLOCKED. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
 
 ## AUTHORITATIVE LIVE LINKS

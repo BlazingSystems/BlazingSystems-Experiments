@@ -1,5 +1,15 @@
 # LIVE STATE — BlazePwifi full ecosystem (AUTHORITATIVE)
 
+## VERIFIED CURRENT STATUS — 2026-10-08 / supersedes pending notes below
+
+Source and test result: 74623164a808f22d0f1adbf4468b32c19c3cfb69 on draft PR #30, Full Actions #37799976600 COMPLETED SUCCESS (26 success / 0 failures, four intentional production skips), Windows Actions #37799992623 COMPLETED SUCCESS (handover and native build-windows jobs).
+Full validate included v0.6 migration fail-closed, preserved paid-state sysupgrade policy, replay/accounting/CSRF, both Full + Standalone self-contained Fusion smoke tests. Real browser v04_browser_simulation PASSED both Full QR/auth and Standalone local theme/reload, exact 390px and 360px page width, sign-out visibility, no network outside mocked local HTTPS or money mutations. Full Android emulator, firmware/ESP/Ruijie/Orange Pi and x86 QEMU tests PASSED. Browser artifact 11561130056; gate 11560821092; source handover evidence 11560535720.
+Historical P1 bug #37799066752 failed only Standalone 390px page width. CSS commit 52da18e6ea1d314158edd7ffc0daaf909a9d39ef fixed min-content/grid sizing without clipping overflow; diagnostic test commit d616c16b4c41bc3870352e647978d0b8471d7a23 kept strict check; current exact-source Chromium SUCCESS. Previous failed/pending entries below are archived evidence, NOT current blocker.
+Integration scope: Full BlazePwifi v0.6 preview management console and Standalone Rental single-file source have Fusion/Compact/Comfort presentation. CoreUI React 5.7.0 and Metis 3.6.0 (both MIT) are design references, not two app runtimes. Standalone endpoints and installer behavior were not changed, no new CGI, rental lease/payment or key updates.
+Release status: PRODUCTION BLOCKED. Source still 0.5.3, unsigned/unpublished 0.6.0, existing production releases and Lineage-2 signer frozen. Physical financial ledger and sysupgrade restore, Android same-signer current/rescue, migration/rollback, phone Device Owner OEM acceptance and concurrent coin-event soak remain mandatory.
+NEXT EXACT ACTION: first GitHub compare source SHA 74623164a808f22d0f1adbf4468b32c19c3cfb69 to post-checkpoint HEAD and verify only three canonical docs changed. Then audit EasyMode UI structure within experiment/openwrt/easymode-project, create a new isolated versioned integration path (do not edit existing v4.2.1 release snapshot), implement a lightweight optional BlazeFusion presenter only after recording IN PROGRESS here; test all edition-specific capabilities. P0 financial-state migration and hardware recovery remain higher priority than aesthetics for release approval.
+
+---
 **Last reconciled (Asia/Manila):** 2026-10-08 19:43+. **Owner order:** full v0.6.0 audit/research, security and native Android/admin UI enhancement, rigorous release; continuous mandatory handover logging before and after every meaningful change. **Status:** `HANDOVER POLICY VERIFIED / DEVELOPMENT CI GREEN / RELEASE BLOCKED`.
 
 ## Identity / current pointers (not historical snapshots)
