@@ -196,7 +196,14 @@ bp_member_balance_change() {
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$user" -v k="$mode" -v s="$source" '$1==e && $3==u && $4==k && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
-      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
+      prior_seconds="$(printf '%s' "$prior" | cut -f6)"
+      # Reusing an old ID with a different amount is NOT a successful
+      # replay: it is a payload collision and must not ACK the new intent.
+      case "$mode" in
+        add|subtract|set)
+          [ "$prior_seconds" -eq "$seconds" ] 2>/dev/null || return 5 ;;
+      esac
+      printf '%s\t%s\n' "$prior_seconds" "$(bp_member_global_revision)"
       return 0
     fi
     [ -z "$(bp_member_event_line "$event_id")" ] || return 5
@@ -251,7 +258,14 @@ bp_member_transfer() {
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$from" -v s="$source" '$1==e && $3==u && $4=="transfer" && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
-      printf '%s\t%s\n' "$(printf '%s' "$prior" | cut -f6)" "$(bp_member_global_revision)"
+      prior_seconds="$(printf '%s' "$prior" | cut -f6)"
+      prior_detail="$(printf '%s' "$prior" | cut -f8)"
+      # Transfer receipt detail is from_balance:destination:to_balance.
+      # Missing/mismatched destination metadata is ambiguous: fail closed.
+      prior_destination="$(printf '%s' "$prior_detail" | awk -F: 'NF==3 {print $2}')"
+      [ "$prior_seconds" -eq "$seconds" ] 2>/dev/null &&
+        [ "$prior_destination" = "$to" ] || return 5
+      printf '%s\t%s\n' "$prior_seconds" "$(bp_member_global_revision)"
       return 0
     fi
     [ -z "$(bp_member_event_line "$event_id")" ] || return 5
