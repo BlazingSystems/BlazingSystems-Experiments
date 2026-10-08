@@ -1,3 +1,9 @@
+## V060-RENTAL-QR-UX / P1 security usability — IN PROGRESS 2026-10-09
+
+- **Intent:** improve operator QR enrollment UX without altering signed server enrollment, payment policy or Android runtime: hide one-time token until an explicit limited reveal, validate server-provided QR payload mode (must have pinned admin cert for Device Owner), invalidate pending QR responses when dialog closes/another request starts, clear expired tokens from DOM. `rental.js` currently shows token in full on screen and can render stale async results after modal close. Distinguish UI verification of presence of a pin from physical certificate trust; do not claim APK signature validated by browser.
+- **Files:** `openwrt/rootfs/www/blazepwifi/admin/rental.js`, `admin.html`, `tests/v060_ui_fusion.sh`; research audit doc `docs/V060_COMPETITIVE_SYSTEM_AUDIT.md`; root/ledger status after. Risk: QR payload renderer regressions and timers; source-mode test + `node --check` + Full browser/UI matrix to catch. Rollback revert UI/test changes only, preserve old runtime financial state.
+- **NEXT:** implement, validate actual GitHub Actions logs and entrypoint test, synchronize handovers, keep release blocked pending remaining P0 financial atomicity/signed migration/hardware signoff.
+
 ## V060-RENTAL-PIN / P0 — IN PROGRESS 2026-10-09: managed Android binding cannot silently drop TLS pin
 
 - **Source issue:** Android `android/BlazeRentalLauncher/src/com/blazesystems/blazerental/LeaseClient.java:applyPinnedTls` returns immediately when stored cert pin is empty, even if `ManagedPolicyController.isDeviceOwner(context)` reports true. Back-end Device Owner provisioning QR requires admin cert pin, but a malformed/local state transition or alternate enrollment path could allow an unpinned managed client to initiate requests; this violates higher-security rental deployment intent. Ordinary manual APK remains lower-security by design.
