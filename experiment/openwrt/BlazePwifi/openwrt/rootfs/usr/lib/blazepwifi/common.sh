@@ -146,14 +146,22 @@ bp_account_field() {
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
 	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
+	# Financial writes must propagate *every* failed stage. Previously a
+	# failed awk/rename was masked by the final (often no-op) durable_sync,
+	# allowing CGI callers to ACK money that was not credited.
+	if ! awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
 		BEGIN{f=0}
 		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
 		{print}
 		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
-	' "$BP_ACCOUNTS" > "$tmp" && mv "$tmp" "$BP_ACCOUNTS"
-	chmod 600 "$BP_ACCOUNTS"
-	bp_durable_sync
+	' "$BP_ACCOUNTS" > "$tmp"; then
+		rm -f "$tmp"; return 8
+	fi
+	if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ACCOUNTS"; then
+		rm -f "$tmp"; return 8
+	fi
+	bp_durable_sync || return 8
+	return 0
 }
 
 bp_remove_legacy_mac() {
