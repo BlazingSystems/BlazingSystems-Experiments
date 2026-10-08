@@ -278,7 +278,9 @@ case "$action" in
       exit 0
     fi
 
-    event="c:$(bp_event_hash "coin|$id|$nonce|$target")"
+    # Scope v0.6 receipts to the live coin window; expired targets may
+    # be history-trimmed, but valid ACK retries may never be evicted.
+    event="c:$target.$(bp_event_hash "coin|$id|$nonce|$target")"
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
@@ -311,7 +313,10 @@ case "$action" in
     [ -n "$unit" ] || unit=100
     add=$((unit*pulses))
     newcredit=$((credit+add))
-    newevents="$(bp_events_push "$events" "$event")"
+    if ! newevents="$(bp_events_push "$events" "$event")"; then
+      bp_unlock
+      bp_fail "coin receipt retention full; operator reconciliation required"
+    fi
     # Legacy one-row balance+receipt rename stays contained behind the
     # global paid-state halt. This is not a replacement for v2 fsync WAL.
     bp_paid_begin || { bp_unlock; bp_fail "paid state uncertain or accounting busy"; }
