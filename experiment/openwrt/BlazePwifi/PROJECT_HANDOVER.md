@@ -27,7 +27,7 @@
 
 ## NEXT EXACT ACTION / safe resume
 
-1. **Implemented, pending CI proof:** `tests/handover_gate.sh` added in `c27593ca4f272432118ac37fe74c5dab755eec08`, early full-history CI step in `2cc802a7c44785aa35fde7079d8e4160b0a1759f`. Check the latest exact HEAD `validate` gate and prove stale source edits would fail.
+1. **Implemented, pending CI proof:** `tests/handover_gate.sh` added in `c27593ca4f272432118ac37fe74c5dab755eec08`, early full-history CI step in `2cc802a7c44785aa35fde7079d8e4160b0a1759f`, plus negative regression test `e02474f150b5ac4be18fb2c05edf4cffa69e4957` wired in `8140a4e1c80d45e61d2612e9a664afea5777cb1c`. Check the latest exact HEAD `validate` gate and prove stale source edits would fail.
 2. **Fixed in source, pending CI proof:** `simulation/browser_v04_audit.py` obsolete QR button locators corrected in `da87ad69f2706cec2b71fb7cb6254d5d241c1b7e` without removing Device Owner or Binding assertions. Check `v04_browser_simulation` at the new exact HEAD.
 3. **Checkpointed after the source changes:** `CURRENT_STATE.md`, `CHANGE_LEDGER.md` and this CURRENT STATUS now reflect the gate, QR browser selector fix, CI evidence artifact and README correction. Any subsequent source/workflow modification requires another synchronized checkpoint.
 4. **NOW:** inspect exact-HEAD full CI, including `Mandatory handover freshness gate`, `v04_browser_simulation`, Android Device Owner emulator and candidate gate; inspect the `BlazePwifi-ci-handover-evidence` artifact and Windows EXE/NSIS result. Log failed, skipped or cancelled runs in all three canonical files. Keep PR #30 draft and **do not publish 0.6.0** until versionCode/migration, permanent same-signer APK, firmware, recovery and hardware gates pass.
