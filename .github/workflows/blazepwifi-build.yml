@@ -964,8 +964,7 @@ jobs:
               assert a["state"]=="uploaded" and a["size"]==p.stat().st_size and a["size"]>0,name
               actual=hashlib.sha256(p.read_bytes()).hexdigest()
               digest=a.get("digest")
-              if digest:
-                  assert digest=="sha256:"+actual,"Upload digest mismatch for "+name
+              assert isinstance(digest,str) and digest=="sha256:"+actual,"Missing or mismatched upload SHA-256 for "+name
           print("LAB DRAFT REMOTE VERIFIED: 12 full-size assets, exact source, sha256 where exposed.")
           PY
       - name: Publish verified lab-only prerelease and verify visibility
