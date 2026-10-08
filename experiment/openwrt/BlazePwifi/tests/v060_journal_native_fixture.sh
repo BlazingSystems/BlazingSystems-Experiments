@@ -63,9 +63,9 @@ reject ctrlOne 1 ctrlOne:1 AM alice - 40 1000
 [ "$(account alice)" -eq 141 ]
 # Two independent clients race for the same sequence. The lock may reject one
 # with BUSY, but a retry of that exact request must replay without new credit.
-(BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel1" 2>&1; echo "$?" >"$T/parallel1.rc") &
+(set +e; BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel1" 2>&1; rc="$?"; printf '%s\n' "$rc" >"$T/parallel1.rc"; exit 0) &
 p1=$!
-(BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel2" 2>&1; echo "$?" >"$T/parallel2.rc") &
+(set +e; BLAZE_TEST_FAULT="" sh "$TOOL" "$T" ctrlRace 1 ctrlRace:1 AM alice - 9 1000 >"$T/parallel2" 2>&1; rc="$?"; printf '%s\n' "$rc" >"$T/parallel2.rc"; exit 0) &
 p2=$!
 wait "$p1" "$p2"
 [ "$(account alice)" -eq 150 ]
