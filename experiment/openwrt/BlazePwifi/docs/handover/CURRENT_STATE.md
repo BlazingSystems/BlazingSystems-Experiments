@@ -1,3 +1,11 @@
+## PAY-0631 / IN PROGRESS — 2026-10-09 Asia/Manila — member replay must obey paid-state quarantine
+
+- **P0 financial:** `cgi-bin/vendo` `member_bank`, `member_restore` and `member_transfer` replay lookup/ACK occurs before `bp_member_lock`, and member lock's `paid-state-uncertain` halt is therefore bypassed for a previously logged event. During unreconciled member/rental/Wi-Fi money storage, the controller receives an affirmative signed replay of an ambiguous previous balance. Source verified after PAY-0630 checkpoint `00ce1348e5abe0aaa3bfe03f09fc9c2f4660b65b`.
+- **Fix scope/plan:** fail closed when uncertainty marker exists for all three prepaid member mutations **before** checking or acknowledging replay; read-only snapshot and authentication may remain available. Add signed real CGI regression with synthetically persisted prior member receipt, marker set, and verify `ok:false` for bank/restore/transfer; when synthetic marker absent, genuine matching prior receipt should still return `replayed:true`. All monetary records unchanged, no live accounts, source/test-only PR #30.
+- **Risk:** clients may need operator confirmation/reconciliation after reboot. Never auto-clear marker or accept old SDK replay. Fails closed, production v0.6 still blocked by unified crash-atomic journal, signing/migration and actual hardware.
+- **NEXT EXACT ACTION:** patch `cgi-bin/vendo` guard before replay, add `tests/v060_member_quarantine_replay.sh` and fast+Full CI, inspect actual failures, sync handovers with SHAs and exact test evidence.
+
+
 ## V060 VERIFIED P0 SECURITY RECONCILIATION — 2026-10-09 Asia/Manila; PRODUCTION BLOCKED
 
 **Development HEAD BEFORE THIS HANDOVER:** `9dc2670799b6eb7da6951d112939b6bbc205f63f`, branch `blazepwifi-v0.6.0-audit-foundation`, draft [PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30). These are actual source commits + green focused GitHub checks; no live deploy, signer/keys or previous release altered. Historic failed runs remain listed below. `VERSION=0.5.3`; `v0.6.0-alpha.1` is a frozen LAB ONLY prerelease (12 assets); `PRODUCTION_0.6.0_RELEASED=0`.
