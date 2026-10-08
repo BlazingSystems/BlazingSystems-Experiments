@@ -17,6 +17,8 @@ bp_member_lock() {
   mkdir -p "$BP_RUN"
   exec 7>"$BP_RUN/member.lock"
   flock -w 10 7 || { exec 7>&-; return 1; }
+  # A prior uncertain paid mutation requires explicit reconciliation.
+  [ ! -e "$BP_STATE/paid-state-uncertain" ] || { bp_member_unlock; return 9; }
 }
 
 bp_member_unlock() {
@@ -103,8 +105,10 @@ bp_member_write() {
   tmp="$BP_STATE/.members.$(bp_tmp_suffix)"
   awk -F '\t' -v u="$user" '$1!=u {print}' "$BP_MEMBERS" > "$tmp"
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'     "$user" "$(bp_member_clean "$label")" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$revision" "$updated" "$(bp_member_clean "$source")" >> "$tmp"
-  chmod 600 "$tmp" && mv "$tmp" "$BP_MEMBERS"
-  bp_durable_sync
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBERS"; then
+    rm -f "$tmp"; return 1
+  fi
+  bp_durable_sync || return 1
 }
 
 bp_member_create() {
@@ -166,6 +170,7 @@ bp_member_set_password() {
 # This cap is a fail-closed bridge for legacy random v1 event IDs, NOT a
 # substitute for an authenticated v2 sequence journal or lost-ACK recovery.
 bp_member_financial_receipt_capacity_ok() {
+  [ ! -e "$BP_STATE/paid-state-uncertain" ] || return 1
   [ -f "$BP_MEMBER_EVENTS" ] && [ ! -L "$BP_MEMBER_EVENTS" ] || return 1
   case "$BP_MEMBER_EVENTS" in /dev/*) return 1;; esac
   bytes="$(wc -c < "$BP_MEMBER_EVENTS" 2>/dev/null)" || return 1
@@ -217,10 +222,20 @@ bp_member_balance_change() {
     *) return 2 ;;
   esac
 
+  # A durable quarantine marker precedes the balance change. If receipt
+  # append or filesystem synchronization fails, leave it set and refuse ACK.
+  # This protects retries by halting payments; real crash-atomic v2 WAL is
+  # still required before public release.
+  bp_paid_begin || return 9
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
-  bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$new" "$rev" "$now" "$source"
+  if ! bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$new" "$rev" "$now" "$source"; then
+    bp_paid_abort; return 8
+  fi
   [ -n "$event_id" ] || event_id="admin:$rev:$user"
-  bp_member_event_record "$event_id" "$now" "$user" "$mode" "$delta" "$result" "$source" "$new"
+  if ! bp_member_event_record "$event_id" "$now" "$user" "$mode" "$delta" "$result" "$source" "$new"; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s\t%s\n' "$result" "$rev"
 }
 
@@ -250,6 +265,7 @@ bp_member_transfer() {
   case "$tbank" in ''|*[!0-9]*) tbank=0;; esac
   [ "$fbank" -ge "$seconds" ] 2>/dev/null || return 4
 
+  bp_paid_begin || return 9
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   newf=$((fbank-seconds)); newt=$((tbank+seconds))
 
@@ -265,15 +281,18 @@ bp_member_transfer() {
       { print }
       END { if (fc!=1 || tc!=1) exit 4 }
     ' "$BP_MEMBERS" > "$tmp"; then
-    rm -f "$tmp"; return 1
+    rm -f "$tmp"; bp_paid_abort; return 8
   fi
   if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBERS"; then
-    rm -f "$tmp"; return 1
+    rm -f "$tmp"; bp_paid_abort; return 8
   fi
-  bp_durable_sync || return 1
+  if ! bp_durable_sync; then bp_paid_abort; return 8; fi
 
   [ -n "$event_id" ] || event_id="admin:$rev:$from>$to"
-  bp_member_event_record "$event_id" "$now" "$from" transfer "-$seconds" "$seconds" "$source" "$newf:$to:$newt"
+  if ! bp_member_event_record "$event_id" "$now" "$from" transfer "-$seconds" "$seconds" "$source" "$newf:$to:$newt"; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s\t%s\n' "$seconds" "$rev"
 }
 
@@ -292,8 +311,8 @@ bp_member_delete() {
 
 # event_id timestamp username kind delta result source detail
 bp_member_event_record() {
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'     "$(bp_member_clean "$1")" "$2" "$(bp_member_clean "$3")" "$(bp_member_clean "$4")"     "$5" "$6" "$(bp_member_clean "$7")" "$(bp_member_clean "$8")" >> "$BP_MEMBER_EVENTS"
-  chmod 600 "$BP_MEMBER_EVENTS"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'     "$(bp_member_clean "$1")" "$2" "$(bp_member_clean "$3")" "$(bp_member_clean "$4")"     "$5" "$6" "$(bp_member_clean "$7")" "$(bp_member_clean "$8")" >> "$BP_MEMBER_EVENTS" || return 8
+  chmod 600 "$BP_MEMBER_EVENTS" || return 8
   max="$(bp_cfg member_event_history 2>/dev/null || true)"
   case "$max" in ''|*[!0-9]*) max=2048;; esac
   [ "$max" -ge 128 ] 2>/dev/null || max=128
