@@ -8,9 +8,18 @@ bp_rental_update_init() {
 }
 
 bp_rental_update_url_ok() {
+    # Fail closed on URL-like strings with no hostname or embedded credentials.
+    # This is syntax filtering; downloaded APKs additionally require SHA-256
+    # and the permanent BlazeRental signing certificate on the Android side.
     case "$1" in https://*) ;; *) return 1;; esac
     [ "$(printf '%s' "$1" | wc -c)" -le 512 ] || return 1
-    ! printf '%s' "$1" | grep -q '[[:space:][:cntrl:]]'
+    printf '%s' "$1" | grep -q '[[:space:][:cntrl:]]' && return 1
+    case "$1" in *'#'*|*'\\'*) return 1;; esac
+    authority="${1#https://}"
+    authority="${authority%%/*}"
+    authority="${authority%%\?*}"
+    case "$authority" in ''|:*|*@*|'[]'*|'[') return 1;; esac
+    return 0
 }
 
 bp_rental_update_sha_ok() { printf '%s' "$1" | grep -Eq '^[0-9a-fA-F]{64}$'; }
