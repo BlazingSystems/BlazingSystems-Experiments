@@ -111,7 +111,7 @@ if proc.returncode != 0:
     fail("production APK signature verification failed")
 certs=[]
 for line in proc.stdout.splitlines():
-    m=re.match(r"^Signer #\\d+ certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$", line.strip())
+    m=re.match(r"^Signer #\d+ certificate SHA-256 digest:\s*([0-9A-Fa-f:]+)\s*$", line.strip())
     if m:
         certs.append(norm_fp(m.group(1)))
 if len(certs) != 1:
