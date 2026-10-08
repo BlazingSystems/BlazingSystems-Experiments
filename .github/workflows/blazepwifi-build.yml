@@ -77,6 +77,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh
       - name: BlazePwifi v0.6 synthetic transactional ledger oracle (model only)
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_ledger_model.py
+      - name: BlazePwifi v0.6 synthetic POSIX receipt and balance journal
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: BlazePwifi v0.6 OpenWrt sysupgrade preservation safety
         run: sh experiment/openwrt/BlazePwifi/tests/v060_sysupgrade_preservation.sh
       - name: BlazeFusion offline and authenticated UI integration smoke
