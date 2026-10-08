@@ -75,6 +75,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_sysupgrade_preservation.sh
       - name: BlazeFusion offline and authenticated UI integration smoke
         run: sh experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh
+      - name: Standalone Rental BlazeFusion self-contained UI and original secure routes
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_fusion.sh
       - name: BlazeRental v0.5.1 update compatibility validation
         run: sh experiment/openwrt/BlazePwifi/tests/v051_android_source.sh
       - name: BlazeRental v0.5.2 branding and alarm validation
@@ -394,6 +396,7 @@ jobs:
           python -m pip install --disable-pip-version-check playwright
           python -m playwright install --with-deps chromium
       - run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
+      - run: python experiment/openwrt/BlazePwifi/simulation/standalone_fusion_browser.py simulation-out/browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
