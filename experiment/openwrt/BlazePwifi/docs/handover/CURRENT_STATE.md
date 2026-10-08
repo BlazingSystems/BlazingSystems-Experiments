@@ -1,3 +1,12 @@
+## SEC-0626 / IN PROGRESS — 2026-10-09 (Asia/Manila) — updater archive extraction hardening
+
+- **Priority P1, scope:** `openwrt/rootfs/usr/lib/blazepwifi/update.sh` and synthetic `tests/v060_update_archive_security.sh`, Full CI validation step. Branch `blazepwifi-v0.6.0-audit-foundation` PR #30. Keep 0.6 upgrade rejection, v0.5.x compatibility, customer finances and existing releases unmodified.
+- **Observed risk:** `bp_update_safe_archive` only inspects `tar -tzf` path strings; archive symlink/hardlink/special members can be extracted before payload verification. It also allows duplicate entry names and `manifest.tsv` duplicated target paths. A verified SHA of the tarball alone does not make malicious archive contents safe.
+- **Planned bounded fix:** validate an allowlisted archive member namespace, reject all nonregular/nondirectory member types (especially links), path traversal/double slash/dot components/duplicate names; require well-formed unique manifest destinations; test using a temporary fake filesystem with valid, symlink and duplicate bundles. Preserve all existing test gates.
+- **Tests:** exact source test `sh tests/v060_update_archive_security.sh`, v051/v052/v060 migration/rollback compatibility and new Full CI. Record actual conclusion+SHA. **State IN_PROGRESS, no pass claim.**
+- **Rollback:** revert scoped code+test+workflow commits if compatibility fails; source `VERSION=0.5.3`, production `0.6` preflight fail-closed. **Production blocker still active:** P0 paid journal/old money migration/current+rescue signed Android/hardware 30 devices.
+- **NEXT EXACT ACTION:** update the archive validator before `tar -xzf`, add regression fixtures and Full validate workflow test, then synchronize all canonical handovers with observed CI.
+
 ## MIG-0625 / VERIFIED TARGETED, FULL STILL PENDING — 2026-10-09 Asia/Manila
 
 - **Validated source change:** `489d067c9f4707e446a2505dc7ba06e27bfce02f` rejects leading-zero sequence before mutation in the *off-device synthetic journal only*; `d3e532adc9620060aa7246c7c5daf97bdde3bdfb` adds unchanged-ledger SHA and rejection regression. Both on `blazepwifi-v0.6.0-audit-foundation` / draft PR #30.
