@@ -186,6 +186,22 @@ bp_update_restore_snapshot() {
     return 0
 }
 
+# v0.6 introduces a new audited persistence migration contract.
+# The v0.5 update snapshot only saves manifest-listed runtime files, not
+# /etc/config/blazepwifi or /etc/blazepwifi/state money/device ledgers.
+# Until a snapshot+recovery transaction is implemented and field-tested,
+# reject all 0.6-family bundles BEFORE any persistent update-side effect.
+bp_update_preflight_release() {
+    candidate_version="$1"
+    case "$candidate_version" in
+        0.6|0.6.*|0.6-*)
+            echo "BlazePwifi 0.6 migration/recovery gate: upgrade blocked; transactional config and financial-state rollback has not been approved" >&2
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 bp_update_apply() {
     bundle="$1"; expected="${2:-}"
     bp_update_lock || { echo "another update is running" >&2; return 1; }
@@ -200,6 +216,13 @@ bp_update_apply() {
     version="$(bp_update_release_value "$release" VERSION)"
     [ -n "$version" ] || { echo "bundle version missing" >&2; rm -rf "$extracted"; bp_update_unlock; return 1; }
     previous="$(bp_update_current_version)"
+    # Fail before creating a snapshot, changing stable.env or replacing code.
+    # Do not provide an environment bypass: migration is financial state.
+    if ! bp_update_preflight_release "$version"; then
+        rm -rf "$extracted"
+        bp_update_unlock
+        return 1
+    fi
     grace="$(uci -q get blazepwifi.main.update_stability_seconds 2>/dev/null || true)"
     [ -n "$grace" ] || grace="$(bp_update_release_value "$release" STABILITY_GRACE_SECONDS)"
     [ -n "$grace" ] || grace=600
