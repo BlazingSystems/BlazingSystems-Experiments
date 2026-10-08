@@ -937,10 +937,19 @@ jobs:
             --target "$GITHUB_SHA" --draft --prerelease \
             --title "BlazePwifi v0.6.0-alpha.2 — LAB ONLY, NOT PRODUCTION" \
             --notes-file "$NOTES"
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$LAB_TAG" > published-draft.json
+          # GitHub draft releases intentionally have an untagged public URL;
+          # /releases/tags/TAG can return HTTP 404 while the draft exists.
+          # Resolve the private draft through authenticated releases listing.
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > created-releases.json
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          release=json.load(open("published-draft.json",encoding="utf-8"))
+          releases=json.load(open("created-releases.json",encoding="utf-8"))
+          matches=[r for r in releases if r.get("tag_name")==os.environ["LAB_TAG"]]
+          assert len(matches)==1,"Expected exactly one new private lab release"
+          release=matches[0]
+          assert isinstance(release.get("id"),int),"Missing new release ID"
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
+              env.write(f'LAB_DRAFT_RELEASE_ID={release["id"]}\\n')
           manifest=json.load(open("lab-release/MANIFEST.json",encoding="utf-8"))
           assert release["draft"] is True and release["prerelease"] is True,"Expected draft prerelease"
           assert release["tag_name"]==os.environ["LAB_TAG"],"Wrong release tag"
@@ -963,11 +972,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release edit "$LAB_TAG" --draft=false --prerelease
+          # PATCH by numeric draft ID; publish only after asset/digest checks.
+          test -n "${LAB_DRAFT_RELEASE_ID:-}"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$LAB_DRAFT_RELEASE_ID" -F draft=false -F prerelease=true > publish-by-id.json
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$LAB_TAG" > published-final.json
           python3 - <<'PY'
           import json,os
           r=json.load(open("published-final.json",encoding="utf-8"))
+          assert r["id"]==int(os.environ["LAB_DRAFT_RELEASE_ID"])
           assert r["tag_name"]==os.environ["LAB_TAG"] and r["target_commitish"]==os.environ["GITHUB_SHA"]
           assert r["draft"] is False and r["prerelease"] is True
           assert len(r["assets"])==12 and all(a["state"]=="uploaded" for a in r["assets"])
