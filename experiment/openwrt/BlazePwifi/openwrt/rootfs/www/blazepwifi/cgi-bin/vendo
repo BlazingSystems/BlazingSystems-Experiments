@@ -59,6 +59,16 @@ member_mutation_sig() {
   printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' "$secret" "$action_name" "$id" "$nonce" "$event_id" "$member_token" "$result_seconds" "$balance_seconds" "$revision" "$secret" | bp_sha256
 }
 
+# No money-related replay ACK may bypass the paid-state-uncertain
+# quarantine, even if an old receipt exists. Read-only member lookup is
+# permitted, but disputed financial results require operator reconciliation.
+case "$action" in
+  member_bank|member_restore|member_transfer)
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] ||
+      bp_fail "paid state uncertain; operator reconciliation required"
+    ;;
+esac
+
 case "$action" in
   register|ping)
     controller="$(bp_controller_json "$id")"
