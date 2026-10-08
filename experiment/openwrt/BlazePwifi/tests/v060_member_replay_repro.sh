@@ -21,21 +21,26 @@ bp_now() { printf '123456'; }
 bp_member_init
 printf 'alice\tFixture\t1\tsha256i\tsalt\thash\t4096\t100\t1\t123\tfixture\n' > "$BP_MEMBERS"
 printf '1\n' > "$BP_MEMBER_REVISION"
-# A valid prior credit, followed by 129 unrelated events, ages its ID out.
+# An acknowledged paid receipt must survive 129 unrelated audit records.
+# Regression against v0.5.x: rolling history had evicted this ID,
+# permitting a second credit after retry.
 bp_member_event_record 'original-coin' 1 alice add 10 10 softtimer:fixture 110
 i=0
 while [ "$i" -lt 129 ]; do
   bp_member_event_record "other-$i" 1 alice patch 0 0 fixture 0
   i=$((i+1))
 done
-if grep -q '^original-coin[[:space:]]' "$BP_MEMBER_EVENTS"; then
-  echo 'REPRO SETUP FAILURE: original event was not evicted' >&2; exit 2
+if ! grep -q '^original-coin[[:space:]]' "$BP_MEMBER_EVENTS"; then
+  echo 'P0 FAIL: accepted paid event ID was evicted from its receipt store' >&2; exit 1
 fi
+# Nonfinancial audit entries remain bounded, without evicting money receipts.
+nonfin="$(awk -F '\t' '$4!="add" && $4!="subtract" && $4!="set" && $4!="restore_all" && $4!="transfer" {n++} END {print n+0}' "$BP_MEMBER_EVENTS")"
+[ "$nonfin" -le 128 ] || { echo "P0 FAIL: audit-only retention not bounded" >&2; exit 1; }
 before="$(bp_member_line alice | cut -f8)"
 bp_member_balance_change alice add 10 softtimer:fixture original-coin > "$T/result"
 after="$(bp_member_line alice | cut -f8)"
 if [ "$after" != "$before" ]; then
-  echo 'P0 RED: evicted event ID credited again in synthetic fixture' >&2
+  echo 'P0 FAIL: paid event replay credited again in synthetic fixture' >&2
   exit 1
 fi
-echo 'PASS: evicted duplicate ID did not mutate account balance'
+echo 'PASS: acknowledged paid member ID retained and replay did not change banked time'
