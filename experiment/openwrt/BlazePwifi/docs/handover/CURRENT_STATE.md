@@ -1,3 +1,12 @@
+## REL-0632 / IN PROGRESS — 2026-10-09 Asia/Manila — actual alpha.2 GitHub lab prerelease of P0 fixes
+
+- **Scope:** PR #30 `blazepwifi-v0.6.0-audit-foundation`; existing real alpha.1 is frozen (tag/source/assets may NOT be overwritten). User explicitly wants real published installable release assets, but production v0.6 is blocked by P0 authenticated journal and physical + Lineage-2 signing. Allowed safe partial deliverable is distinct `v0.6.0-alpha.2` clearly **LAB ONLY** with actual same-SHA Full + Windows CI downloadable outputs, not a production upgrade.
+- **Work planned:** add `releases/0.6.0-alpha.2/RELEASE_NOTES.md` explicitly disclosing unversioned 0.5.3/OpenWrt, Android CI TEST/debug and Windows 0.4.0, no production key, unsafe v1 migration and hardware limits; update guarded workflow `publish_v060_lab_preview` to use only new `v0.6.0-alpha.2` tag, new notes, matching manifest and title; retain original predecessor release immutable. A dedicated marker commit `[v060-lab-release]` triggers a real release ONLY when exact Full candidate and exact-SHA Windows installer plus verified nine archives pass. No unconditional publish.
+- **Success evidence required:** actual Github releases API shows `tag=v0.6.0-alpha.2`, `prerelease=true`, target exact SHA, 12 expected assets including SHA256/manifest, matching source & Windows build run SUCCESS. If CI fails/asset missing, leave blocked; do not publish fake. Rollback unshipped workflow changes, never edit previous alpha tag.
+- **Safety:** no customer or signed Android keys uploaded, no installed router/network altered, `VERSION=0.5.3`, 0.6 preflight refused. **Production v0.6 remains blocked**: authenticated atomic money, v1 reversible migration, Lineage-2 signer, physical acceptance.
+- **NEXT EXACT ACTION:** create 0.6.0-alpha.2 notes and adjust gated workflow, sync handovers with source SHAs, create explicit marker commit; inspect exact Full/Windows jobs and actual tag/upload. Current prior doc checkpoint `f8122e021c11ade168123a2db31dbff0ef5e9e55`.
+
+
 ## PAY-0631 VERIFIED TARGETED / 2026-10-09 Asia/Manila — financial quarantine cannot be bypassed by member replay
 
 - **Branch/PR:** `blazepwifi-v0.6.0-audit-foundation`, draft [#30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30); source HEAD before doc checkpoint `1c5a4020ffad37fd6c508deb35a66f768775ad96`.
