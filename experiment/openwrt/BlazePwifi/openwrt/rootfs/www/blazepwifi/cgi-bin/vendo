@@ -246,6 +246,10 @@ case "$action" in
     [ "$target" = "$target_nonce" ] || bp_fail "coin target mismatch"
     [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file" "$BP_TARGET_DIR/$id.progress"; bp_fail "coin window expired"; }
     [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
+    # Never ACK even a retried receipt while any paid operation is
+    # uncertain; the operator must reconcile before vending resumes.
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] ||
+      bp_fail "paid state uncertain; operator reconciliation required"
 
     if [ "$kind" = rental ]; then
       bp_lock || bp_fail "rental accounting busy"
@@ -308,7 +312,18 @@ case "$action" in
     add=$((unit*pulses))
     newcredit=$((credit+add))
     newevents="$(bp_events_push "$events" "$event")"
-    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
+    # Legacy one-row balance+receipt rename stays contained behind the
+    # global paid-state halt. This is not a replacement for v2 fsync WAL.
+    bp_paid_begin || { bp_unlock; bp_fail "paid state uncertain or accounting busy"; }
+    if ! bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"; then
+      bp_paid_abort
+      bp_unlock
+      bp_fail "coin credit storage failed; operator reconciliation required"
+    fi
+    if ! bp_paid_commit; then
+      bp_unlock
+      bp_fail "coin credit durability failed; operator reconciliation required"
+    fi
     bp_unlock
     body="$(printf '{"ok":true,"duplicate":false,"credited_cents":%s,"credit_cents":%s,"target_nonce":"%s"}' "$add" "$newcredit" "$(bp_json_escape "$target")")"
     bp_json "$body"
