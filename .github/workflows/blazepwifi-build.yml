@@ -75,6 +75,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_state_fixture.sh
       - name: BlazePwifi v0.6 legacy prepaid receipt replay retention
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh
+      - name: BlazePwifi v0.6 receipt store full rejects payment
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh
       - name: BlazePwifi v0.6 synthetic crash-atomic member transfer
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh
       - name: BlazePwifi v0.6 synthetic transactional ledger oracle (model only)
