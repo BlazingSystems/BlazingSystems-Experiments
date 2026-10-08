@@ -1,3 +1,10 @@
+## MIG-0621 / P0 — IN PROGRESS: concurrent duplicate oracle + main CI gate (2026-10-09)
+
+- **Current evidence:** Synthetic staged Actions #37811759148, SHA `40fb33338aa5378900d86a95ff4d0b000cb48bc4`, COMPLETED SUCCESS. Log explicitly reports `MIG-0620 synthetic ledger MODEL PASS`, old replay RED, atomic transfer PASS and receipt EIO RED. This establishes only isolated model behavior; no durable OpenWrt journal, controller v2 protocol or recovery migration exists.
+- **Intent now:** extend isolated `tests/v060_ledger_model.py` with two concurrent equal transaction submissions using independent SQLite connections (prove one commit + one replay, never double balance); then register the fully passing model regression in required Full `validate` CI, without dropping expected-RED source reproduction evidence. Any failed test must be investigated, not bypassed.
+- **Safety & rollback:** isolated temporary DB only. Python test is an oracle not a runtime dependency; published assets, money source, firmware signers and real state remain untouched. Revert test/CI if it fails unexpectedly. Production 0.6 still blocked.
+- **Next exact step:** commit concurrent stress test, gate model in Full validate, update ledger/root/current, inspect exact-head staged+Full+Windows results. Do not call full v2 transaction journal implemented.
+
 ## MIG-0620 / P0 — model source committed; targeted CI pending (2026-10-09)
 
 - Test-only `tests/v060_ledger_model.py` commit `28ff5bb8532c20a9d90ee7023cae494dd634ca2a` adds synthetic temporary SQLite transactional oracle. It cannot open arbitrary device paths and never reads customer state. Staged CI workflow commit `40fb33338aa5378900d86a95ff4d0b000cb48bc4` runs this before the already proven expected-RED source replay/receipt and GREEN transfer cases. **Latest staged run #37811759148 QUEUED** when checked, status unverified. No existing member.sh source changed since single-rename transfer fix `5782937deeb1651d45204d446a9851179be9d6c3`.
