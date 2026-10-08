@@ -49,6 +49,17 @@ body[data-blaze-style="comfort"] .nav button{padding:13px}
  body[data-blaze-style="compact"] .main{padding:11px}
 }
 @media(max-width:390px){.blaze-style-select{width:105px}.top .row .badge:not(.good){display:none}}
+/* Constrain intrinsic min-content width; never clip horizontal overflow. */
+@media(max-width:850px){
+ .shell{grid-template-columns:minmax(0,1fr)}
+ .main,.grid,.card,.top,.row{min-width:0;max-width:100%}
+ .grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+ .grid>.card{min-width:0;overflow-wrap:anywhere}
+ .kv{grid-template-columns:minmax(0,170px) minmax(0,1fr)}
+ .kv>div,.mono{min-width:0;overflow-wrap:anywhere}
+ .row>.field{min-width:0}
+ body[data-blaze-style="compact"] .shell{grid-template-columns:minmax(0,1fr)}
+}
 @media(prefers-reduced-motion:reduce){body[data-blaze-style] *{transition:none!important;animation:none!important}}
 
 </style></head><body>
