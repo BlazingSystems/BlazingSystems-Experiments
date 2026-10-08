@@ -11,6 +11,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh'
 permissions:
   contents: read
 jobs:
@@ -36,6 +37,7 @@ jobs:
           set -euo pipefail
           checks=(
             'experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh|PASS: acknowledged paid member ID retained and replay did not change banked time|0'
+            'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh|PASS: paid member quota rejects credit and transfer before mutation, never deletes old receipts|0'
             'experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh|PASS: transfer outcome atomic at tested interruption boundary|0'
             'experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh|P0 RED: balance credited and success returned despite failed event receipt|1'
             'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh|P0 RED: rental lease credited and ACK succeeded despite unwritable receipt|1'
