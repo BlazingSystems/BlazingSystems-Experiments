@@ -1,3 +1,9 @@
+## CURRENT STATUS — 2026-10-09 MIG-0617 source-only checkpoint
+
+**Active:** PR #30 `blazepwifi-v0.6.0-audit-foundation`, P0 issue #31. Pre-test source head `42675aae156e8d30f5c149f6d12c2ac0eda49ac2`, Full Actions #37807641991 SUCCESS, previous Windows #37807200137 SUCCESS. Those runs PRECEDE new reproduction script and do not certify it. `CURRENT_STATE.md` recorded IN PROGRESS at `af576d282b236c90ddab32fde9574e5468d9bb72`; a synthetic-only intended-RED replay test was added in `tests/v060_member_replay_repro.sh` commit `8bce9402a0f367cfc4ac574217b6bb63131c10fa`. Execution is PENDING, not proven RED/GREEN. No runtime balances, member.sh, release assets, signer or production state changed. **DO NOT RELEASE v0.6.0.**
+
+**NEXT EXACT ACTION:** run `sh experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh` on the development checkout, confirm its fail is from evicted ID double-credit (not setup error), implement synthetic failure-injected transfer regression, then design and validate durable idempotency/atomic journal, synchronize handover with new exact SHA/CI evidence. Hardware outage acceptance and migration remain release blockers. Audit & Reconcile prompt: `@GitHub Inspect PR #30 branch, issue #31, top PROJECT_HANDOVER.md, docs/handover/{CURRENT_STATE,CHANGE_LEDGER,HANDOVER_POLICY}.md. Run MIG-0617 RED synthetic test and confirm failure mechanism before changing member.sh. Update all three records after each meaningful commit. Keep production release blocked.`
+
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
 ## LATEST VERIFIED DEVELOPMENT CODE — 2026-10-08 (MIG-0616)
