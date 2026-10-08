@@ -76,6 +76,12 @@ PR #30 stays DRAFT. Previous Full CI #37796743126 and #37796759105 were canceled
 
 NEXT: check exact-head Full CI validate and Playwright standalone browser test (mobile 360/390px, login read-only mock, appearance persistence, no external calls) and Windows CI; log failure details, fix narrowly, resync all three canonical handovers, rerun. New v0.6.0 production tag remains blocked by financial migration/recovery and real hardware/device validation.
 
+**Latest standalone mobile CI regression (P1; source fix not yet green):** Full run #37799066752, source SHA 75d88c87b844d1d3f73469ff757317847234d303, detected a real failure in v04_browser_simulation job 113386892960: Standalone Rental HTML overflow at **390px** in new standalone_fusion_browser.py:91. Existing Full admin browser test passed. This is a UI layout bug, not permission, money or QR route change.
+
+Scoped patch: Standalone HTML CSS commit 52da18e6ea1d314158edd7ffc0daaf909a9d39ef constrains grid/flex min-width and wraps long values without hiding horizontal overflow; browser diagnostics commit d616c16b4c41bc3870352e647978d0b8471d7a23 records viewport, actual document width and oversize elements if the new 360/390px assertion fails. Current state and change ledger have recorded exact source/test commits; this root update is the final checkpoint.
+
+**NEXT NOW:** inspect exact-new-HEAD `validate` (both Full/Standalone theme smoke), `v04_browser_simulation` (360/390px + QR), full firmware/Android candidate gate and Windows EXE/handover. If a layout failure persists, use geometry evidence to fix the responsible element only. Published Full v0.5.2, Standalone Rental RC9 and Windows v0.4.0 assets remain unchanged. No 0.6.0 production release while P0 financial migration/real-device backups remain unresolved.
+
 ## NEXT EXACT ACTION / safe resume
 
 1. Read `docs/handover/CURRENT_STATE.md` for the complete latest issue register. The **verified development source** is `d1e7fb4187e2d0701f4e2b5c842c8711eb09d756`: full GitHub Actions #37774312541 (**26 success, 0 failure**) and Windows #37774312533 (**2 success**) passed. **This document update creates a new documentation SHA; do not misrepresent it as the source SHA certified by those runs.**
