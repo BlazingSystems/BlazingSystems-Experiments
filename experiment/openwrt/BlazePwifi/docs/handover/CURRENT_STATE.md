@@ -1,3 +1,11 @@
+## PAY-0635 / IN PROGRESS — 2026-10-09 Asia/Manila — signed member transfer/bank receipt payload collision
+
+- **P0 accounting protocol:** audited `openwrt/rootfs/www/blazepwifi/cgi-bin/vendo` `member_bank` and `member_transfer` replay branches, plus `openwrt/rootfs/usr/lib/blazepwifi/member.sh` `bp_member_balance_change` and `bp_member_transfer`. Existing receipt lookup identifies same event ID/controller/username/type but *does not compare previously acknowledged amount*; transfer additionally fails to compare the stored destination. Re-signed reuse of event_id with a new amount/destination may wrongly ACK that new intent without changing balance, creating disputed money and incorrect client state even when `paid-state-uncertain` marker is absent.
+- **Scoped fix:** fail closed on previously retained ID where amount differs, and for transfer destination where stored receipt detail (`source_new_balance:destination:destination_new_balance`) differs; preserve exact matching replay. Enforce in both core member financial functions (admin/other callers) and Vendo signed replay fast path; do not touch existing customer data, version/signing or frozen lab alpha.2.
+- **Required test:** use real signed `cgi-bin/vendo` in `tests/v060_member_quarantine_replay.sh` synthetic temporary fixture to prove matching bank/transfer replay succeeds, changed amount or transfer target returns `ok:false`, no money/receipt mutation, existing paid-state quarantine still works. Add focused P0+Full CI.
+- **Safety:** source PR #30 only, no production rollout, no 0.6 upgrade guard removal. Full source v1 migration, atomic ledger and physical tests remain blocked. Status `IN_PROGRESS`.
+- **NEXT EXACT ACTION:** patch core and Vendo exact replay comparisons, extend synthetic regression, run test and record actual Actions SHA/conclusion in all handovers.
+
 ## REL-0634 / VERIFIED SOURCE-POLICY CI — 2026-10-09 Asia/Manila
 
 - **Production state:** `PRODUCTION_v0.6.0_RELEASED=0`. Genuine public **lab only** [v0.6.0-alpha.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.6.0-alpha.2), release ID `407234610`, original exact binary source `38937a46f007e8a379a2bb8ab6de68543d87795e`, 12 verified public assets, remains unchanged. `v0.6.0-alpha.1` and official shipped `v0.5.2` unchanged; no new version tag created in REL-0634.
