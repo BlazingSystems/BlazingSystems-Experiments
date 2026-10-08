@@ -4,9 +4,10 @@ bp_init_dirs
 
 action="$(bp_param action)"
 ipaddr="${REMOTE_ADDR:-0.0.0.0}"
-mac="$(bp_mac_for_ip "$ipaddr")"
-[ -n "$mac" ] || mac="$(bp_param mac)"
-mac="$(bp_mac_norm "$mac" 2>/dev/null || true)"
+# Public captive requests must be bound to the router-observed neighbor.
+# A browser-supplied MAC is not proof of network identity and can rebind paid
+# credit to another station if ARP resolution temporarily fails.
+mac="$(bp_mac_norm "$(bp_mac_for_ip "$ipaddr")" 2>/dev/null || true)"
 
 case "$action" in
   portal_config)
@@ -27,7 +28,7 @@ esac
 
 device="$(bp_device_norm "$(bp_param device)" 2>/dev/null || true)"
 [ -n "$device" ] || bp_fail "missing or invalid device token"
-[ -n "$mac" ] || bp_fail "client MAC not resolved"
+[ -n "$mac" ] || bp_fail "client network identity unavailable; reconnect to Wi-Fi and retry"
 
 create_account=0
 case "$action" in
