@@ -82,3 +82,16 @@ body[data-blaze-style="comfort"] .metrics .card{min-height:172px}
  body[data-blaze-style="compact"] .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(prefers-reduced-motion:reduce){body[data-blaze-style] *{transition:none!important;animation:none!important}}
+
+/* 320–540px: avoid toolbar crowding without hiding the actual logout action. */
+@media(max-width:540px){
+ .topbar .user-chip .status-pulse,.topbar .user-chip>div{display:none}
+ .topbar .user-chip{gap:6px;min-width:0}
+ .topbar .toolbar{min-width:0}
+ .topbar .crumb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:390px){
+ .blaze-style-label .field{width:90px;font-size:11px}
+ .topbar .crumb{max-width:86px}
+ .topbar #logoutBtn{font-size:11px;padding:5px 7px}
+}
