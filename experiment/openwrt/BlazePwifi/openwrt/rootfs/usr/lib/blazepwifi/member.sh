@@ -232,12 +232,24 @@ bp_member_transfer() {
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   newf=$((fbank-seconds)); newt=$((tbank+seconds))
 
-  bp_member_write "$from" "$(printf '%s' "$fl" | cut -f2)" "$(printf '%s' "$fl" | cut -f3)" \
-    "$(printf '%s' "$fl" | cut -f4)" "$(printf '%s' "$fl" | cut -f5)" "$(printf '%s' "$fl" | cut -f6)" \
-    "$(printf '%s' "$fl" | cut -f7)" "$newf" "$rev" "$now" "$source"
-  bp_member_write "$to" "$(printf '%s' "$tl" | cut -f2)" "$(printf '%s' "$tl" | cut -f3)" \
-    "$(printf '%s' "$tl" | cut -f4)" "$(printf '%s' "$tl" | cut -f5)" "$(printf '%s' "$tl" | cut -f6)" \
-    "$(printf '%s' "$tl" | cut -f7)" "$newt" "$rev" "$now" "$source"
+  # A transfer must never expose a half-debited member file. Build both
+  # modified rows in a private snapshot, then replace members.tsv in one rename.
+  # The caller holds bp_member_lock; a separate transaction journal remains
+  # necessary to make the event receipt and retry semantics crash-atomic.
+  tmp="$BP_STATE/.member-transfer.$(bp_tmp_suffix)"
+  if ! awk -F '\t' -v OFS='\t' -v f="$from" -v t="$to" \
+      -v fb="$newf" -v tb="$newt" -v r="$rev" -v ts="$now" -v src="$source" '
+      $1==f { $8=fb; $9=r; $10=ts; $11=src; fc++ }
+      $1==t { $8=tb; $9=r; $10=ts; $11=src; tc++ }
+      { print }
+      END { if (fc!=1 || tc!=1) exit 4 }
+    ' "$BP_MEMBERS" > "$tmp"; then
+    rm -f "$tmp"; return 1
+  fi
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBERS"; then
+    rm -f "$tmp"; return 1
+  fi
+  bp_durable_sync || return 1
 
   [ -n "$event_id" ] || event_id="admin:$rev:$from>$to"
   bp_member_event_record "$event_id" "$now" "$from" transfer "-$seconds" "$seconds" "$source" "$newf:$to:$newt"
