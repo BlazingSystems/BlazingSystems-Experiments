@@ -1,3 +1,10 @@
+## MIG-0626 / P0 — IN PROGRESS 2026-10-09: regression for paid receipt-store quota fail-closed
+
+- **Intent:** add a synthetic-only test for runtime `member.sh:bp_member_financial_receipt_capacity_ok` added in MIG-0625. Saturate a synthetic member-events file beyond the 4MiB headroom cap and confirm a new member deposit and transfer are rejected before any balance mutation; no real filesystem or customer records. The accepted paid receipt history must not silently evict old IDs. Purely test-level change; does NOT fix the receipt EIO / crash-atomicity issue.
+- **Files:** `tests/v060_member_receipt_quota.sh` new, `.github/workflows/blazepwifi-p0-repro.yml`, `.github/workflows/blazepwifi-build.yml` required validate; all on `blazepwifi-v0.6.0-audit-foundation`. Rollback: remove synthetic test/workflow steps; no installed change.
+- **Success evidence:** target Linux CI GREEN, rejection rc=7, balances before/after same, no mutated receipt; exact source SHA and post-doc Full/Windows green required. Bounded footnote: previously-evicted IDs cannot be restored, a full receipt file stops accepting credits, and v2 migration/flash fsync remains blocked.
+- **NEXT EXACT ACTION:** create test, CI wire, verify logs, sync root/current/ledger; advance real WAL design without bypassing v0.6 updater safety guard or production signer.
+
 ## MIG-0625 P0 — MEMBER REPLAY FIX CODE+STAGED VERIFIED / FULL CI AFTER HANDOVER PENDING
 
 ## 2026-10-09 MIG-0625 P0 — paid member receipt replay fix VERIFIED in targeted CI; other P0 gates OPEN
