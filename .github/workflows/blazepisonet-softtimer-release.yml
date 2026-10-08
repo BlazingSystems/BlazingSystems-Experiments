@@ -25,7 +25,19 @@ env:
   TAG: softtimer-v0.4.0
 
 jobs:
+  handover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify shared BlazePwifi and SoftTimer handover freshness
+        run: sh experiment/openwrt/BlazePwifi/tests/handover_gate.sh
+      - name: Verify stale and partial handovers are rejected
+        run: sh experiment/openwrt/BlazePwifi/tests/handover_gate_regression.sh
+
   build-windows:
+    needs: handover
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -202,7 +214,9 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Never mutate the frozen v0.4.0 release from later development code.
+        # A version/tag bump and explicit new candidate are mandatory first.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.VERSION != '0.4.0'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -214,9 +228,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           if (gh release view $env:TAG *> $null) {
-            gh release upload $env:TAG $setup $zip SHA256SUMS --clobber
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-            gh release create $env:TAG $setup $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.4.0.md" --target $releaseTarget
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            throw "Immutable release tag $env:TAG already exists. Refusing asset replacement; bump version and TAG with a new candidate."
           }
+          gh release create $env:TAG $setup $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.4.0.md" --target $releaseTarget
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
