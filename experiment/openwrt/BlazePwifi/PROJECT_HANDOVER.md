@@ -1,5 +1,20 @@
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
+## LATEST VERIFIED CODE + LIVE P0 WORK — 2026-10-08
+
+**Last completed exact-HEAD development validation:** commit `7fde42bbd8692158c8c52066a1f01b73a513a0f2`, Full BlazePwifi Actions [#37802942602](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37802942602) **26/26 SUCCESS** plus Windows [#37802942611](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37802942611) **2/2 SUCCESS**. CoreUI×Metis-inspired BlazeFusion Full, Standalone, and off-device EasyMode R281 preview passed. All published releases remain unchanged. This green code does **not** verify subsequent changes.
+
+**ACTIVE P0 — MIG-0616 / COMMITTED, CI PENDING:** a synthetic-only paid-state snapshot/verify/restore integrity prototype is under `tools/state-fixture.py` (commit `137e0d83dcf77eb96708e6126a35a2be3d6e3876`), with fake ledgers, tampering/permissions/link/overwrite tests `tests/v060_state_fixture.sh` (`a0517378cd023170cbf0e123546f90c4f946c88b`), required CI `.github/workflows/blazepwifi-build.yml` (`c1028a03bb22d2b7d3836db90cf9ab2e63313f86`), and strict [0.6.0 migration limitations](docs/RELEASE_0.6.0_MIGRATION.md) (`76310541675273a324c3847c0bcce894a0f22564`). The program **cannot** read real appliances (requires explicit synthetic marker) or restore over existing data; its fixture backup is **NOT ENCRYPTED and is NOT a production migration**. Existing OpenWrt 0.6.0 update preflight remains blocked. No existing business state, router settings, release or Android signer touched.
+
+**NEXT EXACT ACTION:** verify new exact-branch-head Actions `validate` step **BlazePwifi v0.6 synthetic state backup/restore integrity prototype**, plus legacy 0.5.x update/rollback, Android, browser, firmware and Windows jobs. If failure: inspect exact job logs and record failed step before fixing; re-sync root/current/ledger. After success, implement a *separate* simulated transaction journal with freeze/event cursors, replay safety and fault injection; do **not** unblock 0.6.0 or publish an APK until encrypted private backup, signer/rescue, real hardware power-cut, money invariants and sysupgrade restore tests pass. Draft [PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30) remains unmerged.
+
+### Copyable safe handoff
+
+> Resume BlazePwifi development on `BlazingSystems/BlazingSystems-Experiments`, branch `blazepwifi-v0.6.0-audit-foundation`, draft PR #30. Read the TOP of `PROJECT_HANDOVER.md`, `docs/handover/CURRENT_STATE.md`, `CHANGE_LEDGER.md`, `HANDOVER_POLICY.md`, and `docs/RELEASE_0.6.0_MIGRATION.md`. Previous EasyMode UI source 7fde42bb passed Full #37802942602 (26/26) and Windows #37802942611 (2/2). NEW synthetic-only snapshot prototype source commits 137e0d83, a0517378, c1028a03; check latest exact-SHA CI and fix documented P0 failures without bypassing 0.6 update guard. Existing published releases and permanent APK signer untouched; do not call fixture tests production recovery approval.
+
+---
+
+
 ## LATEST VERIFIED CONTINUITY CHECKPOINT — 2026-10-08
 
 Development source SHA: 74623164a808f22d0f1adbf4468b32c19c3cfb69. Draft PR #30, branch blazepwifi-v0.6.0-audit-foundation, base blazepwifi-v0.5.3-rc1.
