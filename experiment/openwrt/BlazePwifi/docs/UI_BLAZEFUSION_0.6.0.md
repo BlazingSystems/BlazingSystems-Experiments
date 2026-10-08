@@ -48,12 +48,20 @@ The archive titles say `v1.0.0` but internal project versions are **5.7.0** and 
 |---|---|---|
 | Full OpenWrt Ruijie, x86, Orange Pi | BlazeFusion CSS + selector + existing authorized CGI | **Development implementation; exact CI and browser regression pending** |
 | Lite/EasyMode (other OpenWrt devices) | Reuse subset of design tokens/card/nav CSS; omit heavy graphics, adapt to available ports and hardware controls | **Not yet applied** to their independent repos/profiles; require capability matrix and router resource tests |
-| Standalone Rental / R281 firmware | Match visual tokens on separate rental admin and Device Owner choice pages, preserve separate update installer and separate released RC9 | **Not yet applied**; never bulk-copy Full CGI or overwrite standalone release |
+| Standalone Rental / R281 firmware | Self-contained BlazeFusion themes in `profiles/standalone-rental/openwrt/rental-standalone.html`; separate rental CGI and installer unchanged | **Implemented on development source, CI pending**. Published RC9 remains frozen; Device Owner versus standard QR workflows unchanged and require separate security work |
 | PC/Orange Pi advanced console | Optional CoreUI React build generated in CI and served as immutable static assets; secure same-origin API/role adapter, CSP, bundle size budget, and safe fallback to low-resource local console | **Design candidate, not yet built/shipped**; do not deploy raw ZIP `node_modules` onto firmware |
 | BlazeRental Android APK | Translate theme colors, typography, cards and spacing into native Java resources/screens; retain Launcher3 Device Owner security, same permanent signing cert and higher-code rescue | **Visual design handoff only**; existing Android v0.5.3-dev candidate unchanged by this frontend integration |
 | Windows BlazePisonet SoftTimer | Native WinForms/WPF visual design tokens, accessible layout, COM device selectors, money/timer state unchanged | **Visual design handoff only**, protect existing EXE and signed publisher chain |
 | ESP8266/ESP32 portal / tiny AP | Very small CSS variables, no React, Alpine or Chart.js; hardware web endpoints remain coin authority | **Visual design handoff only**, optimize AP captive UX and heap use later |
 | Public WiFi vendo / phone rental captive pages | Keep child-friendly purchase/credit UI separated from operator dashboard; no admin links, token or device keys exposed | **No behavioral or UI change in this integration** |
+
+## Standalone Rental UI source rollout
+
+- **One-file/offline requirement:** the Standalone installer copies `rental-standalone.html` directly to `/rental/index.html` and provides only the separate local QR library. Therefore the development branch implements Fusion/Compact/Comfort via **inlined styles and inlined appearance-only JS**; it does not depend on Full's `/vendor/blazefusion` assets, React, Alpine or Vite.
+- **Unified choice:** the appearance selector uses the same nonsecret `blazepwifi.console.appearance.v1` key as Full when accessed on the same origin, with safe default Fusion, plus failure-tolerant private browsing handling. No client-session, QR enrollment token, device credential or money is saved in localStorage.
+- **Trust boundaries intact:** Standalone `/cgi-bin/blaze-rental-admin`, `blaze-rental-profile`, login/session/CSRF and rental event ledger remain unchanged. This is not permission to use the Full CGI on rental-only appliances. No upgrade-to-Full event, network mutation or rent extension is performed by a theme change.
+- **Evidence:** `tests/v060_standalone_fusion.sh` asserts local installation, JS syntax, authorized CGI routes and style mode existence; `simulation/standalone_fusion_browser.py` runs a real Chromium test on a **mocked HTTPS origin**, uses only read-only rental-list/controller-list responses, checks mobile 360/390px overflow, operator sign-out visibility and generated desktop/mobile screenshots. The full existing authenticated Playwright QR test stays in CI.
+- **Deployment status:** source development only. Real Standalone UI/Android provisioning, multi-device rental operations, installer and enrollment security must be tested independently before issuing a new published Standalone release. Frozen RC9 assets are unchanged.
 
 ## Security, accessibility and performance gates
 
