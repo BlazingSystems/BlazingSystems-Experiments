@@ -101,3 +101,10 @@ never call v0.6.0 released while blocked.
 - Workflow commit `8140a4e1c80d45e61d2612e9a664afea5777cb1c` adds that test to validation.
 - State: committed, awaiting a successful exact-commit CI run. No release decision has changed.
 - Next action: synchronize the change ledger and root handover, then inspect the validation, browser, and candidate-gate jobs.
+
+## NEW IN PROGRESS — WIN-GATE-0609 / P0
+
+- Verified published GitHub Release `softtimer-v0.4.0` currently contains `BlazePisonet-SoftTimer-Setup-v0.4.0.exe`, the portable ZIP and `SHA256SUMS`. The Windows workflow's `Publish GitHub Release` step currently uses `gh release upload ... --clobber` on `main`, which could overwrite frozen v0.4.0 artifacts when newer Windows code is merged without a version bump.
+- Windows-only PRs run `.github/workflows/blazepisonet-softtimer-release.yml` but do not necessarily run BlazePwifi's mandatory handover gate. This leaves a cross-platform documentation enforcement gap.
+- State: **finding confirmed, change not implemented yet**. Intended change: add an Ubuntu handover gate job required before Windows compilation, disable automatic publishing for the unchanged v0.4.0 version, and enforce immutable release tags (no `--clobber`).
+- NEXT: implement guarded Windows workflow only on draft v0.6.0 branch, checkpoint all handover files after source write, and verify exact-head CI; do not touch existing released assets.
