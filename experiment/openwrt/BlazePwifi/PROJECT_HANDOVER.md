@@ -1,6 +1,6 @@
 # BlazePwifi — CURRENT STATUS (READ FIRST)
 
-**As reconciled:** 2026-10-08 19:43+ Asia/Manila; policy gate and browser selector fix now committed, exact-head CI recheck pending. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
+**As reconciled:** 2026-10-08 19:43+ Asia/Manila; policy gate, browser selector fix and history regression now committed, exact-head CI recheck pending. **Owner mandate:** v0.6.0 cross-platform audit, security/data-integrity and native UI overhaul; continuous handover writing for **every meaningful code, test, failure, PR and release-state change**, without gaps. **The sections below the archive divider are historical context and may be stale.**
 
 ## AUTHORITATIVE LIVE LINKS
 
