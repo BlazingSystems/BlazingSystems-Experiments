@@ -2,6 +2,7 @@
 # UI-only integration: the existing BlazePwifi auth/CSRF and business API stay canonical.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+W="$ROOT/openwrt/rootfs/www/blazepwifi"
 HTML="$ROOT/openwrt/rootfs/www/blazepwifi/admin.html"
 CSS="$ROOT/openwrt/rootfs/www/blazepwifi/vendor/blazefusion/blaze-fusion.css"
 JS="$ROOT/openwrt/rootfs/www/blazepwifi/vendor/blazefusion/blaze-fusion.js"
