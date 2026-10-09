@@ -1,3 +1,9 @@
+## 2026-10-09 — V2NATIVE-0668 — in_progress
+
+- **Validated preceding SHADOW-0667:** exact source `af34604c59cc700e6322dbb265d849576db12138`. Full push #37900085850, Full PR #37900091486, Windows Setup #37900091492 all GitHub `completed/success`. Earlier cancelled intermediate runs remain historically cancelled.
+- **Planned work:** introduce host-compiled *fixture-only* native authenticated single-snapshot financial journal; tests for HMAC/private-key read, replay collision, monotonic sequence, member transfer conservation, lease extension, corruption/unsafe file refusal, fsync/rename/dirsync and unknown-outcome ACK refusal. Strict synthetic roots, no production money write or signer/firmware/publisher changes.
+- **State:** in_progress, pre-implementation; no new source CI. Rollback only new source/test/CI. **NEXT:** implement then verify exact CI, update canonical docs without overwriting past entries.
+
 ## 2026-10-09 — SHADOW-0667 — committed_untested
 
 - Code commit `febab8739960fa6ec77a5e7e50ad9f8251ff62df`: `openwrt/rootfs/usr/lib/blazepwifi/v2_shadow.sh`, explicitly rejects directory != mode 700/current user and paid record inode != mode 600/single-link/current user. Test commit `611c970b02547187e96231eb98fa1d357dc92f2e`: `tests/v060_v2_shadow_readonly.sh`, disposable hardlink, group-readable and directory-mode negative tests and original records SHA preservation.
