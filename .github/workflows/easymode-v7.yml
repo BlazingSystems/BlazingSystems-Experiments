@@ -1,0 +1,31 @@
+name: EasyMode v7 validation
+on:
+  push:
+    branches: [easymode-v7-production]
+    paths:
+      - 'experiment/openwrt/easymode-project/**'
+      - '.github/workflows/easymode-v7.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: experiment/openwrt/easymode-project
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare ucode test runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake libjson-c-dev ninja-build
+          git clone https://github.com/jow-/ucode.git /tmp/ucode
+          git -C /tmp/ucode checkout 82e19a501eb5a66ba747969c31ac86b6adf78fd7
+          cmake -S /tmp/ucode -B /tmp/ucode/build -G Ninja
+          cmake --build /tmp/ucode/build
+          sudo cmake --install /tmp/ucode/build
+          sudo ldconfig
+      - name: Execute release checks
+        run: |
+          if test -f traffic/tests/run.sh; then sh traffic/tests/run.sh; else ucode -e 'print("Build infrastructure ready\n");'; fi
