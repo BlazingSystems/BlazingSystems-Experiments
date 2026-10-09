@@ -44,6 +44,14 @@ fi
 [ -d "$state" ] && [ ! -L "$state" ] || {
   echo 'SHADOW BLOCKED: financial state directory missing/unsafe' >&2; exit 8;
 }
+# SHADOW-0667: the observer must not treat foreign, linked or broadly
+# accessible financial files as independently trustworthy migration sources.
+# Use only BusyBox-compatible stat fields. No chmod, mkdir, touch or repair.
+# Root on appliances / calling uid for marker-gated synthetic fixtures.
+source_uid="$(id -u)" || exit 8
+[ "$(stat -c '%a:%u' "$state" 2>/dev/null)" = "700:$source_uid" ] || {
+  echo 'SHADOW BLOCKED: financial state directory ownership/mode unsafe' >&2; exit 8;
+}
 [ ! -e "$state/paid-state-uncertain" ] && [ ! -L "$state/paid-state-uncertain" ] || {
   echo 'SHADOW BLOCKED: paid-state uncertainty requires operator reconciliation' >&2; exit 9;
 }
@@ -52,6 +60,11 @@ for name in accounts.tsv members.tsv rental-devices.tsv; do
   f="$state/$name"
   [ -f "$f" ] && [ -r "$f" ] && [ ! -L "$f" ] || {
     echo "SHADOW BLOCKED: missing/unsafe $name" >&2; exit 8;
+  }
+  # Regular private files must have exactly one hardlink and be owned by the
+  # executing root/operator. Identical contents do NOT establish inode trust.
+  [ "$(stat -c '%a:%h:%u' "$f" 2>/dev/null)" = "600:1:$source_uid" ] || {
+    echo "SHADOW BLOCKED: linked or broadly accessible $name" >&2; exit 8;
   }
 done
 # No PII, HMAC/private key, device identifiers or full file digest is printed.
