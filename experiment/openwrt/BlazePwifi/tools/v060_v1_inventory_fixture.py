@@ -95,6 +95,31 @@ def private_file(dirfd: int, name: str, required: bool = True) -> bytes | None:
         os.close(fd)
 
 
+def file_stamp(dirfd: int, name: str) -> tuple | None:
+    """Opaque in-process metadata only; never emit customer IDs."""
+    try:
+        st = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    return (st.st_dev, st.st_ino, st.st_mode, st.st_uid, st.st_nlink,
+            st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def directory_stamp(fd: int) -> tuple:
+    st = os.fstat(fd)
+    return (st.st_dev, st.st_ino, st.st_mode, st.st_uid,
+            st.st_mtime_ns, st.st_ctime_ns)
+
+
+def confirm_same_file(dirfd: int, name: str, stamp: tuple | None,
+                      contents: bytes | None, *, required: bool = True) -> None:
+    """Best-effort volatility detector; NOT proof of quiescence."""
+    require(file_stamp(dirfd, name) == stamp, "SOURCE_CHANGED_DURING_AUDIT")
+    require(private_file(dirfd, name, required=required) == contents,
+            "SOURCE_CHANGED_DURING_AUDIT")
+    require(file_stamp(dirfd, name) == stamp, "SOURCE_CHANGED_DURING_AUDIT")
+
+
 def lines(data: bytes) -> list[list[str]]:
     require(not (b"\x00" in data or b"\r" in data), "SOURCE_BINARY_OR_CR")
     if data and not data.endswith(b"\n"):
@@ -140,18 +165,28 @@ def audit(root: Path) -> dict:
                 rootstat.st_uid == os.geteuid() and
                 (rootstat.st_mode & 0o077) == 0,
                 "ROOT_NOT_PRIVATE")
+        start_root_stamp = directory_stamp(dirfd)
+        marker_stamp = file_stamp(dirfd, MARKER)
         require(private_file(dirfd, MARKER) == MAGIC, "FIXTURE_MARKER_INVALID")
+        require(file_stamp(dirfd, MARKER) == marker_stamp,
+                "SOURCE_CHANGED_DURING_AUDIT")
         # Never declare the source comprehensively inventoried if a future,
         # unknown or half-written paid-state sidecar was omitted entirely.
         # This is a strict disposable fixture schema, not live migration.
         allowed_entries = set((*REQUIRED, *OPTIONAL, MARKER,
                                "targets", "paid-state-uncertain"))
-        require(set(os.listdir(dirfd)) <= allowed_entries,
+        root_entries = set(os.listdir(dirfd))
+        require(root_entries <= allowed_entries,
                 "UNRECOGNIZED_SOURCE_ENTRY")
         data: dict[str, bytes] = {}
+        stamps: dict[str, tuple | None] = {}
         total_bytes = 0
         for name in (*REQUIRED, *OPTIONAL):
+            before_stamp = file_stamp(dirfd, name)
             value = private_file(dirfd, name, required=name in REQUIRED)
+            require(file_stamp(dirfd, name) == before_stamp,
+                    "SOURCE_CHANGED_DURING_AUDIT")
+            stamps[name] = before_stamp
             if value is not None:
                 total_bytes += len(value)
                 require(total_bytes <= MAX_TOTAL, "TOTAL_SIZE_UNSAFE")
