@@ -82,25 +82,40 @@ MV
   chmod 700 "$T/bin/mv"
   hash -r 2>/dev/null || true
   export FAILING_FILE="$mode"
+  stage="fault-$mode:request"
   fail="$(request)"
-  printf '%s' "$fail" | grep -q '"ok":false'
-  printf '%s' "$fail" | grep -q 'operator reconciliation required'
+  stage="fault-$mode:must-reject-success"
+  printf '%s' "$fail" | grep -q '"ok":false' || {
+    echo "ENROLL-0655 unexpected response for fault=$mode (redacted)" >&2; exit 1;
+  }
+  stage="fault-$mode:must-quarantine-operator"
+  printf '%s' "$fail" | grep -q 'operator reconciliation required' || {
+    echo "ENROLL-0655 missing reconciliation error for fault=$mode" >&2; exit 1;
+  }
   if printf '%s' "$fail" | grep -q '"device_secret"'; then
     echo "P0 private enrollment secret disclosed after $mode storage EIO" >&2
     exit 1
   fi
+  stage="fault-$mode:marker-persist"
   [ -f "$BP_PAID_UNCERTAIN" ]
+  stage="fault-$mode:enrollment-source-unchanged"
   [ "$(enroll_sha)" = "$snapshot" ]
-  if [ "$mode" = devices ]; then [ "$(count_devices)" -eq 0 ]; fi
+  if [ "$mode" = devices ]; then
+    stage="fault-$mode:device-not-created"
+    [ "$(count_devices)" -eq 0 ]
+  fi
   unset FAILING_FILE
   rm -f "$T/bin/mv"
   hash -r 2>/dev/null || true
   # Even with disk repaired, an unresolved two/three-file transaction must
   # not create a second valid identity or claim successful token consumption.
   before="$(devices_sha)"
+  stage="fault-$mode:uncertainty-refuses-retry"
   retry="$(request)"
   printf '%s' "$retry" | grep -q '"ok":false'
+  stage="fault-$mode:reconciliation-message-on-retry"
   printf '%s' "$retry" | grep -q 'operator reconciliation required'
+  stage="fault-$mode:no-extra-identity"
   [ "$(devices_sha)" = "$before" ]
   [ -f "$BP_PAID_UNCERTAIN" ]
 done
