@@ -139,7 +139,8 @@ EOF
 
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
-    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"
+    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now" ||
+      bp_fail "rental device state write failed; retry after operator review"
 
     v2="$(bp_rental_policy_v2_get "$did")" || bp_fail "policy unavailable"
     IFS="$(printf '\t')" read -r _did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
