@@ -75,6 +75,14 @@ fi
 exec /usr/bin/awk "$@"
 AWK
 chmod 700 "$T/bin/awk"
+# POSIX shells cache command paths. We already invoked /usr/bin/awk for
+# checks before installing the fault shim; flush the hash or this EIO
+# injection would never be exercised and might falsely certify an unsafe
+# successful write.
+hash -r 2>/dev/null || true
+[ "$(command -v awk)" = "$T/bin/awk" ] || {
+  echo "fault-injection awk shim not active" >&2; exit 1
+}
 export FAULT_AWK=partial
 stage=partial-awk
 assert_refused
