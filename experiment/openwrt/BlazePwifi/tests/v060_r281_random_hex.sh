@@ -5,7 +5,8 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/blaze-r281-rng-XXXXXX)"
 trap 'rm -rf "$T"' EXIT HUP INT TERM
-mkdir -p "$T/bin"
+mkdir -p "$T/bin" "$T/state" "$T/run"
+export BP_STATE="$T/state" BP_RUN="$T/run"
 LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi"
 . "$LIB/auth.sh"
 for size in 6 12 18 24 32; do
