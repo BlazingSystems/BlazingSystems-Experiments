@@ -100,15 +100,21 @@ for profile in full r281; do
     [ ! -e "$BP_PAID_UNCERTAIN" ]
     grep -q "auth_macs" "$BP_NET_LOG"
 
-    stage="$profile:already-claimed-MAC-cannot-migrate-again"
+    stage="$profile:claimed:prepare"
     printf '%s\t150\n' "$MAC" > "$BP_LEGACY_CREDITS"
     before="$(sha256sum "$BP_LEGACY_CREDITS" | cut -d' ' -f1)"
     : > "$BP_NET_LOG"
+    stage="$profile:claimed:reject-double-identity"
     assert_refused "$D2"
+    stage="$profile:claimed:keep-legacy-evidence"
     [ "$(sha256sum "$BP_LEGACY_CREDITS" | cut -d' ' -f1)" = "$before" ]
+    stage="$profile:claimed:never-mint-new-credit"
     [ -z "$(account_credit "$D2")" ]
+    stage="$profile:claimed:keep-first-paid-account"
     [ "$(account_credit "$D1")" = 200 ]
+    stage="$profile:claimed:no-uncertain-financial-operation"
     [ ! -e "$BP_PAID_UNCERTAIN" ]
+    stage="$profile:claimed:no-network-authorization"
     [ ! -s "$BP_NET_LOG" ]
 
     stage="$profile:ambiguous-legacy-record"
