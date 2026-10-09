@@ -288,20 +288,49 @@ def audit(root: Path) -> dict:
             require(stat.S_ISDIR(st.st_mode) and st.st_uid == os.geteuid() and
                     (st.st_mode & 0o077) == 0, "TARGETS_DIR_NOT_PRIVATE")
             account_ids = {row[0] for row in accounts}
+            start_targets_stamp = directory_stamp(targetsfd)
             names = os.listdir(targetsfd)
+            target_snapshots: dict[str, tuple[tuple | None, bytes]] = {}
             targets = 0
             for name in names:
                 require(re.fullmatch(r"[A-Za-z0-9_.-]{1,96}\.tsv", name) is not None,
                         "TARGET_UNRECOGNIZED_ENTRY")
+                before_stamp = file_stamp(targetsfd, name)
                 d = private_file(targetsfd, name)
+                require(file_stamp(targetsfd, name) == before_stamp,
+                        "TARGET_CHANGED_DURING_AUDIT")
+                target_snapshots[name] = (before_stamp, d)
                 rows = lines(d)
                 require(len(rows) == 1 and len(rows[0]) == 6,
                         "TARGET_SCHEMA")
                 require(rows[0][0] in account_ids, "TARGET_ACCOUNT_ORPHAN")
                 number(rows[0][3])
                 targets += 1
+            require(len(set(names)) == len(names) and
+                    set(os.listdir(targetsfd)) == set(names) and
+                    directory_stamp(targetsfd) == start_targets_stamp,
+                    "TARGET_CHANGED_DURING_AUDIT")
+            for name, (stamp, contents) in target_snapshots.items():
+                require(file_stamp(targetsfd, name) == stamp,
+                        "TARGET_CHANGED_DURING_AUDIT")
+                require(private_file(targetsfd, name) == contents and
+                        file_stamp(targetsfd, name) == stamp,
+                        "TARGET_CHANGED_DURING_AUDIT")
         finally:
             os.close(targetsfd)
+
+        # Best-effort rereads detect common concurrent writer races.
+        # Even if this succeeds, it CANNOT prove a quiesced point-in-time state.
+        require(set(os.listdir(dirfd)) == root_entries and
+                directory_stamp(dirfd) == start_root_stamp,
+                "SOURCE_CHANGED_DURING_AUDIT")
+        confirm_same_file(dirfd, MARKER, marker_stamp, MAGIC)
+        for name in (*REQUIRED, *OPTIONAL):
+            confirm_same_file(dirfd, name, stamps[name], data.get(name),
+                              required=name in REQUIRED)
+        require(set(os.listdir(dirfd)) == root_entries and
+                directory_stamp(dirfd) == start_root_stamp,
+                "SOURCE_CHANGED_DURING_AUDIT")
 
         return {
             "status": "SCHEMA_READABLE_UNQUIESCED",
