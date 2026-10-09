@@ -114,7 +114,12 @@ MV
   retry="$(request)"
   printf '%s' "$retry" | grep -q '"ok":false'
   stage="fault-$mode:reconciliation-message-on-retry"
-  printf '%s' "$retry" | grep -q 'operator reconciliation required'
+  printf '%s' "$retry" | grep -q 'operator reconciliation required' || {
+    # Only the JSON error is printed; never log generated device secrets.
+    error_text="$(printf '%s' "$retry" | sed -n 's/.*"error":"\([^"]*\)".*/\1/p')"
+    echo "ENROLL-0655 unexpected $mode retry rejection error: $error_text" >&2
+    exit 1
+  }
   stage="fault-$mode:no-extra-identity"
   [ "$(devices_sha)" = "$before" ]
   [ -f "$BP_PAID_UNCERTAIN" ]
