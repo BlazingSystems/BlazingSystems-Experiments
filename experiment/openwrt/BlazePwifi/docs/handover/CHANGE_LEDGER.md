@@ -1,3 +1,10 @@
+## 2026-10-09 — V2TARGET-0670 — committed_untested (SDK build)
+
+- Created SDK-only OpenWrt package `openwrt/lab-native/Makefile` `8897a43fd77bcd376e85afec13244ec78d248175`; SDK checksum-verified cross builder `tools/v060_cross_compile_native_lab.sh` `95445f92617a7267a2bbf38659012fb9302ae381`; three-target Actions matrix `.github/workflows/blazepwifi-v060-sdk-lab.yml` `1c832d9a40c8d5dd26af5bd61af564bc6e7f8996`; rootfs/payment avoidance regression `tests/v060_sdk_lab_guard.sh` `70bc7691b28668eef87a81d6e73f2161c909224c`; full-platform static gate `7fd9b7ed1f6e98c4a9ea393d9f3fb7c2696e6321`.
+- Initial [SDK Actions #37904896780](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37904896780) all three jobs advanced to SDK cross compile step and still **IN PROGRESS** on last check. Do not call any target passed. Intermediate [Windows #37904850294](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37904850294) failed before these source changes had their mandatory handover checkpoint; preserve failure. Other superseded intermediate runs may cancel. Final fresh CI required.
+- Package `DEFAULT=n` and compile-time `BLAZE_FIXTURE_ONLY`, requires official verified SDK, machine-matched ELF and actual SDK lab `.apk`, stores max three-day Actions artifacts. This is opt-in compile evidence only, not firmware installation/production signing/payment authority. No user/customer files edited.
+- **NEXT:** actual job logs then fix if any, record new SHA and conclusion. Keep `PRODUCTION_v0.6.0_RELEASED=0`, frozen previous alpha releases.
+
 ## 2026-10-09 — V2TARGET-0670 — in_progress
 
 - Baseline `62dbe9fa5319ba386521dd0e41d71e6eda447bba`: GitHub Full push #37902464250 SUCCESS, Full PR #37902469005 SUCCESS, Windows #37902468986 SUCCESS, native focused #37902469023 SUCCESS.
