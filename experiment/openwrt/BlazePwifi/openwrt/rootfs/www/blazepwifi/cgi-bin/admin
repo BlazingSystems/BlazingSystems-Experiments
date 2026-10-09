@@ -518,7 +518,15 @@ EOF
     [ "$seconds" -le 2592000 ] || bp_fail "lease duration too large"
     line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown rental device"
     secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
-    lease=$((now+seconds)); bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last"
+    # Operator lease changes are financial authority, not a cosmetic edit.
+    # Refuse ACK and retain paid-state quarantine after any ambiguous write.
+    bp_paid_begin || bp_fail "paid state uncertain; operator reconciliation required"
+    lease=$((now+seconds))
+    if ! bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last"; then
+      bp_paid_abort
+      bp_fail "rental lease storage failed; operator reconciliation required"
+    fi
+    bp_paid_commit || bp_fail "rental lease sync uncertain; operator reconciliation required"
     bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
