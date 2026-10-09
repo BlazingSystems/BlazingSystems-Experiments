@@ -34,6 +34,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_legacy_bind_zero_loss.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental'
@@ -98,7 +99,11 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh
       - name: Preserve R281 active signed coin-start nonce and refuse failed target writes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh
-      - name: Verify R281 secure device keys have exact entropy-backed length or fail closed
+      - name: Validate full and standalone auth shell syntax before signed payment tests
+        run: |
+          sh -n experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh
+          sh -n experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh
+      - name: Verify both R281 and full OpenWrt secure tokens fail closed
         run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
       - name: Refuse false-success R281 signed one-time Android enrollment and token reuse
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
