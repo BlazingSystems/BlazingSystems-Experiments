@@ -1,3 +1,10 @@
+## 2026-10-09 — V2TARGET-0670 — failed SDK dependency/sparse checkout, repair untested
+
+- **GitHub SDK actual failure chain**: #37904896780 all targets OpenWrt required umask 022 (not 077), resolved source `32fca404bd19f7721cd18d3e406adf691ad27f74`. #37905183268 all targets C compiler `openssl/crypto.h: No such file or directory` because official SDK had no preinstalled target libopenssl headers. Source `efde785904cfaeeace00fcc1126abf35a208e95b` clones matching v25.12.5 official source by verified signed tag SHA/commit, cross-builds upstream OpenSSL; package `399e3164a830728b43427ea5aca39a867fb71863` adds target-native staging include/link paths. #37905580594 Ruijie SDK `matching OpenSSL build source missing` from wrong non-cone Git sparse paths; fixed `ffebdce13cdc6d54a2e4d43931c30b31b1ef073d` using cone sparse checkout. Outcome of latest cross-target SDK `ffebdce` not yet verified.
+- **Handover gate failure:** Full #37905580597 validate failed mandatory handover freshness before this documentation checkpoint. This is a recorded failure, not ignored; newer exact-source Full validation required. Prior native HMAC/journal gates green at old SHA are historical evidence.
+- **Security:** no forcing SDK prerequisites, no host libcrypto fallback, no public production asset, no change to real controller/account/member/rental financial code. SDK build package is still `DEFAULT=n`, fixture marker mandatory and has no path in existing firmware builder; original alpha.4 frozen.
+- **State:** `committed_untested` latest source; NEXT verify current SDK three targets, Full/Windows and restart only if test source changes; no prod v0.6.0 release.
+
 ## 2026-10-09 — V2TARGET-0670 — SDK failed_prereq → fixed_untested
 
 - Actual [SDK Actions #37904896780](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37904896780) concluded FAILURE for all 3 target jobs. Ruijie & x86 logs expose upstream OpenWrt prerequisite: `proper-umask failed` / required 022. Original builder correctly verified/extracted SDK but ran `make` with staging umask 077. No custom C build is claimed.
