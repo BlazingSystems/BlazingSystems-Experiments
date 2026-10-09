@@ -123,6 +123,12 @@ external immutable custody, signed controller telemetry, operator review,
 real per-device hardware identifiers, reproducible native build hashes, and
 owner acceptance remain separate; this tool does not gather or upload data.
 
+## PEVID-0680 — independent physical-event chronology and capture anti-copy rule
+
+A claim of 150 distinct hardware interruptions must not reuse one timestamp for every observation. The LAB-only structural checker now rejects impossible calendar dates and duplicate UTC-second `power_event_time_utc` claims across the trial manifest, and rejects identical SHA-256 capture contents copied under different filenames, even when the modified manifest supplies the matching digest. The fixture regression creates unique mock event timestamps, injects repeated/impossible dates, and copies one log to another with a recomputed digest to prove refusal.
+
+This is a **quality gate for claimed evidence**, not an authenticated power controller, clock attestation, verified event sequence, or independent hardware observation. When two trials genuinely occur within the same second, the operator must obtain independent higher-resolution timing/provenance and request an explicitly reviewed schema revision, **not** alter a timestamp to trick the checker. The existing `physical_powercut_verified=false` and production NO-GO policy remain mandatory even when the complete structural gate passes.
+
 ## Release NO-GO checklist
 
 **PASS requires actual evidence, not self-assertion.** Any incomplete/failed case leaves `PRODUCTION_v0.6.0_RELEASED=0` and `CUSTOMER_INSTALL_AUTHORIZED=0`.
