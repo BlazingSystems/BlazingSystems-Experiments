@@ -25,3 +25,10 @@ Workflow at actual repo root .github/workflows/blaze-gen2-v100-release.yml; Wind
 5. Update this handover after every substantial milestone, including commit SHA, Actions run ID, test outcome, defects, release asset names and observed status.
 6. Do not touch unrelated projects/workflows. Never redistribute proprietary apps or games.
 
+
+## QA milestone 1 — 2026-10-10 (Asia/Manila)
+- Commit 6ed34a103789da50bcdfb758305c4391a1614303 created native source and workflow.
+- GitHub Actions run 37995390932 (windows-2025) **FAILED in Studio compilation** due to missing System.IO import in StudioWindow.cs (File, Path, InvalidDataException unresolved).
+- PortableLauncher self-contained compilation was successful within this run; standalone Studio, integration tests and release were not reached.
+- Corrective commit under preparation: add System.IO, make shared analysis target Windows, verify copy digest from destination bytes; rerun required.
+- No pre-release has been claimed.

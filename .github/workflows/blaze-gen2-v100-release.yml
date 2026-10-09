@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'expiremental/Blaze-Gen2-Portable-Studio/**'
+      - '!expiremental/Blaze-Gen2-Portable-Studio/PROJECT_HANDOVER.md'
       - '.github/workflows/blaze-gen2-v100-release.yml'
   workflow_dispatch:
 

@@ -29,17 +29,21 @@ public static class PackageBuilder {
             foreach(var f in files) {
                 ct.ThrowIfCancellationRequested();
                 var target=Paths.Inside(app,f.relative);Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                byte[] expectedHash;
                 using(var input=new FileStream(f.path,FileMode.Open,FileAccess.Read,FileShare.Read,81920,true))
                 using(var output=new FileStream(target,FileMode.CreateNew,FileAccess.Write,FileShare.None,81920,true)) {
                     using var srcHash=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-                    using var dstHash=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                     var buffer=new byte[131072];int n;
                     while((n=await input.ReadAsync(buffer,ct))>0) {
                         ct.ThrowIfCancellationRequested();srcHash.AppendData(buffer,0,n);
-                        await output.WriteAsync(buffer.AsMemory(0,n),ct);dstHash.AppendData(buffer,0,n);copied+=n;progress?.Report((int)Math.Min(98,copied*98/total));
+                        await output.WriteAsync(buffer.AsMemory(0,n),ct);copied+=n;progress?.Report((int)Math.Min(98,copied*98/total));
                     }
                     await output.FlushAsync(ct);
-                    if(!srcHash.GetHashAndReset().SequenceEqual(dstHash.GetHashAndReset()))throw new IOException("Copy integrity check failed: "+f.relative);
+                    expectedHash=srcHash.GetHashAndReset();
+                }
+                using(var diskFile=new FileStream(target,FileMode.Open,FileAccess.Read,FileShare.Read,81920,true)) {
+                    var actualHash=await SHA256.HashDataAsync(diskFile,ct);
+                    if(!expectedHash.SequenceEqual(actualHash))throw new IOException("On-disk SHA256 copy verification failed: "+f.relative);
                 }
             }
             foreach(var dir in new[]{"Data/Roaming","Data/Local","Data/Config","Data/Saves","Runtime","Cache","Logs","Backups"})
