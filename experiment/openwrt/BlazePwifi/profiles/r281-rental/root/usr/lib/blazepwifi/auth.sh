@@ -259,15 +259,19 @@ bp_auth_cookie_token() {
 
 bp_auth_session_lookup() {
 	token="$1"; ip="$2"; now="$(bp_auth_now)"; idle="$(bp_auth_cfg auth_idle_seconds 900)"; bind="$(bp_auth_cfg auth_bind_ip 1)"
-	line="$(awk -F '\t' -v t="$token" '$1==t {print; exit}' "$BP_ADMIN_SESSIONS")"
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	line="$(awk -F '\t' -v t="$token" '$1==t {print; exit}' "$BP_ADMIN_SESSIONS")" || return 8
 	[ -n "$line" ] || return 1
 	last="$(printf '%s' "$line" | cut -f6)"; absolute="$(printf '%s' "$line" | cut -f7)"; sip="$(printf '%s' "$line" | cut -f8)"
 	[ "$absolute" -gt "$now" ] 2>/dev/null || return 1
 	[ $((now-last)) -le "$idle" ] 2>/dev/null || return 1
 	[ "$bind" != 1 ] || [ "$sip" = "$ip" ] || return 1
 	tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v t="$token" -v n="$now" '$1==t {$6=n} {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
+	if ! awk -F '\t' -v OFS='\t' -v t="$token" -v n="$now" '$1==t {$6=n} {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
 	printf '%s\n' "$line"
 }
 
@@ -294,16 +298,26 @@ bp_auth_csrf_ok() {
 
 bp_auth_invalidate_user_sessions() {
 	user="$1"; tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v u="$user" '$2!=u {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	if ! awk -F '\t' -v u="$user" '$2!=u {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	return 0
 }
 
 bp_auth_logout() {
 	token="$1"; user="$2"; ip="$3"
 	tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v t="$token" '$1!=t {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
-	bp_auth_audit logout "$user" "$ip" ""
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	if ! awk -F '\t' -v t="$token" '$1!=t {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_auth_audit logout "$user" "$ip" "" || return 8
+	return 0
 }
 
 case "${1:-}" in
