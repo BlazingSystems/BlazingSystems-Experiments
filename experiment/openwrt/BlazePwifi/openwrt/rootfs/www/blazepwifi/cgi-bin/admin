@@ -498,7 +498,15 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"
-    bp_rental_device_revoke "$did" || bp_fail "unknown rental device"
+    rc=0
+    bp_rental_device_revoke "$did" || rc=$?
+    case "$rc" in
+      0) ;;
+      1) bp_fail "unknown rental device" ;;
+      6) bp_fail "rental has active paid time; settle or transfer it before revoking" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental revocation storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_revoke "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
     bp_json '{"ok":true}'
     ;;
