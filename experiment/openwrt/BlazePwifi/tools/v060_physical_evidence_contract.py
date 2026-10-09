@@ -16,6 +16,7 @@ import re
 import stat
 import sys
 import argparse
+from datetime import datetime, timezone
 
 ROOT_PREFIX = "blaze-v2-evidence-"
 MARKER = ".blaze-physical-evidence-fixture-only"
@@ -100,7 +101,7 @@ def nonneg(x: object) -> bool:
     return type(x) is int and 0 <= x <= 2**63 - 1
 
 
-def capture(root: Path, rel: object, digest: object, used: set[str]) -> None:
+def capture(root: Path, rel: object, digest: object, used: set[str], digests: set[str]) -> None:
     ensure(isinstance(rel, str) and re.fullmatch(r"captures/[0-9a-f]{40}\.log", rel) is not None,
            "CAPTURE_PATH_UNSAFE")
     ensure(rel not in used, "CAPTURE_REUSED")
@@ -109,6 +110,8 @@ def capture(root: Path, rel: object, digest: object, used: set[str]) -> None:
     data = private_bytes(root / rel, MAX_CAPTURE)
     ensure(len(data) >= 32 and hashlib.sha256(data).hexdigest() == digest,
            "CAPTURE_DIGEST_MISMATCH")
+    ensure(digest not in digests, "CAPTURE_CONTENT_REUSED")
+    digests.add(digest)
 
 
 def review(rootname: str) -> dict:
@@ -132,6 +135,8 @@ def review(rootname: str) -> dict:
            type(soaks) is list and len(soaks) == 3, "MINIMUM_COVERAGE_MISSING")
     coverage: set[tuple[str, str, int]] = set()
     used: set[str] = set()
+    used_digests: set[str] = set()
+    seen_power_times: set[str] = set()
     events: set[str] = set()
     arch_identity: dict[str, tuple[str, str, str, str]] = {}
     for t in trials:
@@ -166,11 +171,19 @@ def review(rootname: str) -> dict:
         ensure(type(ref) is str and OPAQUE.fullmatch(ref) is not None and
                ref not in events, "EVENT_REF_UNSAFE_OR_DUPLICATE")
         events.add(ref)
-        ensure(type(t["power_event_time_utc"]) is str and
-               TIME.fullmatch(t["power_event_time_utc"]) is not None,
+        instant = t["power_event_time_utc"]
+        ensure(type(instant) is str and TIME.fullmatch(instant) is not None,
                "POWER_EVENT_TIME_INVALID")
-        capture(root, t["power_log"], t["power_log_sha256"], used)
-        capture(root, t["recovery_log"], t["recovery_log_sha256"], used)
+        try:
+            parsed = datetime.strptime(instant, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            deny("POWER_EVENT_CALENDAR_INVALID")
+        # This is a uniqueness guard on *claimed* events, not an attestation
+        # that any powered-off trial actually happened.
+        ensure(parsed not in seen_power_times, "POWER_EVENT_TIME_REUSED")
+        seen_power_times.add(parsed)
+        capture(root, t["power_log"], t["power_log_sha256"], used, used_digests)
+        capture(root, t["recovery_log"], t["recovery_log_sha256"], used, used_digests)
     seen_arch: set[str] = set()
     for soak in soaks:
         ensure(type(soak) is dict and set(soak) == SOAK_FIELDS,
@@ -187,7 +200,7 @@ def review(rootname: str) -> dict:
                soak["lost_ack_count"] == 0 and
                soak["claimed_outcome"] == "pass", "SOAK_EVIDENCE_INSUFFICIENT")
         seen_arch.add(a)
-        capture(root, soak["capture_log"], soak["capture_log_sha256"], used)
+        capture(root, soak["capture_log"], soak["capture_log_sha256"], used, used_digests)
     ensure(set(arch_identity) == set(ARCHES) and seen_arch == set(ARCHES) and
            len(coverage) == 150, "COVERAGE_MISSING")
     ensure({"captures/" + name for name in os.listdir(root / "captures")} == used,
