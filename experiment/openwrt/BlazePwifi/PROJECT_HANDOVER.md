@@ -1,3 +1,10 @@
+## V2NATIVE-0669 / STALE RECEIPT & LOCK STRESS COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
+
+- **Previous native code fix passed real CI:** `338cc995a314d579bff1f6027df54242be64ac3c` [native push #37901902866](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901902866) **SUCCESS** and [native PR #37901909728](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901909728) **SUCCESS**, both compile with `-Werror` and execute the original synthetic signed durability/adversarial suite; [docs-head focused PR #37901983190](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901983190) **SUCCESS** on `6c84a36828b3a61236b18eb7dd1afbf6b07cf167`.
+- **NEW TEST ONLY:** `225a41b997a8b171ec3f2fefd435acdb77b4e2ba` extends synthetic regression with 11 authenticated sequential debits (controller floor 15, only eight latest receipts remain), stale evicted replay rejection, and simultaneous writer lock held by another process. **COMMITTED_UNTESTED** until new exact run returns.
+- **Not production:** C executable remains under `tools/` only with `BLAZE_FIXTURE_ONLY`, never packaged in rootfs; `v2_shadow.sh` UCI OFF; no customer credit migration, physical flash durability, original Lineage-2 Android signing or 30-device cash soak verified. Public alpha.4 immutable and LAB ONLY. `PRODUCTION_v0.6.0_RELEASED=0`.
+- **NEXT EXACT ACTION:** get focused native and full+Windows CI results on checkpoint; fix any regression with evidence; then begin OFF-by-default target SDK compilation without exposing any real paid write API.
+
 ## V2NATIVE-0668 / ACTUAL COMPILE FAILURE FIXED, RETEST REQUIRED — 2026-10-09 Asia/Manila
 
 - **Observed failure:** [native gate run #37901810966](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901810966) **COMPLETED FAILURE** at the C compile step, not a claimed passing build. GitHub job log line 227 reports `newline` undeclared inside `getkey`. The earlier text rename changed a local `nl` reference in the registry parser.
