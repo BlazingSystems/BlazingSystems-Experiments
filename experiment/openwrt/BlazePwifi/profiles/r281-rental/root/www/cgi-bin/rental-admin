@@ -84,7 +84,14 @@ case "$action" in
     [ -n "$ttl" ] || ttl=600
     case "$ttl" in ''|*[!0-9]*) bp_fail "invalid enrollment lifetime";; esac
     [ "$ttl" -ge 60 ] 2>/dev/null && [ "$ttl" -le 3600 ] 2>/dev/null || bp_fail "enrollment lifetime must be 60-3600 seconds"
-    token="$(bp_rental_enroll_create "${label:-Rental phone}" "$ttl")"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "${label:-Rental phone}" "$ttl")" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     bp_auth_audit rental_enroll_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
     bp_json "$(printf '{"ok":true,"enrollment_token":"%s","expires_seconds":%s}' "$(bp_json_escape "$token")" "$ttl")"
     ;;
