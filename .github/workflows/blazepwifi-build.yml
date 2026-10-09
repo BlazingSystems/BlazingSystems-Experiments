@@ -117,6 +117,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_rental_lease_set.sh
       - name: Prevent signed Android status from rewriting authoritative paid rental lease
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_status_heartbeat.sh
+      - name: Protect paid rental time in standalone R281 signed heartbeats
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_heartbeat.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Prevent partial member ledger replacement and false password/admin ACK
