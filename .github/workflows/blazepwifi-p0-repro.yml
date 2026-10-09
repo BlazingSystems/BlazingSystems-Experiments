@@ -31,6 +31,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
@@ -101,6 +102,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
       - name: Refuse false-success R281 signed one-time Android enrollment and token reuse
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
+      - name: Refuse full and R281 one-time QR issued before registry durability
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh
       - name: Refuse R281 hotspot cash false credit and active receipt rollover
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
       - name: Protect full and R281 legacy MAC paid credit through account bind and cleanup
