@@ -1,3 +1,9 @@
+## 2026-10-09 — V2NATIVE-0668 — failed_compile → repaired_untested
+
+- **Failed:** real [native CI #37901810966](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901810966) (and first build #37901712211/#37901715502) compile stage; log `v060_journal_authority_native.c:227:11: error: 'newline' undeclared`. Validates that prior new source was NOT green. Failure caused by a broad variable rename that altered key parser iteration instead of only ledger parser; not a payment runtime result.
+- **Fix:** `338cc995a314d579bff1f6027df54242be64ac3c` replaces `p=newline+1` with local `p=nl+1` inside `getkey`. No other code changed; no rootfs, customer ledger, Android signing or GitHub release touched.
+- **State:** repaired_untested. **NEXT:** recheck focused compile+fault run by commit, fix any remaining defect before Full/Windows validation. Keep original failed run and source provenance. `PRODUCTION_v0.6.0_RELEASED=0`.
+
 ## 2026-10-09 — V2NATIVE-0668 — committed_untested follow-up
 
 - **Static code-review correction** `9a56ad2516c76d8b270958a3c26bffe7be66f2da`: `uint` C function collides with typedef on GNU systems. Renamed to `parse_uint` before compiler evidence; this is a source correction, not a green test claim.
