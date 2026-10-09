@@ -129,6 +129,24 @@ A claim of 150 distinct hardware interruptions must not reuse one timestamp for 
 
 This is a **quality gate for claimed evidence**, not an authenticated power controller, clock attestation, verified event sequence, or independent hardware observation. When two trials genuinely occur within the same second, the operator must obtain independent higher-resolution timing/provenance and request an explicitly reviewed schema revision, **not** alter a timestamp to trick the checker. The existing `physical_powercut_verified=false` and production NO-GO policy remain mandatory even when the complete structural gate passes.
 
+## PEVID-0682 — changes during a structural review (not a snapshot)
+
+A structural evidence bundle may be modified during a long review even when
+its initial capture checks all pass. The read-only checker now performs a
+second pass over every referenced capture's private metadata and SHA-256,
+rechecks the initial bytes/identity of the private manifest and fixture
+marker, and rechecks the root/captures directory identity and listing.
+
+`tests/v060_physical_evidence_contract.py` injects four deterministic changes
+**after** the final claimed capture is inspected: modifying an early capture,
+replacing it with the same bytes, editing the manifest and adding a new
+capture. Each must refuse `STRUCTURE_READY_FOR_INDEPENDENT_REVIEW` with a
+redacted `BLOCKED` result. This is entirely **MOCKED CI**, not a real
+hardware interruption. Repeat reads merely detect some concurrent changes;
+they are **not** an atomic multi-file snapshot and cannot authenticate
+operator captures, prove power removal, override source-owned quiescence,
+or authorize any financial migration or customer install.
+
 ## Release NO-GO checklist
 
 **PASS requires actual evidence, not self-assertion.** Any incomplete/failed case leaves `PRODUCTION_v0.6.0_RELEASED=0` and `CUSTOMER_INSTALL_AUTHORIZED=0`.
