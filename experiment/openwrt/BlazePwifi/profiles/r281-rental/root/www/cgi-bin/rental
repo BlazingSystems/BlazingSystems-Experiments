@@ -42,7 +42,16 @@ case "$action" in
     [ "$sig" = "$expected" ] || bp_fail "authentication failed"
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
-    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"
+    # Never rewrite authoritative paid lease with a snapshot from before
+    # enrollment/inventory work: a concurrent coin credit may have landed.
+    # Last-seen is ephemeral, not financial data.
+    live="$(bp_rental_device_line "$did")"
+    [ -n "$live" ] || bp_fail "rental identity missing after authentication"
+    live_secret="$(printf '%s' "$live" | cut -f2)"
+    [ "$live_secret" = "$secret" ] || bp_fail "rental identity changed; re-enroll securely"
+    lease="$(printf '%s' "$live" | cut -f3)"
+    case "$lease" in ''|*[!0-9]*) bp_fail "invalid paid rental lease; operator reconciliation required";; esac
+    bp_rental_seen_update "$did" "$now" || bp_fail "rental presence update failed; retry status"
     policy="$(bp_rental_policy_line "$did")"
     allowed="$(printf '%s' "$policy" | cut -f2)"
     salt="$(printf '%s' "$policy" | cut -f3)"
