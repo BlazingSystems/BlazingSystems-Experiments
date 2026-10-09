@@ -1,3 +1,9 @@
+## 2026-10-09 — V2TARGET-0670 — in_progress
+
+- Baseline `62dbe9fa5319ba386521dd0e41d71e6eda447bba`: GitHub Full push #37902464250 SUCCESS, Full PR #37902469005 SUCCESS, Windows #37902468986 SUCCESS, native focused #37902469023 SUCCESS.
+- Opened **LAB-ONLY SDK cross compilation** of marker-gated native synthetic journal for OpenWrt 25.12.5 ramips/mt7621, x86/64, sunxi/cortexa53. Source stays unchanged at first; package/CI must not add executable to existing production images or allow nonfixture roots. Toolchain SHA source is upstream official sha256sums; no unchecked download.
+- Status pre-code `in_progress`. **Next:** package and CI, capture objective build/ELF checks; report blocker if OpenWrt SDK or libopenssl missing. No release. Rollback new lab-only tooling only.
+
 ## 2026-10-09 — V2NATIVE-0669 — focused_validated, broad_matrix_pending
 
 - **Actual compiled test evidence:** `225a41b997a8b171ec3f2fefd435acdb77b4e2ba`, focused native push #37902207844 SUCCESS, PR #37902213670 SUCCESS. The same source at doc-head `aebf8cbce7b6031087394032ab093715f5f1d263` focused PR #37902292666 SUCCESS. 11 signed debits and bounded 8-receipt replay window pass; expired authentic seq1/5 refused; locked concurrent write refused; SHA snapshot/tampering/faults remain asserted.
