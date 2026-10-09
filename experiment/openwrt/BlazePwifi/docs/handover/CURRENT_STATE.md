@@ -1,3 +1,13 @@
+## MULTICTL-0673 / TEST COMMITTED, PHYSICAL ACCEPTANCE RUNBOOK WRITTEN — 2026-10-09 Asia/Manila
+
+- **Previous exact documented green baseline:** `b787d5f45529997ec390f2da9ecbd88f5c47b8ce`, Full #37914697234, Windows #37914697308, native #37914697280 and SDK #37914697227 ALL COMPLETED SUCCESS. These prior runs do not test MULTICTL-0673.
+- **Test-source commit:** `2ad44a61e978b86be8b19c0f98a34e9517684c0b` changes ONLY `tests/v060_native_v2_authority.sh`: independent controller 2 secret/sequence, cross-controller key forgery refusal, shared-member amount conservation, retained original replay outcome, signed collision and stale sequence rejection. Code of native fixture and all shipping/runtime payment authorities untouched. **COMMITTED_UNTESTED** until new exact-source CI.
+- **Protocol commit:** `fca3d18f85e786bbfffc477ff1443cb523a7521d` creates `docs/V060_PHYSICAL_DURABILITY_ACCEPTANCE.md`, a NOT EXECUTED lab-only physical flash/real-powercut plan, including persistent scratch backing because OpenWrt `/tmp` is commonly volatile tmpfs, quiescent encrypted v1 migration, evidence schema and release NO-GO. No storage, firmware, customer data or appliance configuration touched.
+- **Required validation:** look up newly triggered `BlazePwifi V2 Native Synthetic Journal Gate` on exact current source/doc HEAD, inspect the first actual failing step if any, repair only within scoped test/native LAB; then require Full, Windows and 3-target SDK check at documentation checkpoint. Absence of a pass means do NOT call verified. Hardware and customer financial tests are still NOT executed.
+- **Safety/rollback:** documentation and synthetic test only, reversible by reverting these commits; PR #30 remains draft; no customer balances, wallet balances, standalone rental, Lineage-2 signer, GPIO, published version or firmware modified. `PRODUCTION_v0.6.0_RELEASED=0`; `CUSTOMER_INSTALL_AUTHORIZED=0`.
+- **NEXT EXACT ACTION:** inspect focused native journal CI at updated HEAD and validate new two-controller replay/forgery scenarios. Follow with same-SHA Full/Windows/SDK results; then arrange authorized physical scratch-media power-cut testing per acceptance protocol. No production v0.6 tag or paid migration.
+
+
 ## MULTICTL-0673 / MULTI-CONTROLLER AUTHENTICATED LEDGER TEST — IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Baseline verified:** same-SHA GitHub Full #37914697234, Windows #37914697308, native #37914697280 and OpenWrt SDK #37914697227 all completed SUCCESS on doc checkpoint `b787d5f45529997ec390f2da9ecbd88f5c47b8ce`. No physical paid-device validation.
