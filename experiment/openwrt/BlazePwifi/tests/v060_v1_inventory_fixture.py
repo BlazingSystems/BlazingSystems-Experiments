@@ -100,6 +100,18 @@ def mutated(test):
 
 
 isolated(check_clean)
+
+# Only explicitly known optional legacy stores are permitted. These remain
+# counts, not authorization to reconcile or migrate their paid balances.
+def check_known_optionals(root):
+    write(root / "credits.tsv", "aa:bb:cc:dd:ee:ff\\t12\\n".replace("\\t", "\t").replace("\\n", "\n"))
+    write(root / "sessions.tsv", "bb:cc:dd:ee:ff:00\\t3\\n".replace("\\t", "\t").replace("\\n", "\n"))
+    result = run(root, "SCHEMA_READABLE_UNQUIESCED")
+    assert result["legacy_credit_rows"] == 1
+    assert result["legacy_session_rows"] == 1
+    assert result["migration_authorized"] is False
+
+isolated(check_known_optionals)
 mutated(lambda p: write(p / "accounts.tsv",
                         (p / "accounts.tsv").read_text() * 2))
 mutated(lambda p: write(p / "members.tsv",
@@ -131,6 +143,24 @@ mutated(replace_with_symlink)
 mutated(lambda p: os.link(p / "members.tsv", p / "member-hardlink.tsv"))
 mutated(lambda p: write(p / "targets" / "vendo-01.tsv",
                         "bad-target\n"))
+# VINV-0675: an extra paid-store file MUST NOT disappear from the inventory
+# silently. The output remains strictly redacted and read-only.
+mutated(lambda p: write(p / "unrecognized-ledger.tsv", "hidden-credit\t600\n"))
+mutated(lambda p: write(p / "wallet-backup.tsv", "hidden-wallet\t900\n"))
+mutated(lambda p: (p / "unknown-private-store").symlink_to("/etc/passwd"))
+# Transactions bound to accounts/devices that are not inventoried cannot
+# safely be migrated, even if every TSV row is syntactically correct.
+mutated(lambda p: write(p / "member-events.tsv",
+                        (p / "member-events.tsv").read_text().replace("\talice\t", "\tmissing\t")))
+mutated(lambda p: write(p / "rental-events.tsv",
+                        (p / "rental-events.tsv").read_text().replace(DEVICE, "c" * 32)))
+mutated(lambda p: write(p / "targets" / "vendo-01.tsv",
+                        (p / "targets" / "vendo-01.tsv").read_text().replace(ACCOUNT, "d" * 32)))
+# 5k digit numeric cell would raise ValueError on some Python builds
+# without an early length check: it must be a clean redacted BLOCKED.
+mutated(lambda p: write(p / "accounts.tsv",
+                        (p / "accounts.tsv").read_text().replace(
+                            "\t100\t", "\t" + ("9" * 5000) + "\t", 1)))
 
 with tempfile.TemporaryDirectory(prefix="not-blaze-v1-") as invalid:
     result = run(Path(invalid), "BLOCKED", "NONFIXTURE_ROOT")
