@@ -143,15 +143,49 @@ bp_account_field() {
 
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
+	# This is a materialized paid-credit store. Never replace it from a
+	# symlink, a partially decoded source, or a duplicated account ID. Keep
+	# the old bytes for manual reconciliation if any source row is corrupt.
+	[ -f "$BP_ACCOUNTS" ] && [ ! -L "$BP_ACCOUNTS" ] || return 8
+	printf '%s\n' "$d" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+	case "$credit:$expiry:$remaining:$paused:$pause_started" in
+	  *[!0-9:]*|'') return 8 ;;
+	esac
+	case "$paused" in 0|1) ;; *) return 8;; esac
+	# Future v2 migration MUST use authenticated structured records. Current
+	# v1 caller strings cannot contain a TSV row separator or line break.
+	for field in "$mac" "$ipaddr" "$events"; do
+	  case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+	done
 	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
-		BEGIN{f=0}
-		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
-		{print}
-		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
-	' "$BP_ACCOUNTS" > "$tmp" && mv "$tmp" "$BP_ACCOUNTS"
-	chmod 600 "$BP_ACCOUNTS"
-	bp_durable_sync
+	umask 077
+	# Exit nonzero even if a duplicated target is found after writing part
+	# of the temporary snapshot. No rename is allowed on any such error.
+	if ! awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
+		BEGIN {found=0; malformed=0}
+		{
+		  if (NF!=9 || $1 !~ /^[A-Za-z0-9_.:-]+$/ || length($1)>96 ||
+		      $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/ ||
+		      $4 !~ /^[0-9]+$/ || $5 !~ /^(0|1)$/ ||
+		      $6 !~ /^[0-9]+$/ || ++seen[$1]>1) malformed=1
+		  if ($1==d) {print d,c,e,r,p,ps,m,ip,ev;found++;next}
+		  print
+		}
+		END {
+		  if (malformed || found>1) exit 8
+		  if (!found) print d,c,e,r,p,ps,m,ip,ev
+		}
+	' "$BP_ACCOUNTS" > "$tmp"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ACCOUNTS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_durable_sync || return 8
+	return 0
 }
 
 bp_remove_legacy_mac() {
@@ -240,10 +274,33 @@ bp_events_has() {
 	printf ',%s,' "$events" | grep -Fq ",$event,"
 }
 
+bp_coin_event_is_live() {
+	case "$1" in c:*.*) ;; *) return 1;; esac
+	coin_body="${1#c:}"
+	coin_window="${coin_body%%.*}"
+	coin_digest="${coin_body#*.}"
+	printf '%s' "$coin_window" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || return 1
+	printf '%s' "$coin_digest" | grep -Eq '^[a-f0-9]{64}$' || return 1
+	for coin_target_file in "$BP_TARGET_DIR"/*.tsv; do
+		[ -f "$coin_target_file" ] && [ ! -L "$coin_target_file" ] || continue
+		IFS="$(printf '\t')" read -r coin_did coin_mac coin_target coin_expires coin_controller coin_kind < "$coin_target_file"
+		if [ "$coin_target" = "$coin_window" ] &&
+		   [ "${coin_kind:-hotspot}" = hotspot ] &&
+		   [ "$coin_expires" -gt "$(bp_now)" ] 2>/dev/null; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 bp_events_push() {
 	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=64
+	case "$max" in ''|*[!0-9]*) max=64;; esac
+	[ "$max" -gt 0 ] 2>/dev/null || max=64
 	out="$event"; coin_count=0
-	case "$event" in c:*) coin_count=1;; esac
+	case "$event" in
+		c:*) if ! bp_coin_event_is_live "$event"; then coin_count=1; fi ;;
+	esac
 	oldIFS="$IFS"; IFS=','
 	for e in $events; do
 		[ -n "$e" ] || continue
@@ -251,13 +308,22 @@ bp_events_push() {
 		case "$e" in
 			v:*) out="$out,$e" ;;
 			c:*)
-				[ "$coin_count" -ge "$max" ] && continue
-				out="$out,$e"; coin_count=$((coin_count+1))
+				# Historical/expired coins are display-bounded. Active
+				# target coins may NOT be forgotten while ACKs can retry.
+				if bp_coin_event_is_live "$e"; then
+					out="$out,$e"
+				else
+					[ "$coin_count" -ge "$max" ] && continue
+					out="$out,$e"; coin_count=$((coin_count+1))
+				fi
 				;;
 			*) out="$out,$e" ;;
 		esac
 	done
 	IFS="$oldIFS"
+	# High active-window volume must fail closed, not prune replay IDs.
+	bytes="$(printf '%s' "$out" | wc -c)" || return 8
+	[ "$bytes" -le 131072 ] 2>/dev/null || return 8
 	printf '%s' "$out"
 }
 
