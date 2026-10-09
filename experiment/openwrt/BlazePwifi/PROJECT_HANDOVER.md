@@ -1,3 +1,9 @@
+## V2NATIVE-0668 / ACTUAL COMPILE FAILURE FIXED, RETEST REQUIRED — 2026-10-09 Asia/Manila
+
+- **Observed failure:** [native gate run #37901810966](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901810966) **COMPLETED FAILURE** at the C compile step, not a claimed passing build. GitHub job log line 227 reports `newline` undeclared inside `getkey`. The earlier text rename changed a local `nl` reference in the registry parser.
+- **Code repair:** targeted `p=nl+1` in the registry parser, commit `338cc995a314d579bff1f6027df54242be64ac3c`. No application/customer money/state code touched. Full v0.6.0 production remains STOP. `V2NATIVE-0668` remains **COMMITTED_UNVALIDATED** until newly triggered focused+full tests show actual success.
+- **NEXT EXACT ACTION:** inspect new V2 Native gate logs against `338cc995...` and this doc head, correct other compiler/runtime regressions if any, then synchronize all handovers and verify full+Windows. Preserve failing logs and previous green SHADOW-0667, original alpha.4 12 assets.
+
 ## V2NATIVE-0668 / COMPILER HARDENING & FOCUSED CI — COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
 
 - **Latest source transition:** fixed native identifier `uint` colliding with GNU `sys/types.h` typedef in commit `9a56ad2516c76d8b270958a3c26bffe7be66f2da`. Added dedicated [V2 Native Synthetic Journal Gate](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/workflows/blazepwifi-v060-native-journal.yml) in commit `a9211cc52c908c701280268de34ae4ab88a2c7db`, which compiles with `-Werror`, executes synthetic HMAC/money faults, and verifies no OpenWrt rootfs native authority is installed.
