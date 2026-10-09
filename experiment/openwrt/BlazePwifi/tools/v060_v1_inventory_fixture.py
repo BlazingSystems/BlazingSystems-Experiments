@@ -41,6 +41,10 @@ class InvalidState(Exception):
 def number(value: str, *, signed: bool = False) -> int:
     if not re.fullmatch(r"-?(0|[1-9][0-9]*)" if signed else r"0|[1-9][0-9]*", value):
         raise InvalidState("INVALID_NUMERIC")
+    # Python 3.11 limits very long int() input; reject it as malformed state
+    # instead of producing an unredacted ValueError/traceback in preflight.
+    if len(value.lstrip("-")) > 19:
+        raise InvalidState("NUMERIC_OVERFLOW")
     num = int(value)
     if abs(num) > MAX_INT:
         raise InvalidState("NUMERIC_OVERFLOW")
@@ -64,6 +68,7 @@ def private_file(dirfd: int, name: str, required: bool = True) -> bytes | None:
     try:
         before = os.fstat(fd)
         require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and
+                before.st_uid == os.geteuid() and
                 not (before.st_mode & 0o077), "SOURCE_NOT_PRIVATE_REGULAR")
         require(0 <= before.st_size <= MAX_BYTES, "SOURCE_SIZE_UNSAFE")
         chunks = []
@@ -131,9 +136,18 @@ def audit(root: Path) -> dict:
         raise InvalidState("UNSAFE_ROOT") from None
     try:
         rootstat = os.fstat(dirfd)
-        require(stat.S_ISDIR(rootstat.st_mode) and (rootstat.st_mode & 0o077) == 0,
+        require(stat.S_ISDIR(rootstat.st_mode) and
+                rootstat.st_uid == os.geteuid() and
+                (rootstat.st_mode & 0o077) == 0,
                 "ROOT_NOT_PRIVATE")
         require(private_file(dirfd, MARKER) == MAGIC, "FIXTURE_MARKER_INVALID")
+        # Never declare the source comprehensively inventoried if a future,
+        # unknown or half-written paid-state sidecar was omitted entirely.
+        # This is a strict disposable fixture schema, not live migration.
+        allowed_entries = set((*REQUIRED, *OPTIONAL, MARKER,
+                               "targets", "paid-state-uncertain"))
+        require(set(os.listdir(dirfd)) <= allowed_entries,
+                "UNRECOGNIZED_SOURCE_ENTRY")
         data: dict[str, bytes] = {}
         total_bytes = 0
         for name in (*REQUIRED, *OPTIONAL):
@@ -173,6 +187,9 @@ def audit(root: Path) -> dict:
             number(row[4], signed=True)
             number(row[5])
         unique(events, 0, "MEMBER_EVENTS")
+        member_ids = {row[0] for row in members}
+        require(all(row[2] in member_ids for row in events),
+                "MEMBER_EVENT_ORPHAN")
 
         for row in rentals:
             require(len(row) == 5 and bool(KEY_RE.fullmatch(row[0])),
@@ -185,7 +202,11 @@ def audit(root: Path) -> dict:
             require(len(row) in (4, 5) and bool(row[0]) and bool(row[1]),
                     "RENTAL_EVENTS_SCHEMA")
             number(row[3])
-        unique([r for r in rental_events if r[0].startswith("r:")], 0, "PAID_RENTAL_EVENTS")
+        paid_rental_events = [r for r in rental_events if r[0].startswith("r:")]
+        unique(paid_rental_events, 0, "PAID_RENTAL_EVENTS")
+        rental_ids = {row[0] for row in rentals}
+        require(all(row[1] in rental_ids for row in paid_rental_events),
+                "PAID_RENTAL_EVENT_ORPHAN")
 
         for row in vouchers:
             require(len(row) in (2, 3) and bool(row[0]), "VOUCHERS_SCHEMA")
@@ -229,8 +250,9 @@ def audit(root: Path) -> dict:
             raise InvalidState("TARGETS_DIR_MISSING_OR_UNSAFE") from None
         try:
             st = os.fstat(targetsfd)
-            require(stat.S_ISDIR(st.st_mode) and (st.st_mode & 0o077) == 0,
-                    "TARGETS_DIR_NOT_PRIVATE")
+            require(stat.S_ISDIR(st.st_mode) and st.st_uid == os.geteuid() and
+                    (st.st_mode & 0o077) == 0, "TARGETS_DIR_NOT_PRIVATE")
+            account_ids = {row[0] for row in accounts}
             names = os.listdir(targetsfd)
             targets = 0
             for name in names:
@@ -240,6 +262,7 @@ def audit(root: Path) -> dict:
                 rows = lines(d)
                 require(len(rows) == 1 and len(rows[0]) == 6,
                         "TARGET_SCHEMA")
+                require(rows[0][0] in account_ids, "TARGET_ACCOUNT_ORPHAN")
                 number(rows[0][3])
                 targets += 1
         finally:
