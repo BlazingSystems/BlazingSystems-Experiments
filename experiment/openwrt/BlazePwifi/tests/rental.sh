@@ -201,7 +201,14 @@ bp_rental_device_rename "$DID" 'Owner Test Phone'
 printf '%s' "$(bp_rental_device_line "$DID")" | grep -q 'Owner Test Phone'
 ADDED="$(bp_rental_lease_add "$DID" 120)"
 [ "$ADDED" -gt "$(bp_now)" ]
-EXPIRED="$(bp_rental_lease_expire "$DID")"
+# Forfeiting still-active rental credit is an explicit admin settlement,
+# never an ordinary one-click expire.
+set +e
+bp_rental_lease_expire "$DID" > "$T/denied-active-expiry" 2>&1
+expire_rc=$?
+set -e
+[ "$expire_rc" -eq 6 ]
+EXPIRED="$(bp_rental_lease_expire "$DID" CONFIRM_FORFEIT)"
 [ "$EXPIRED" -le "$(bp_now)" ]
 EVENTS="$(bp_rental_events_json 16)"
 printf '%s' "$EVENTS" | grep -q '"kind":"rename"'
