@@ -58,7 +58,10 @@ bp_auth_random_hex() {
       tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
   fi
   [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null &&
-    printf '%s' "$rng_out" | LC_ALL=C grep -Eq '^[a-f0-9]+
+    printf '%s' "$rng_out" | LC_ALL=C grep -Eq '^[a-f0-9]+$' || return 8
+  printf '%s' "$rng_out"
+}
+
 bp_auth_clean_field() {
 	printf '%s' "$1" | tr '\t\r\n' '   '
 }
