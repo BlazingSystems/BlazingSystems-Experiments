@@ -75,7 +75,7 @@ umask 022
 # Pin the upstream source commit from its verified annotated v25.12.5 tag.
 OPENWRT_SRC_SHA=f0a60eee2fe051741c643ea6118718aae1ef17fb
 SOURCE="$TMP/openwrt-source"
-git clone --quiet --filter=blob:none --depth=1 --no-checkout \
+git clone --quiet --filter=blob:none --depth=1 --sparse \
   --branch v25.12.5 https://github.com/openwrt/openwrt.git "$SOURCE"
 [ "$(git -C "$SOURCE" rev-parse HEAD)" = "$OPENWRT_SRC_SHA" ] || {
   echo 'V2TARGET-0670 BLOCKED: OpenWrt release source tag changed' >&2;exit 9;
@@ -84,6 +84,7 @@ git clone --quiet --filter=blob:none --depth=1 --no-checkout \
 # sources and the matching OpenWrt build include macros. A non-cone trailing
 # slash alone did not materialize these sources on GitHub's runner.
 git -C "$SOURCE" sparse-checkout set package/libs/openssl include
+git -C "$SOURCE" checkout --quiet --detach "$OPENWRT_SRC_SHA"
 [ -s "$SOURCE/package/libs/openssl/Makefile" ] &&
 [ -s "$SOURCE/include/openssl-module.mk" ] || {
   echo 'V2TARGET-0670 BLOCKED: matching OpenSSL build source missing' >&2;exit 9;
