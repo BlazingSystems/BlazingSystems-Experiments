@@ -238,9 +238,16 @@ case "$action" in
     [ -n "$new_password" ] || bp_fail "missing new password"
     bp_auth_lock || bp_fail "authentication busy"
     if bp_auth_set_password "$BP_AUTH_USER" "$BP_AUTH_ROLE" "$new_password" 0; then
-      bp_auth_invalidate_user_sessions "$BP_AUTH_USER"
-      rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null || true
-      bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"
+      if ! bp_auth_invalidate_user_sessions "$BP_AUTH_USER"; then
+        bp_auth_audit session_revoke_failure "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "password_changed" || true
+        bp_auth_unlock
+        bp_fail "password changed but old sessions could not be revoked; operator reconciliation required"
+      fi
+      if ! rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null ||
+         ! bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"; then
+        bp_auth_unlock
+        bp_fail "password changed but admin cleanup/audit failed; operator reconciliation required"
+      fi
       bp_auth_unlock
       bp_json '{"ok":true,"reauth_required":true}'
     else
