@@ -4,12 +4,15 @@
 All contents are fake under /tmp/blaze-v1-audit-* and /tmp/blaze-v1-seal-*.
 Never connects to /etc, OpenWrt, an account, or payment/lease authority.
 """
+import errno
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/v060_v1_sealed_fixture.py"
 FAKE_SECRET = "PRIVATE-SYNTHETIC-BACKUP-DO-NOT-PRINT"
@@ -111,6 +114,71 @@ with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as temp_s
         assert not reject_dst.exists()
         keyfile.chmod(0o600)
 
+        # EBACK-0678: ciphertext must not appear at its final filename until
+        # every byte is written and the staging file is fsynced. Failures are
+        # fault-injected in the LAB module only; no block devices are altered.
+        spec = importlib.util.spec_from_file_location("v1_sealed_atomic_lab", SCRIPT)
+        assert spec is not None and spec.loader is not None
+        sys.path.insert(0, str(SCRIPT.parent))
+        try:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        finally:
+            sys.path.pop(0)
+        backup.unlink()
+        for fault in ("write", "file-fsync", "rename"):
+            assert not backup.exists(), "A previous failed archive became visible"
+            try:
+                if fault == "write":
+                    with patch.object(mod.os, "write", side_effect=OSError(errno.ENOSPC, "synthetic full disk")):
+                        mod.publish_encrypted_archive(backup, saved_cipher)
+                elif fault == "file-fsync":
+                    with patch.object(mod.os, "fsync", side_effect=OSError(errno.EIO, "synthetic file sync")):
+                        mod.publish_encrypted_archive(backup, saved_cipher)
+                else:
+                    with patch.object(mod, "publish_no_replace",
+                                      side_effect=OSError(errno.EIO, "synthetic rename failure")):
+                        mod.publish_encrypted_archive(backup, saved_cipher)
+            except OSError:
+                pass
+            else:
+                raise AssertionError(f"Injected {fault} unexpectedly succeeded")
+            assert not backup.exists(), f"Unsafe partial final archive after {fault}"
+            assert not list(sealroot.iterdir()), f"Private stage leak after {fault}"
+
+        # Once a rename succeeds, a failed directory fsync is an UNCERTAIN
+        # durability outcome. The *complete* authenticated bytes are retained,
+        # and no success is returned to the caller.
+        real_fsync = os.fsync
+        count = [0]
+        def fail_parent_sync(fd):
+            count[0] += 1
+            if count[0] == 2:
+                raise OSError(errno.EIO, "synthetic directory fsync uncertainty")
+            return real_fsync(fd)
+        try:
+            with patch.object(mod.os, "fsync", side_effect=fail_parent_sync):
+                mod.publish_encrypted_archive(backup, saved_cipher)
+        except OSError:
+            pass
+        else:
+            raise AssertionError("Directory fsync failure falsely acknowledged")
+        assert count == [2], "Fixture did not reach simulated post-rename sync"
+        assert backup.read_bytes() == saved_cipher, "Published encrypted archive truncated"
+        assert not any(p.name.startswith(".blaze-v1-cipher-stage-")
+                       for p in sealroot.iterdir()), "Staging file leaked after rename"
+
+        # Existing immutable output must not be replaced, even if a caller
+        # attempts to publish the same or modified ciphertext.
+        with patch.object(mod, "publish_no_replace",
+                          side_effect=AssertionError("Must refuse before rename")):
+            try:
+                mod.publish_encrypted_archive(backup, saved_cipher + b"x")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Encrypted backup overwrite unexpectedly succeeded")
+
         # An unknown paid sidecar or changed marker must prevent new sealing.
         (src / "unknown-money-ledger.tsv").write_text("synthetic-hidden-credit\n")
         (src / "unknown-money-ledger.tsv").chmod(0o600)
@@ -139,4 +207,5 @@ with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as temp_s
             shutil.rmtree(dst)
 
 print("EBACK-0677 PASS: AES-256-GCM synthetic sealed backup / exact reversible restore; wrong key, tamper, truncated tag, untrusted source and overwrite blocked")
+print("EBACK-0678 PASS: injected write, file-fsync, rename faults publish no partial archive; post-rename fsync refuses success and retains complete ciphertext")
 print("NOT PRODUCTION: no customer funds, live quiescence, off-device custody, or hardware power-cut proof")
