@@ -85,6 +85,12 @@ jobs:
           sh -n experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
           sh -n experiment/openwrt/BlazePwifi/tools/v060_journal_auth_fixture.sh
           sh -n experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
+          sh -n experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh
+          sh -n experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh
+          sh -n experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/admin
+          sh -n experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental-admin
+          sh -n experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-logout
+          sh -n experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental-logout
       - name: Refuse ordinary signed-coin false ACK when account storage fails
         run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh
       - name: Refuse duplicate paid Wi-Fi account rows and truncated source copy
