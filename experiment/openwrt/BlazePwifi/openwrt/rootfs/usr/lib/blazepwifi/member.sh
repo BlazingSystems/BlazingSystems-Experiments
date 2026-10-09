@@ -44,8 +44,8 @@ bp_member_global_revision() {
 bp_member_next_revision() {
   old="$(bp_member_global_revision)"
   next=$((old+1))
-  printf '%s\n' "$next" > "$BP_MEMBER_REVISION"
-  chmod 600 "$BP_MEMBER_REVISION"
+  printf '%s\n' "$next" > "$BP_MEMBER_REVISION" || return 8
+  chmod 600 "$BP_MEMBER_REVISION" || return 8
   printf '%s' "$next"
 }
 
@@ -313,13 +313,35 @@ bp_member_transfer() {
 bp_member_delete() {
   user="$(bp_member_norm "$1")" || return 2
   source="$(bp_member_clean "$2")"
-  [ -n "$(bp_member_line "$user")" ] || return 3
-  rev="$(bp_member_next_revision)"; now="$(bp_now)"
+  line="$(bp_member_line "$user")"
+  [ -n "$line" ] || return 3
+  banked="$(printf '%s\n' "$line" | cut -f8)"
+  # This is an account record containing PURCHASED TIME, not a cosmetic
+  # contact. A deletion must never silently destroy a positive balance.
+  case "$banked" in ''|*[!0-9]*) return 7;; esac
+  [ "$banked" -eq 0 ] 2>/dev/null || return 6
+  # Build and commit deletion+event under the paid-state quarantine.
+  # This is conservative v1 containment, NOT a v2 crash-atomic journal.
+  bp_paid_begin || return 9
+  rev="$(bp_member_next_revision)" || { bp_paid_abort; return 8; }
+  now="$(bp_now)"
   tmp="$BP_STATE/.members.$(bp_tmp_suffix)"
-  awk -F '\t' -v u="$user" '$1!=u {print}' "$BP_MEMBERS" > "$tmp"
-  chmod 600 "$tmp" && mv "$tmp" "$BP_MEMBERS"
-  bp_member_event_record "admin:$rev:$user" "$now" "$user" delete 0 0 "$source" ""
-  bp_durable_sync
+  if ! awk -F '\t' -v u="$user" '
+    $1==u {deleted++; next}
+    {print}
+    END {if (deleted!=1) exit 1}
+  ' "$BP_MEMBERS" > "$tmp" ||
+     ! chmod 600 "$tmp" ||
+     ! mv "$tmp" "$BP_MEMBERS"; then
+    rm -f "$tmp" 2>/dev/null || true
+    bp_paid_abort
+    return 8
+  fi
+  if ! bp_member_event_record "admin:$rev:$user" "$now" "$user" delete 0 0 "$source" ""; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s' "$rev"
 }
 
