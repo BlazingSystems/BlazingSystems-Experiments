@@ -34,7 +34,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install pinned AES-GCM test-only dependency (never firmware)
-        run: python -m pip install --disable-pip-version-check --only-binary=:all: 'cryptography==50.0.2'
+        # Literal block avoids YAML interpreting ': ' in '--only-binary=:all: cryptography' as a mapping.
+        run: |
+          python -m pip install --disable-pip-version-check --only-binary=:all: 'cryptography==50.0.2'
       - name: Negative-test private sealed backup and non-overwriting recovery
         run: python experiment/openwrt/BlazePwifi/tests/v060_v1_sealed_fixture.py
       - name: Prove this fixture is never packaged or installed into production rootfs
