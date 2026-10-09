@@ -67,7 +67,8 @@ for profile in full r281; do
     unset QR_MV_FAIL
 
     stage="$profile:duplicate-ID-existing-source-refused"
-    cat "$BP_RENTAL_ENROLL" | head -n 1 >> "$BP_RENTAL_ENROLL"
+    head -n 1 "$BP_RENTAL_ENROLL" > "$T/first-fake-token"
+    cat "$T/first-fake-token" >> "$BP_RENTAL_ENROLL"
     before="$(state_sha)"
     set +e
     duplicate="$(issue)"
