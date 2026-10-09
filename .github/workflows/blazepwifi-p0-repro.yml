@@ -35,6 +35,9 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_admin_password_write_integrity.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_auth_session_revocation.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/admin-logout'
+      - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental-logout'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
@@ -111,6 +114,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh
       - name: Refuse failed or truncated full/R281 admin password database updates
         run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_password_write_integrity.sh
+      - name: Refuse false logout or post-password session revoke acknowledgments
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_session_revocation.sh
       - name: Refuse false-success R281 signed one-time Android enrollment and token reuse
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Refuse full and R281 one-time QR issued before registry durability
