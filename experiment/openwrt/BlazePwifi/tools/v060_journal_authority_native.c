@@ -215,17 +215,37 @@ static void validate_receipts(void) {
 }
 static void getkey(const char *wanted,unsigned char key[32]) {
     size_t n;char *data=readfile("controller-keys.tsv",16384,&n);
-    char *p=data,*e=data+n;int seen=0;
+    char *p=data,*e=data+n;int seen=0,count=0,i,j,nonzero;
+    char ids[MAX_CTL][33];
+    unsigned char keys[MAX_CTL][32],decoded[32];
     while(p<e){
         char *nl=memchr(p,'\n',(size_t)(e-p)),*v[3];
         if(!nl)die("incomplete controller registry row");
         *nl=0;
-        if(parts(p,v,3)!=2||!valid_id(v[0])||!hex64(v[1]))
+        if(parts(p,v,3)!=2||!valid_id(v[0])||!hex64(v[1])||
+           count>=MAX_CTL)
             die("invalid controller key registry");
-        if(!strcmp(v[0],wanted)){if(seen++)die("duplicate controller key");
-            unhex(v[1],key,32);}
+        unhex(v[1],decoded,sizeof(decoded));
+        nonzero=0;
+        for(j=0;j<32;j++)if(decoded[j])nonzero=1;
+        if(!nonzero)die("zero controller secret rejected");
+        for(i=0;i<count;i++){
+            if(!strcmp(ids[i],v[0]))
+                die("duplicate controller identity");
+            if(CRYPTO_memcmp(keys[i],decoded,sizeof(decoded))==0)
+                die("duplicate controller secret");
+        }
+        strcpy(ids[count],v[0]);
+        memcpy(keys[count],decoded,sizeof(decoded));
+        count++;
+        if(!strcmp(v[0],wanted)){
+            memcpy(key,decoded,sizeof(decoded));
+            seen++;
+        }
         p=nl+1;
     }
+    OPENSSL_cleanse(decoded,sizeof(decoded));
+    OPENSSL_cleanse(keys,sizeof(keys));
     OPENSSL_cleanse(data,n);free(data);
     if(seen!=1)die("unknown controller key");
 }
