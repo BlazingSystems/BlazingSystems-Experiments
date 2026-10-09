@@ -45,7 +45,7 @@ ASSET_ZIPS = [
     "BlazePisonet-SoftTimer-v0.4.0-win-x64-LAB-ONLY.zip",
 ]
 SHA = "89" * 20
-TAG = "v0.6.0-alpha.2"
+TAG = "v0.6.0-alpha.3"
 
 
 def execute_fixture(kind):
