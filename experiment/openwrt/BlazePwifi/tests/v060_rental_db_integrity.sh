@@ -145,7 +145,11 @@ grep -Fq 'bp_paid_begin || {' "$ADMIN"
 grep -Fq 'if ! bp_paid_commit; then' "$ADMIN"
 grep -Fq 'rental lease sync uncertain; operator reconciliation required' "$ADMIN"
 grep -Fq 'bp_rental_event_log lease_set "$did"' "$ADMIN"
-grep -Fq 'bp_fail "rental device state write failed; retry after operator review"' "$CLIENT"
+# Phone heartbeat is only presence data now: the status CGI must NEVER
+# re-write the authoritative paid lease row from an old snapshot.
+grep -Fq 'bp_rental_seen_update "$did" "$now"' "$CLIENT"
+grep -Fq 'rental presence update failed; retry status' "$CLIENT"
+! grep -Fq 'bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now"' "$CLIENT"
 
 echo 'RENT-0646 PASS: paid rental leases survive duplicate/corrupt/partial copy, failed rename, source symlink and secret pollution; quarantined operator lease never false-ACKs'
 echo 'NOT PRODUCTION: real source lease/receipt still separate TSV files; v2 signed journal, source migration, Android owner signing and physical powercut remain P0'
