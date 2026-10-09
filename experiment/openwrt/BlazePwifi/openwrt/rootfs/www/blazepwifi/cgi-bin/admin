@@ -310,6 +310,7 @@ EOF
       8) bp_fail "invalid collision policy" ;;
       9|15) bp_fail "member state is busy or rollback failed" ;;
       14) bp_fail "member import failed; all member state was rolled back" ;;
+      16) bp_fail "unsigned metadata cannot restore paid member time; use a verified financial migration" ;;
       *) bp_fail "member import could not be applied" ;;
     esac
     created="$(printf '%s' "$result" | cut -f1)"
