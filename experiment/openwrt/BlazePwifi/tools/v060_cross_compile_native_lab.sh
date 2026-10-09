@@ -69,9 +69,35 @@ grep -Fq -- '-DBLAZE_FIXTURE_ONLY' "$DEST/Makefile"
 # Do not use FORCE=1 to bypass its build safety checks.
 umask 022
 [ "$(umask)" = 0022 ] || { echo 'OpenWrt SDK umask prerequisite failed' >&2; exit 9; }
-# Build only the opted-in package in its own verified official OpenWrt SDK.
-printf '\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
+# The published SDK provides the cross toolchain but not necessarily
+# staged OpenSSL development headers. Build the authentic matching OpenWrt
+# 25.12.5 openssl package first; NEVER use host openssl headers/libraries.
+# Pin the upstream source commit from its verified annotated v25.12.5 tag.
+OPENWRT_SRC_SHA=f0a60eee2fe051741c643ea6118718aae1ef17fb
+SOURCE="$TMP/openwrt-source"
+git clone --quiet --filter=blob:none --depth=1 --no-checkout \
+  --branch v25.12.5 https://github.com/openwrt/openwrt.git "$SOURCE"
+[ "$(git -C "$SOURCE" rev-parse HEAD)" = "$OPENWRT_SRC_SHA" ] || {
+  echo 'V2TARGET-0670 BLOCKED: OpenWrt release source tag changed' >&2;exit 9;
+}
+git -C "$SOURCE" sparse-checkout set --no-cone \
+  'package/libs/openssl/' 'include/openssl-module.mk'
+[ -s "$SOURCE/package/libs/openssl/Makefile" ] &&
+[ -s "$SOURCE/include/openssl-module.mk" ] || {
+  echo 'V2TARGET-0670 BLOCKED: matching OpenSSL build source missing' >&2;exit 9;
+}
+mkdir -p "$SDK/package/libs"
+cp -a "$SOURCE/package/libs/openssl" "$SDK/package/libs/openssl"
+cp "$SOURCE/include/openssl-module.mk" "$SDK/include/openssl-module.mk"
+# Build both dependency and opt-in fixture in SDK only. SDK package logic
+# ensures libcrypto is target-native. No FORCE, no host-header fallback.
+printf '\nCONFIG_PACKAGE_libopenssl=m\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
 make -C "$SDK" defconfig
+make -C "$SDK" -j2 package/openssl/compile V=s
+OPENSSL_HDR="$(find "$SDK/staging_dir" -path '*/usr/include/openssl/crypto.h' -print -quit)"
+[ -n "$OPENSSL_HDR" ] || {
+  echo 'V2TARGET-0670 BLOCKED: SDK target libcrypto headers not staged' >&2;exit 9;
+}
 make -C "$SDK" -j2 package/blazepwifi-v2-native-lab/compile V=s
 ELF="$(find "$SDK/build_dir" -type f -name v2-native-fixture -print -quit)"
 [ -n "$ELF" ] && [ -s "$ELF" ] || {
