@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ctypes
 import json
+import errno
 import os
 from pathlib import Path
 import re
@@ -103,6 +105,21 @@ def durable_new(path: Path, content: bytes) -> None:
         os.fsync(dirfd)
     finally:
         os.close(dirfd)
+
+
+def publish_private_dir_no_replace(stage: Path, destination: Path) -> None:
+    """Linux renameat2(RENAME_NOREPLACE); refuse legacy rename overwrite."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        block()
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p,
+                          ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    ret = renameat2(-100, os.fsencode(stage), -100,
+                    os.fsencode(destination), 1)
+    if ret != 0:
+        block()
 
 
 def keygen(keypath: str) -> None:
@@ -226,7 +243,7 @@ def restore(backup: str, keyfile: str, dest: str) -> None:
             block()
         if dst.exists() or dst.is_symlink():
             block()
-        os.rename(stage, dst)  # existing directory is never overwritten
+        publish_private_dir_no_replace(stage, dst)  # atomic fail-if-exists
         dirfd = os.open("/tmp", os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(dirfd)
