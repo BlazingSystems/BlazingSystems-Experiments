@@ -1,3 +1,11 @@
+## V2NATIVE-0669 / TEST COMMITTED, CI TO VERIFY — 2026-10-09 Asia/Manila
+
+- **Previous exact focused validation:** #37901902866 and #37901909728 completed success at `338cc995a314d579bff1f6027df54242be64ac3c`, plus #37901983190 success on `6c84a36828b3a61236b18eb7dd1afbf6b07cf167`. Does not validate new test commit.
+- **New `tests/v060_native_v2_authority.sh` source commit:** `225a41b997a8b171ec3f2fefd435acdb77b4e2ba`. Sends 11 further signed seconds-debits `seq=5..15`, requires bank 89, high-water sequence 15, exactly 8 remaining controller receipts, refusal of previously authentic evicted seq1/seq5 without a balance change, retained last replay, and refusal with no ledger mutation while another process holds `.v2-native-lock`. Tests synthetic disposable financial records only.
+- **STATUS:** COMMITTED_UNTESTED newly extended test. Full v0.6 production blocked; no firmware SDK native build or real cash enabled. Preserves verified native C implementation and prior failure/fix evidence.
+- **NEXT EXACT ACTION:** check focused gate exact test commit/latest doc-head, correct any failed assertion before downstream Full/Windows. Preserve detailed outcome including cancellations and SHA. After green exact matrix, investigate safe OpenWrt SDK target compilation in a separate task without rootfs live installation or payment access.
+- **Rollback:** revert test extension, not any paid/customer state. `PRODUCTION_v0.6.0_RELEASED=0`.
+
 ## V2NATIVE-0669 / IN PROGRESS — REPLAY WINDOW & LOCK CONCURRENCY STRESS — 2026-10-09 Asia/Manila
 
 - **New verified checkpoint:** V2NATIVE-0668 native synthetic gate push #37901902866 and PR #37901909728 at compiler fix `338cc995a314d579bff1f6027df54242be64ac3c` both completed SUCCESS; later doc-head focused PR #37901983190 also SUCCESS on SHA `6c84a36828b3a61236b18eb7dd1afbf6b07cf167`. Full platform #37901975670/#37901983284 and Windows #37901983262 remained pending when checked. No hardware proof.
