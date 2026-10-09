@@ -53,6 +53,26 @@ if fixture credit >"$T/stdout" 2>"$T/stderr"; then
  echo 'paid write command accidentally supported' >&2;exit 1
 fi
 
+# SHADOW-0667: fail closed for source inode aliasing or permissions that
+# would compromise the reliability/private handling of v1 financial data.
+# All mutations in this section are disposable fixture metadata only.
+for name in accounts.tsv members.tsv rental-devices.tsv; do
+  ln "$T/$name" "$T/linked-source"
+  refuse "hardlinked-$name"
+  rm "$T/linked-source"
+  chmod 640 "$T/$name"
+  refuse "group-readable-$name"
+  chmod 600 "$T/$name"
+done
+chmod 750 "$T"
+refuse group-accessible-state-directory
+chmod 700 "$T"
+chmod 777 "$T"
+refuse world-writable-state-directory
+chmod 700 "$T"
+[ "$(snapshot)" = "$baseline" ]
+[ "$(fixture status | grep -Fc 'status=NON_AUTHORITATIVE_READ_ONLY')" -eq 1 ]
+
 cp -p "$T/accounts.tsv" "$T/a.good"
 printf '%s\t20\t0\t0\t0\t0\t\t\t\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >> "$T/accounts.tsv"
 refuse duplicate-account
@@ -88,5 +108,5 @@ refuse missing-marker
   echo 'v2 shadow diagnostics unexpectedly changed final paid records' >&2; exit 1
 }
 [ ! -e "$T/v2-ledger.tsv" ] && [ ! -e "$T/v2-shadow-ledger" ]
-echo 'SHADOW-0666 PASS: installed read-only diagnostic opted out by default; 3 paid stores validated without mutation, no IDs or secrets leaked, corrupt/duplicate/uncertain/symlink refused'
+echo 'SHADOW-0666 PASS: installed read-only diagnostic opted out by default; 3 paid stores validated without mutation, no IDs or secrets leaked, corrupt/duplicate/uncertain/symlink/hardlink/unsafe-mode refused'
 echo 'NOT PRODUCTION: no coherent financial migration or authenticated crash-atomic powercut ledger'
