@@ -215,4 +215,39 @@ printf '%s' "$EVENTS" | grep -q '"kind":"rename"'
 printf '%s' "$EVENTS" | grep -q '"kind":"lease_add"'
 printf '%s' "$EVENTS" | grep -q '"kind":"expire"'
 
+# RENT-0688: inject a real signed coin request after the lease+receipt
+# succeeded but a private window progress rename fails. It MUST NOT get
+# a success ACK and further payments MUST be frozen for reconciliation.
+NC4=progressfail123
+SIG4="$(bp_rental_hmac "$DSEC" "coin_start|$NC4|$DSEC")"
+START4="$(printf 'action=coin_start&device_id=%s&nonce=%s&sig=%s' "$DID" "$NC4" "$SIG4" | REQUEST_METHOD=POST sh "$CGI")"
+printf '%s' "$START4" | grep -q '"ok":true'
+TARGET4="$(printf '%s' "$START4" | sed -n 's/.*"target_nonce":"\([^"]*\)".*/\1/p')"
+[ -n "$TARGET4" ]
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 0 ]
+before_lease="$(bp_rental_device_line "$DID" | cut -f3)"
+before_receipts="$(wc -l < "$BP_RENTAL_EVENTS")"
+cat > "$T/bin/mv" <<'PROGRESS_EIO'
+#!/bin/sh
+# For this disposable test ONLY, fail the final progress replacement;
+# all other real rent/member/pending journal renames continue normally.
+case "$2" in *.progress) exit 74;; esac
+exec /bin/mv "$@"
+PROGRESS_EIO
+chmod 700 "$T/bin/mv"
+VN4=feedbeef
+SIGV4="$(bp_vendo_sig_expected coin vendo-02 "$VN4" 1 "$TARGET4")"
+FAIL4="$(printf 'action=coin&id=vendo-02&nonce=%s&pulses=1&target=%s&sig=%s' "$VN4" "$TARGET4" "$SIGV4" | REQUEST_METHOD=POST SERVER_PORT=4455 sh "$VENDO_CGI")"
+printf '%s' "$FAIL4" | grep -q '"ok":false'
+printf '%s' "$FAIL4" | grep -q 'rental progress commit failed'
+[ "$(bp_rental_device_line "$DID" | cut -f3)" -gt "$before_lease" ]
+[ "$(wc -l < "$BP_RENTAL_EVENTS")" -eq $((before_receipts+1)) ]
+[ "$(cat "$BP_TARGET_DIR/vendo-02.progress")" -eq 0 ]
+[ -f "$BP_STATE/paid-state-uncertain" ]
+RETRY4="$(printf 'action=coin&id=vendo-02&nonce=%s&pulses=1&target=%s&sig=%s' "$VN4" "$TARGET4" "$SIGV4" | REQUEST_METHOD=POST SERVER_PORT=4455 sh "$VENDO_CGI")"
+printf '%s' "$RETRY4" | grep -q '"ok":false'
+printf '%s' "$RETRY4" | grep -q 'paid state uncertain'
+[ "$(wc -l < "$BP_RENTAL_EVENTS")" -eq $((before_receipts+1)) ]
+echo 'RENT-0688 PASS: signed post-credit progress EIO never ACKs and halts retries for reconciliation'
+
 echo "BlazeRental production server checks passed"

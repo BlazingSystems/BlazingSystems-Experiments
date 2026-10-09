@@ -270,20 +270,48 @@ case "$action" in
 
     if [ "$kind" = rental ]; then
       bp_lock || bp_fail "rental accounting busy"
+      progress_file="$BP_TARGET_DIR/$id.progress"
+      # Never credit a rental coin if its window progress cannot be read,
+      # or points outside the dedicated target directory via a symlink.
+      if [ ! -f "$progress_file" ] || [ -L "$progress_file" ]; then
+        bp_unlock
+        bp_fail "rental progress unavailable; no coin credited"
+      fi
+      received_pulses="$(cat "$progress_file" 2>/dev/null)" || {
+        bp_unlock
+        bp_fail "rental progress unreadable; no coin credited"
+      }
+      case "$received_pulses" in
+        ''|*[!0-9]*)
+          bp_unlock
+          bp_fail "rental progress invalid; no coin credited" ;;
+      esac
+      [ "$received_pulses" -le 1000000 ] 2>/dev/null || {
+        bp_unlock
+        bp_fail "rental progress out of range; no coin credited"
+      }
       result="$(bp_rental_apply_coin "$device" "$id" "$nonce" "$target" "$pulses")"
       rc=$?
       [ "$rc" -eq 0 ] || { bp_unlock; bp_fail "rental target not found"; }
       state="$(printf '%s' "$result" | cut -f1)"
       lease="$(printf '%s' "$result" | cut -f2)"
-      progress_file="$BP_TARGET_DIR/$id.progress"
-      received_pulses=0
-      [ -r "$progress_file" ] && received_pulses="$(cat "$progress_file" 2>/dev/null || echo 0)"
-      case "$received_pulses" in ''|*[!0-9]*) received_pulses=0;; esac
       if [ "$state" != duplicate ]; then
         received_pulses=$((received_pulses+pulses))
-        printf '%s\n' "$received_pulses" > "$progress_file"
-        chmod 600 "$progress_file"
-        bp_durable_sync
+        # On post-credit progress EIO, paid state is uncertain; do not
+        # emit a success ACK or silently leave status counters stale.
+        progress_tmp="$BP_TARGET_DIR/.$id.progress.$(bp_tmp_suffix)"
+        umask 077
+        if ! printf '%s\n' "$received_pulses" > "$progress_tmp" ||
+           ! chmod 600 "$progress_tmp" ||
+           ! mv "$progress_tmp" "$progress_file" ||
+           ! bp_durable_sync; then
+          rm -f "$progress_tmp" 2>/dev/null || true
+          # This marker is an operator reconciliation halt, NOT an
+          # atomic rollback of the already-committed paid receipt.
+          if bp_paid_begin; then bp_paid_abort; fi
+          bp_unlock
+          bp_fail "rental progress commit failed; paid state uncertain"
+        fi
       fi
       bp_unlock
       unit="$(bp_cfg pulse_value_centavos)"; [ -n "$unit" ] || unit=100
