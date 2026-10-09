@@ -14,6 +14,16 @@ case "$root" in /tmp/*|/var/tmp/*) ;; *) echo "fixture requires /tmp sandbox" >&
   { echo "missing synthetic sentinel" >&2; exit 2; }
 grep -qx 'BLAZE-V2-SYNTHETIC-ONLY' "$root/.blaze-v2-fixture-only" ||
   { echo "invalid synthetic sentinel" >&2; exit 2; }
+# Only an explicitly marked private /tmp laboratory workspace may opt in
+# to the compiled file+parent-directory fsync helper. It is NOT rootfs code.
+if [ -n "${BLAZE_V2_ATOMIC_BIN:-}" ]; then
+  case "$root" in /tmp/blaze-v2-atomic-*) ;; *)
+    echo "native durability helper only allowed in synthetic atomic fixture" >&2; exit 2;; esac
+  [ "$BLAZE_V2_ATOMIC_BIN" = "$root/native-fixture" ] &&
+    [ -f "$BLAZE_V2_ATOMIC_BIN" ] && [ ! -L "$BLAZE_V2_ATOMIC_BIN" ] &&
+    [ -x "$BLAZE_V2_ATOMIC_BIN" ] ||
+    { echo "untrusted native fixture helper path" >&2; exit 2; }
+fi
 ledger="$root/ledger.tsv"
 [ -f "$ledger" ] && [ ! -L "$ledger" ] ||
   { echo "not an ordinary synthetic ledger" >&2; exit 2; }
@@ -59,7 +69,7 @@ calculated="$(sed '$d' "$ledger" | sha256sum | cut -d' ' -f1)" || exit 9
   { echo "synthetic ledger SHA-256 mismatch (fail-closed)" >&2; exit 9; }
 # Strictly temp-only and private, no production filesystem paths.
 umask 077
-tmp="$root/.v2-next-$$"
+tmp="$root/v2-next-$$"
 status="$root/.v2-status-$$"
 trap 'rm -f "$tmp" "$status"' EXIT HUP INT TERM
 digest="$(printf '%s|%s|%s|%s|%s|%s|%s|%s|%s' "$controller" "$seq" "$event" "$op" "$subject" "$target" "$units" "$now" v2 | sha256sum | cut -d' ' -f1)" ||
@@ -195,10 +205,20 @@ case "$read_result" in
     case "$BLAZE_TEST_FAULT" in
       before-rename|receipt-eio) echo "injected precommit I/O error" >&2; exit 70 ;;
     esac
-    chmod 600 "$tmp"
-    mv "$tmp" "$ledger" || exit 71
-    # Best-effort sync on the *fixture* machine, NOT a verified fsync contract.
-    sync || exit 72
+    chmod 600 "$tmp" || exit 69
+    if [ -n "${BLAZE_V2_ATOMIC_BIN:-}" ]; then
+      # Off-device syscall-backed simulated journal commit. Exactly one
+      # snapshot holds balances, controller floor and replay receipt.
+      # A post-rename/dirsync EIO must be reported as UNCERTAIN, never ACK.
+      durable_reply="$("$BLAZE_V2_ATOMIC_BIN" "$root" "v2-next-$$" ledger.tsv)" ||
+        { echo "native synthetic durability commit failed / uncertain" >&2; exit 72; }
+      [ "$durable_reply" = COMMITTED ] ||
+        { echo "native synthetic durability ACK invalid" >&2; exit 72; }
+    else
+      mv "$tmp" "$ledger" || exit 71
+      # Backwards-compatible synthetic fixture path; not fsync verified.
+      sync || exit 72
+    fi
     case "$BLAZE_TEST_FAULT" in
       after-rename-before-ack) echo "injected lost ACK after rename" >&2; exit 73 ;;
     esac
