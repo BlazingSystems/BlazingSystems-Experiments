@@ -145,20 +145,46 @@ bp_account_field() {
 
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
+	# This is a materialized paid-credit store. Never replace it from a
+	# symlink, a partially decoded source, or a duplicated account ID. Keep
+	# the old bytes for manual reconciliation if any source row is corrupt.
+	[ -f "$BP_ACCOUNTS" ] && [ ! -L "$BP_ACCOUNTS" ] || return 8
+	printf '%s\n' "$d" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+	case "$credit:$expiry:$remaining:$paused:$pause_started" in
+	  *[!0-9:]*|'') return 8 ;;
+	esac
+	case "$paused" in 0|1) ;; *) return 8;; esac
+	# Future v2 migration MUST use authenticated structured records. Current
+	# v1 caller strings cannot contain a TSV row separator or line break.
+	for field in "$mac" "$ipaddr" "$events"; do
+	  case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+	done
 	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
-	# Financial writes must propagate *every* failed stage. Previously a
-	# failed awk/rename was masked by the final (often no-op) durable_sync,
-	# allowing CGI callers to ACK money that was not credited.
+	umask 077
+	# Exit nonzero even if a duplicated target is found after writing part
+	# of the temporary snapshot. No rename is allowed on any such error.
 	if ! awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
-		BEGIN{f=0}
-		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
-		{print}
-		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
+		BEGIN {found=0; malformed=0}
+		{
+		  if (NF!=9 || $1 !~ /^[A-Za-z0-9_.:-]+$/ || length($1)>96 ||
+		      $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/ ||
+		      $4 !~ /^[0-9]+$/ || $5 !~ /^(0|1)$/ ||
+		      $6 !~ /^[0-9]+$/ || ++seen[$1]>1) malformed=1
+		  if ($1==d) {print d,c,e,r,p,ps,m,ip,ev;found++;next}
+		  print
+		}
+		END {
+		  if (malformed || found>1) exit 8
+		  if (!found) print d,c,e,r,p,ps,m,ip,ev
+		}
 	' "$BP_ACCOUNTS" > "$tmp"; then
-		rm -f "$tmp"; return 8
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
 	fi
 	if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ACCOUNTS"; then
-		rm -f "$tmp"; return 8
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
 	fi
 	bp_durable_sync || return 8
 	return 0
