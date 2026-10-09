@@ -139,8 +139,19 @@ EOF
 
     inventory="$(bp_param inventory)"
     [ -z "$inventory" ] || bp_rental_inventory_write "$did" "$inventory" || bp_fail "invalid app inventory"
-    bp_rental_device_write "$did" "$secret" "${lease:-0}" "$label" "$now" ||
-      bp_fail "rental device state write failed; retry after operator review"
+    # A heartbeat is NOT a paid transaction. Previously, the status request
+    # read a paid lease before enrollment/inventory work, then wrote that
+    # STALE lease back solely to update last_seen. A coin credit landing
+    # between those steps could be lost permanently. Only update volatile
+    # presence metadata, then re-read authoritative current paid lease.
+    live="$(bp_rental_device_line "$did")"
+    [ -n "$live" ] || bp_fail "rental identity missing after authentication"
+    live_secret="$(printf '%s' "$live" | cut -f2)"
+    [ "$live_secret" = "$secret" ] || bp_fail "rental identity changed; re-enroll securely"
+    lease="$(printf '%s' "$live" | cut -f3)"
+    case "$lease" in ''|*[!0-9]*) bp_fail "invalid paid rental lease; operator reconciliation required";; esac
+    bp_rental_seen_update "$did" "$now" ||
+      bp_fail "rental presence update failed; retry status"
 
     v2="$(bp_rental_policy_v2_get "$did")" || bp_fail "policy unavailable"
     IFS="$(printf '\t')" read -r _did rev updated by mode allowed hidden preferred timer_mode timer_toggle quick notifications gesture_type gesture_value salt hash rounds grace caps <<EOF
