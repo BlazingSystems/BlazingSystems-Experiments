@@ -119,6 +119,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_status_heartbeat.sh
       - name: Protect paid rental time in standalone R281 signed heartbeats
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_heartbeat.sh
+      - name: Reject false-ACK signed R281 rental coin after paid lease/audit faults
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Prevent partial member ledger replacement and false password/admin ACK
