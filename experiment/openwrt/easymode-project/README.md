@@ -1,17 +1,20 @@
 # EasyMode for OpenWrt
 
-**Functional reference: the installed R281 EasyMode**, now carrying the 4.2.5 visual refresh. Version numbers identify separate work; they do not rank feature completeness.
+**Functional reference: the installed R281 EasyMode**, now at 4.2.6 with client presence and session history. Version numbers identify separate work; they do not rank feature completeness.
 
 The current router retains its existing SMS, cellular, repeater, Wi-Fi, LED, device-access and other controls. The visual refresh combines CoreUI/Metis design cues using about 6 KB of original CSS, with no React or Bootstrap runtime.
 
 ## Current source and audit
+
+- [Consolidated current application source — 4.2.6](releases/v4.2.6-r281-consolidated/)
+- [Handoff for 6.0 development](releases/v4.2.6-r281-consolidated/HANDOFF-6.0.md)
 
 - [4.2.5 live theme and source comparison](releases/v4.2.5-theme-update/)
 - [Installer reconciliation audit](INSTALLER-RECONCILIATION.md)
 - [4.2.4 system-wide device-access update](releases/v4.2.4-access-update/)
 - [4.2.3 R281 source snapshot](releases/v4.2.3-r281-experiment/)
 
-The published current application reference is the 4.2.3 source plus the 4.2.4 and 4.2.5 overlays. The live audit checked all 46 previously published application files. These incremental releases are not standalone universal installers or flashable firmware.
+The 4.2.6 folder consolidates the current application source and includes client tracking, so development no longer needs the earlier overlays. Its 50 application files were compared with the installed R281. External package prerequisites are documented; this is a development snapshot, not standalone universal installation or flashable firmware.
 
 ## Separate universal toolkit
 
