@@ -98,6 +98,9 @@ cp "$SOURCE/include/openssl-module.mk" "$SDK/include/openssl-module.mk"
 # required by this fixture. Disable only optional engines in the LAB SDK;
 # preserve target-native OpenSSL and all core cryptographic algorithms.
 # Avoid conflicting duplicate Kconfig assignments from the imported SDK.
+# Official OpenWrt SDK archives may not contain a .config until first setup.
+# Create only this disposable SDK configuration, never customer/device files.
+[ -e "$SDK/.config" ] || : > "$SDK/.config"
 for opt in OPENSSL_ENGINE OPENSSL_ENGINE_BUILTIN \
   OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto; do
   sed -i "/^CONFIG_$opt=/d; /^# CONFIG_$opt is not set$/d" "$SDK/.config"
