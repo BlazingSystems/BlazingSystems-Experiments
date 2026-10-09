@@ -166,6 +166,31 @@ fi
 [ "$(awk -F '\t' '$1=="C"&&$2=="ctrlTwo"{print $3}' "$T/ledger.tsv")" = 2 ]
 [ "$(run ctrlTwo 2 ctrlTwo:2 SM bob - 5 1000)" = "$(printf 'REPLAY\t225')" ]
 refuse ctrlOne 5 ctrlOne:5 SM alice - 1 1000
+# MULTICTL-0681: an operator-side registry misconfiguration must not
+# let distinct controllers impersonate one another by sharing an HMAC key.
+# ALL registry entries are validated, even if the requested ID is ctrlOne.
+printf 'ctrlOne\t%s\nctrlTwo\t%s\n' "$key" "$key" > "$T/controller-keys.tsv"
+refuse ctrlOne 16 ctrlOne:16 AM alice - 1 1000
+grep -Fq 'duplicate controller secret' "$T/err"
+# Duplicate identity in unrelated rows must invalidate the entire registry.
+key3=5555555555555555555555555555555555555555555555555555555555555555
+key4=6666666666666666666666666666666666666666666666666666666666
+printf 'ctrlOne\t%s\nctrlTwo\t%s\nctrlThird\t%s\nctrlThird\t%s\n' \
+  "$key" "$key2" "$key3" "$key4" > "$T/controller-keys.tsv"
+refuse ctrlOne 16 ctrlOne:16 AM alice - 1 1000
+grep -Fq 'duplicate controller identity' "$T/err"
+# Reject the trivially forgeable all-zero secret on ANY listed controller.
+printf 'ctrlOne\t%s\nctrlTwo\t%s\n' "$key" "$wrong" > "$T/controller-keys.tsv"
+refuse ctrlOne 16 ctrlOne:16 AM alice - 1 1000
+grep -Fq 'zero controller secret rejected' "$T/err"
+# Restore the unique, private, nonzero registry. Earlier real receipts
+# must still replay without changing balances or emitting a new COMMIT.
+printf 'ctrlOne\t%s\nctrlTwo\t%s\n' "$key" "$key2" > "$T/controller-keys.tsv"
+pre_registry_digest="$(digest)"
+[ "$(run ctrlOne 15 ctrlOne:15 SM alice - 1 1000)" = "$(printf 'REPLAY\t89')" ]
+[ "$(run ctrlTwo 2 ctrlTwo:2 SM bob - 5 1000)" = "$(printf 'REPLAY\t225')" ]
+[ "$(digest)" = "$pre_registry_digest" ]
+echo 'MULTICTL-0681 PASS: global duplicate IDs, reused HMAC secrets and zero keys rejected without ACK or ledger mutation'
 # Data corruption must not be treated as a zero-balance fallback.
 sed 's/A\talice\t92/A\talice\t93/' "$T/ledger.tsv" > "$T/bad"
 mv "$T/bad" "$T/ledger.tsv"
