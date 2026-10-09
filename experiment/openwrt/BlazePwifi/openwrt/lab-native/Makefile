@@ -37,10 +37,11 @@ define Build/Configure
 endef
 
 define Build/Compile
-	$(TARGET_CC) $(TARGET_CFLAGS) -std=c11 -Wall -Wextra -Werror -O2 \
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+		-I$(STAGING_DIR)/usr/include -std=c11 -Wall -Wextra -Werror -O2 \
 		-DBLAZE_FIXTURE_ONLY $(PKG_BUILD_DIR)/v060_journal_authority_native.c \
 		-o $(PKG_BUILD_DIR)/v2-native-fixture \
-		$(TARGET_LDFLAGS) -lcrypto
+		$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib -lcrypto
 endef
 
 define Package/blazepwifi-v2-native-lab/install
