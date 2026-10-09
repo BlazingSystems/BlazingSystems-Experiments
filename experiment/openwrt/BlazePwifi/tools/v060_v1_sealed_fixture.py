@@ -33,6 +33,7 @@ MAX_BLOB = MAX_BODY + 1024
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,96}\.tsv$")
 SOURCE_RE = re.compile(r"^blaze-v1-audit-[A-Za-z0-9_-]+$")
 SEAL_RE = re.compile(r"^blaze-v1-seal-[A-Za-z0-9_-]+$")
+KEY_RE = re.compile(r"^blaze-v1-key-[A-Za-z0-9_-]+$")
 
 
 def block():
@@ -51,9 +52,11 @@ def fixture(path: str, *, must_exist: bool) -> Path:
 def seal_file(path: str, *, must_exist: bool) -> Path:
     p = Path(path)
     parent = p.parent
-    if parent.parent != Path("/tmp") or not SEAL_RE.fullmatch(parent.name):
+    if parent.parent != Path("/tmp") or parent.is_symlink():
         block()
-    if p.name not in ("key.bin", "backup.blaze") or parent.is_symlink():
+    if not ((p.name == "key.bin" and KEY_RE.fullmatch(parent.name)) or
+            (p.name == "backup.blaze" and SEAL_RE.fullmatch(parent.name))):
+        block()
         block()
     if parent.is_dir():
         st = parent.stat()
@@ -166,7 +169,7 @@ def seal(source: str, backup: str, keyfile: str) -> None:
     src = fixture(source, must_exist=True)
     output = seal_file(backup, must_exist=False)
     keypath = seal_file(keyfile, must_exist=True)
-    if output.name != "backup.blaze" or keypath.parent != output.parent or keypath.name != "key.bin":
+    if output.name != "backup.blaze" or keypath.name != "key.bin" or keypath.parent == output.parent:
         block()
     if output.exists():
         block()
@@ -221,7 +224,7 @@ def restore(backup: str, keyfile: str, dest: str) -> None:
     input_path = seal_file(backup, must_exist=True)
     keypath = seal_file(keyfile, must_exist=True)
     dst = fixture(dest, must_exist=False)
-    if input_path.name != "backup.blaze" or keypath.parent != input_path.parent or keypath.name != "key.bin":
+    if input_path.name != "backup.blaze" or keypath.name != "key.bin" or keypath.parent == input_path.parent:
         block()
     if dst.exists() or dst.is_symlink():
         block()
