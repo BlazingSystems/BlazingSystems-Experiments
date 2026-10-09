@@ -313,6 +313,9 @@ bp_member_transfer() {
 bp_member_delete() {
   user="$(bp_member_norm "$1")" || return 2
   source="$(bp_member_clean "$2")"
+  # The member row may have been replaced before an event/EIO interruption.
+  # Returning "unknown member" on replay would hide the disputed deletion.
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
   line="$(bp_member_line "$user")"
   [ -n "$line" ] || return 3
   banked="$(printf '%s\n' "$line" | cut -f8)"
