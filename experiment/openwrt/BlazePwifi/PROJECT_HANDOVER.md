@@ -1,3 +1,10 @@
+## V2NATIVE-0668 / OPEN — 2026-10-09 Asia/Manila
+
+- **Verified SHADOW-0667 checkpoint:** `af34604c59cc700e6322dbb265d849576db12138`. Full push [#37900085850](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900085850), Full PR [#37900091486](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900091486), Windows [#37900091492](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900091492) all **COMPLETED SUCCESS** for exact SHA, superseding prior pending state.
+- **IN PROGRESS V2NATIVE-0668:** Develop a **self-contained, host-compiled, fixture-guarded native C authenticated atomic prepaid journal engine** with controller key privacy, HMAC, monotonic per-controller floor, immutable signed receipts, all-in-one balance+receipt commit, file fsync/renameat/parent fsync. This is a required step *toward* a target-native engine, not a claim that production OpenWrt builds include it. No production rootfs/payment endpoint installation or v1 customer state migration. Add adversarial disposable `/tmp/blaze-v2-native-*` test, CI and exact commits.
+- **Next action:** implement bounded C source + regression, enforce compile-time fixture sandbox, run exact SHA CI, reconcile outcomes here and in CURRENT_STATE/CHANGE_LEDGER. Later cross-compile package for Ruijie/x86/OrangePi and validate target flash durability without enabling money paths.
+- **Rollback:** revert only V2NATIVE-0668 new source/test/workflow, retain frozen real [v0.6.0-alpha.4 LAB ONLY](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.6.0-alpha.4) original 12 assets. `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`.
+
 ## SHADOW-0667 / CODE+TEST COMMITTED, AWAITING EXACT CI — 2026-10-09 Asia/Manila
 
 - **Actual source:** `v2_shadow.sh` fail-closed private ownership/mode and single-hardlink check committed `febab8739960fa6ec77a5e7e50ad9f8251ff62df`. Synthetic three-store hardlink/mode/parent-directory regression committed `611c970b02547187e96231eb98fa1d357dc92f2e`; **NOT YET TESTED** on this head as this checkpoint is written.
