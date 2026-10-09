@@ -1,3 +1,9 @@
+## V2NATIVE-0668 / COMPILER HARDENING & FOCUSED CI — COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
+
+- **Latest source transition:** fixed native identifier `uint` colliding with GNU `sys/types.h` typedef in commit `9a56ad2516c76d8b270958a3c26bffe7be66f2da`. Added dedicated [V2 Native Synthetic Journal Gate](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/workflows/blazepwifi-v060-native-journal.yml) in commit `a9211cc52c908c701280268de34ae4ab88a2c7db`, which compiles with `-Werror`, executes synthetic HMAC/money faults, and verifies no OpenWrt rootfs native authority is installed.
+- **Still in progress:** no native compile/test result is asserted yet. New Full and Windows CI from these changes supersede earlier intermediate cancellation. Keep PR #30 draft and financial production STOP.
+- **NEXT EXACT ACTION:** inspect focused push [#37901712211](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901712211) and focused PR [#37901715502](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901715502), inspect first failing step and patch if required. Then exact final doc-head Full+Windows; record actual result/IDs before any v2 target installation. Frozen alpha.4 remains LAB ONLY.
+
 ## V2NATIVE-0668 / CODE & CI GATE COMMITTED — NOT YET VALIDATED — 2026-10-09 Asia/Manila
 
 - **Exact source:** C fixture-only authenticated native journal `tools/v060_journal_authority_native.c` commits `52b0cf2...` scaffold then `d311842603462e51e33776dbc74a23f9a499f161` functional controller/HMAC/fsync implementation; adversarial `tests/v060_native_v2_authority.sh` commit `bfe3dfd6fb17a69d6e01c00b3fb2a01ce3d9f460`; CI `.github/workflows/blazepwifi-build.yml` commit `0d7b74f7b1bab71afcf781b157744277bbb748a5`.
