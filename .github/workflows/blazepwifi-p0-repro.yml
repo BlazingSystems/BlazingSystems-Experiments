@@ -26,6 +26,8 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_revoke_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_admin_rental_lease_set.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_rental_status_heartbeat.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental'
       - 'experiment/openwrt/BlazePwifi/tests/rental.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/rental.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental'
@@ -74,6 +76,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh
       - name: Guard actual authenticated rental set-duration from silent credit loss
         run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_rental_lease_set.sh
+      - name: Preserve paid lease against signed Android heartbeat and stale updates
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_status_heartbeat.sh
       - name: Preserve real signed rental portal and operator lease compatibility
         run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Exercise live portal-to-vendo window reuse, write failures and closure
