@@ -14,6 +14,12 @@ grep -Fq 'DEPENDS:=+libopenssl' "$PKG"
 grep -Fq '#ifndef BLAZE_FIXTURE_ONLY' "$SOURCE"
 grep -Fq 'ROOT_PREFIX "/tmp/blaze-v2-native-"' "$SOURCE"
 grep -Fq 'sha256sum -c -' "$BUILDER"
+# SDK libcrypto needs only SHA/HMAC; its optional /dev/crypto engine must
+# remain disabled and is not a security requirement for the fixture.
+grep -Fq 'OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto' "$BUILDER"
+grep -Fq 'optional cryptodev engine remained enabled' "$BUILDER"
+grep -Fq 'package/openssl/compile' "$BUILDER"
+grep -Fq 'crypto.h' "$BUILDER"
 grep -Fq 'readelf -h' "$BUILDER"
 grep -Fq 'MACHINE="MIPS"' "$BUILDER"
 grep -Fq 'MACHINE="X86-64"' "$BUILDER"
