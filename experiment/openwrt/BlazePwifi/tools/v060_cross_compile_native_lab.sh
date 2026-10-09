@@ -64,6 +64,11 @@ cp "$ROOT/tools/v060_journal_authority_native.c" "$DEST/src/"
 grep -Fq '#ifndef BLAZE_FIXTURE_ONLY' "$DEST/src/v060_journal_authority_native.c"
 grep -Fq -- '-DBLAZE_FIXTURE_ONLY' "$DEST/Makefile"
 ! grep -R -Fq 'blazepwifi-v2-native-lab' "$ROOT/build/build-openwrt-image.sh"
+# OpenWrt's SDK prerequisite contract REQUIRES umask 022 for compiled
+# packages; restricted 077 is used only while staging private downloads above.
+# Do not use FORCE=1 to bypass its build safety checks.
+umask 022
+[ "$(umask)" = 0022 ] || { echo 'OpenWrt SDK umask prerequisite failed' >&2; exit 9; }
 # Build only the opted-in package in its own verified official OpenWrt SDK.
 printf '\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
 make -C "$SDK" defconfig
