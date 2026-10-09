@@ -97,7 +97,8 @@ bp_auth_set_password() {
 	case "$role" in admin|operator|viewer) ;; *) echo "invalid role" >&2; return 2;; esac
 	case "$must_change" in 0|1) ;; *) must_change=0;; esac
 	[ "${#pass}" -ge 12 ] || { echo "password must be at least 12 characters" >&2; return 2; }
-	salt="$(bp_auth_random_hex 8)"
+	salt="$(bp_auth_random_hex 8)" || return 8
+	printf '%s' "$salt" | LC_ALL=C grep -Eq '^[a-f0-9]{16}$' || return 8
 	if command -v openssl >/dev/null 2>&1 && openssl passwd -6 -salt "$salt" "$pass" >/dev/null 2>&1; then
 		scheme=openssl6; rounds=0; hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)"
 	else
@@ -193,10 +194,13 @@ bp_auth_role_rank() {
 bp_auth_session_create_unlocked() {
 	user="$1"; role="$2"; ip="$3"; now="$(bp_auth_now)"
 	uline="$(bp_auth_user_line "$user")"; must_change="$(printf '%s' "$uline" | cut -f7)"; [ -n "$must_change" ] || must_change=0
-	token="$(bp_auth_random_hex 32)"; csrf="$(bp_auth_random_hex 24)"
+	token="$(bp_auth_random_hex 32)" || return 8
+	csrf="$(bp_auth_random_hex 24)" || return 8
+	printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{64}$' || return 8
+	printf '%s' "$csrf" | LC_ALL=C grep -Eq '^[a-f0-9]{48}$' || return 8
 	abs="$(bp_auth_cfg auth_absolute_seconds 28800)"; absolute=$((now+abs))
-	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$token" "$user" "$role" "$csrf" "$now" "$now" "$absolute" "$ip" "$must_change" >> "$BP_ADMIN_SESSIONS"
-	chmod 600 "$BP_ADMIN_SESSIONS"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$token" "$user" "$role" "$csrf" "$now" "$now" "$absolute" "$ip" "$must_change" >> "$BP_ADMIN_SESSIONS" || return 8
+	chmod 600 "$BP_ADMIN_SESSIONS" || return 8
 	printf '%s\t%s\t%s\t%s\n' "$token" "$csrf" "$role" "$user"
 }
 
@@ -214,7 +218,11 @@ bp_auth_login() {
 	fi
 	line="$(bp_auth_user_line "$user")"; role="$(printf '%s' "$line" | cut -f2)"
 	bp_auth_clear_failures "$user" "$ip"
-	out="$(bp_auth_session_create_unlocked "$user" "$role" "$ip")"
+	if ! out="$(bp_auth_session_create_unlocked "$user" "$role" "$ip")"; then
+		bp_auth_audit session_create_failed "$user" "$ip" "entropy_or_storage_unavailable"
+		bp_auth_unlock
+		return 8
+	fi
 	bp_auth_audit login_success "$user" "$ip" "$role"
 	bp_auth_unlock
 	printf '%s\n' "$out"
