@@ -119,6 +119,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
       - name: ROLLBACK-0691 EXPECTED UNSAFE old-ledger replay repro (NOT production approval)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_v2_snapshot_rollback_repro.sh
+      - name: WITNESS-0692 hypothetical off-device trusted freshness protocol model (LAB ONLY)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_trusted_witness_model.py
       - name: Verify sealed synthetic-only backup code compiles and remains uninstalled
         run: |
           python3 -m py_compile experiment/openwrt/BlazePwifi/tools/v060_v1_sealed_fixture.py
