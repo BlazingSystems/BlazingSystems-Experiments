@@ -4,7 +4,15 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/blaze-rental-db-XXXXXX)"
-trap 'rm -rf "$T"' EXIT HUP INT TERM
+# Stage-aware failure is essential for silent set -e assertion failures;
+# this contains only fictional /tmp test secrets, never production keys.
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then
+  printf "RENT-0646 failure at stage=%s rc=%s\\n" "${stage:-bootstrap}" "$rc" >&2
+  [ ! -f "$T/failure" ] || cat "$T/failure" >&2
+fi
+rm -rf "$T"' EXIT
+trap 'exit 1' HUP INT TERM
+stage=bootstrap
 mkdir -p "$T/bin" "$T/state" "$T/run"
 cat > "$T/bin/uci" <<'UCI'
 #!/bin/sh
