@@ -270,7 +270,11 @@ bp_rental_lease_expire() {
 bp_rental_device_revoke() {
   did="$1"
   printf '%s\n' "$did" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 2
+  # After a previous interrupted revoke the device record may be missing;
+  # refuse subsequent apparent "unknown" results until money is reconciled.
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
   [ -f "$BP_RENTAL_DEVICES" ] && [ ! -L "$BP_RENTAL_DEVICES" ] || return 8
+  [ -n "$(bp_rental_device_line "$did")" ] || return 1
   # A corrupt/duplicate paid lease store cannot authorize any deletion.
   if ! awk -F '\t' -v d="$did" '
     NF!=5 || $1 !~ /^[A-Za-z0-9_.:-]+$/ || length($1)>96 ||
