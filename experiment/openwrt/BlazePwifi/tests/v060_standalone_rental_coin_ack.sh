@@ -23,13 +23,16 @@ export PATH="$T/bin:$PATH" BP_STATE="$T/state" BP_RUN="$T/run"
 LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi"
 export BP_LIB="$LIB/common.sh" BP_AUTH_LIB="$LIB/auth.sh"
 export BP_RENTAL_LIB="$LIB/rental.sh" BP_CONTROLLER_LIB="$LIB/controller.sh"
-export REQUEST_METHOD=POST SERVER_PORT=4455 REMOTE_ADDR=10.0.0.9
+# Source shared libs with GET, since common.sh reads a POST body from
+# stdin at load time; there is no POST body while setting up this fixture.
+export REQUEST_METHOD=GET SERVER_PORT=4455 REMOTE_ADDR=10.0.0.9
 stage=source-r281-common
 . "$BP_LIB"
 stage=source-r281-auth
 . "$BP_AUTH_LIB"
 stage=source-r281-rental
 . "$BP_RENTAL_LIB"
+export REQUEST_METHOD=POST
 stage=init-rental-store
 bp_rental_init
 DEVICE=0123456789abcdef01234567
