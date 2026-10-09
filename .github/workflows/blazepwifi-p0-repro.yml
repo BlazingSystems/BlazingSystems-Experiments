@@ -30,6 +30,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_heartbeat.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/vendo'
@@ -93,6 +94,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh
       - name: Preserve R281 active signed coin-start nonce and refuse failed target writes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh
+      - name: Refuse false-success R281 signed one-time Android enrollment and token reuse
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Refuse R281 hotspot cash false credit and active receipt rollover
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
       - name: Preserve real signed rental portal and operator lease compatibility
