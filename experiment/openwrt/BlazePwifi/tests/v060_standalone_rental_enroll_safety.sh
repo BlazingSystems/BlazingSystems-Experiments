@@ -120,18 +120,26 @@ MV
   [ -f "$BP_PAID_UNCERTAIN" ]
 done
 
-stage=duplicate-token-source-must-refuse
+stage=duplicate-token-source:reset-fixture
 : > "$BP_RENTAL_DEVICES"
 : > "$BP_RENTAL_POLICY"
 : > "$BP_RENTAL_ENROLL"
 rm "$BP_PAID_UNCERTAIN"
+stage=duplicate-token-source:prepare-source
 add_token
 add_token
 before="$(enroll_sha)"
+stage=duplicate-token-source:signed-request
 response="$(request)"
-printf '%s' "$response" | grep -q '"ok":false'
-printf '%s' "$response" | grep -q 'operator reconciliation required'
+stage=duplicate-token-source:refuse-success
+printf '%s' "$response" | grep -q '"ok":false' ||
+  { echo 'ENROLL-0655 duplicate token got a success response (credentials redacted)' >&2; exit 1; }
+stage=duplicate-token-source:require-reconciliation
+printf '%s' "$response" | grep -q 'operator reconciliation required' ||
+  { echo 'ENROLL-0655 duplicate token lacked operator-reconciliation error' >&2; exit 1; }
+stage=duplicate-token-source:source-remains-byte-identical
 [ "$(enroll_sha)" = "$before" ]
+stage=duplicate-token-source:paid-marker-retained
 [ -f "$BP_PAID_UNCERTAIN" ]
 
 echo 'ENROLL-0655 signed R281 CGI PASS: one QR = one durable identity+policy+consumed token; duplicate replay, EIO and malformed registry no false ACK; ambiguous state quarantined'
