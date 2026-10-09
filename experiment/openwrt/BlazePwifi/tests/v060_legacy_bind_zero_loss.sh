@@ -55,7 +55,9 @@ for profile in full r281; do
       awk -F '\t' -v d="$1" '$1==d {print $2;exit}' "$BP_ACCOUNTS"
     }
     assert_refused() {
-      before="$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)"
+      # Avoid the shell's global variable namespace: outer scenarios
+      # also keep a "before" checksum of the original legacy cash source.
+      refused_account_sha="$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)"
       set +e
       bp_lock
       bp_bind_device "$1" "$MAC" 10.1.1.9 1 >"$T/error.log" 2>&1
@@ -65,7 +67,7 @@ for profile in full r281; do
       [ "$status" -ne 0 ] || {
         echo "$stage $profile: unsafe legacy bind acknowledged" >&2;exit 1;
       }
-      [ "$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)" = "$before" ] || {
+      [ "$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)" = "$refused_account_sha" ] || {
         echo "$stage $profile: account file changed" >&2;exit 1;
       }
     }
