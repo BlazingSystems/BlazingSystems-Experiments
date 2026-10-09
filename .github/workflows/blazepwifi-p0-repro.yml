@@ -19,6 +19,8 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/admin/members.js'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/member.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/admin'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/common.sh'
@@ -52,6 +54,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh
       - name: Reject deletion of remaining member credit and quarantine interrupted admin writes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
+      - name: Guard stale paid balance in actual member management UI
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh
       - name: Verify native POSIX transaction journal fixture (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: Refuse unauthenticated v2 controller monetary envelopes (synthetic only)
