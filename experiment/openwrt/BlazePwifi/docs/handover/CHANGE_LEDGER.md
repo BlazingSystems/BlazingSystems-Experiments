@@ -1,3 +1,9 @@
+## 2026-10-09 — V2TARGET-0670 — SDK failed_prereq → fixed_untested
+
+- Actual [SDK Actions #37904896780](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37904896780) concluded FAILURE for all 3 target jobs. Ruijie & x86 logs expose upstream OpenWrt prerequisite: `proper-umask failed` / required 022. Original builder correctly verified/extracted SDK but ran `make` with staging umask 077. No custom C build is claimed.
+- Fix `32fca404bd19f7721cd18d3e406adf691ad27f74` changes umask to required 022 before make with a guard check, not `FORCE=1`. Previous private staging and strict synthetic code untouched.
+- Status repaired_untested. **NEXT:** live retest of SDK on all three targets and later cross-platform Full/Windows final SHA; record any additional package/toolchain failure. `PRODUCTION_v0.6.0_RELEASED=0`.
+
 ## 2026-10-09 — V2TARGET-0670 — committed_untested (SDK build)
 
 - Created SDK-only OpenWrt package `openwrt/lab-native/Makefile` `8897a43fd77bcd376e85afec13244ec78d248175`; SDK checksum-verified cross builder `tools/v060_cross_compile_native_lab.sh` `95445f92617a7267a2bbf38659012fb9302ae381`; three-target Actions matrix `.github/workflows/blazepwifi-v060-sdk-lab.yml` `1c832d9a40c8d5dd26af5bd61af564bc6e7f8996`; rootfs/payment avoidance regression `tests/v060_sdk_lab_guard.sh` `70bc7691b28668eef87a81d6e73f2161c909224c`; full-platform static gate `7fd9b7ed1f6e98c4a9ea393d9f3fb7c2696e6321`.
