@@ -874,8 +874,8 @@ jobs:
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
-      LAB_TAG: v0.6.0-alpha.2
-      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.2/RELEASE_NOTES.md
+      LAB_TAG: v0.6.0-alpha.3
+      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.3/RELEASE_NOTES.md
     steps:
       - uses: actions/checkout@v4
         with:
@@ -943,7 +943,7 @@ jobs:
           # appear as a successful lab release with missing checksum evidence.
           gh release create "$LAB_TAG" lab-release/* \
             --target "$GITHUB_SHA" --draft --prerelease \
-            --title "BlazePwifi v0.6.0-alpha.2 — LAB ONLY, NOT PRODUCTION" \
+            --title "BlazePwifi v0.6.0-alpha.3 — LAB ONLY, NOT PRODUCTION" \
             --notes-file "$NOTES"
           # GitHub draft releases intentionally have an untagged public URL;
           # /releases/tags/TAG can return HTTP 404 while the draft exists.
