@@ -111,6 +111,11 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_lab_storage_preflight.sh
       - name: BlazePwifi v0.6 native private HMAC and fsync synthetic journal authority
         run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
+      - name: Verify sealed synthetic-only backup code compiles and remains uninstalled
+        run: |
+          python3 -m py_compile experiment/openwrt/BlazePwifi/tools/v060_v1_sealed_fixture.py
+          python3 -m py_compile experiment/openwrt/BlazePwifi/tests/v060_v1_sealed_fixture.py
+          test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/v060_v1_sealed_fixture.py
       - name: Read-only redacted v1 financial migration preflight fixture
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_v1_inventory_fixture.py
       - name: Reject malformed and duplicate paid Wi-Fi account snapshots
