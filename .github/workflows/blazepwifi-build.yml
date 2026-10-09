@@ -402,7 +402,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
+          # Gradle upstream occasionally returns HTTP 500: retry transient
+          # server failure, but still fail closed after bounded attempts.
+          curl -fsSL --retry 5 --retry-delay 3 --connect-timeout 30 --max-time 180 \
+            https://services.gradle.org/distributions/gradle-4.4.1-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /opt
           echo /opt/gradle-4.4.1/bin >> "$GITHUB_PATH"
       - name: Build current BlazeRental APK and frozen v0.5.2 rollback rescue
