@@ -101,6 +101,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_v2_shadow_readonly.sh
       - name: BlazePwifi v0.6 synthetic HMAC authenticated controller journal
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
+      - name: Ensure LAB-only OpenWrt SDK fixture is excluded from production rootfs
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_sdk_lab_guard.sh
       - name: BlazePwifi v0.6 native fsync and renameat transaction boundary
         run: sh experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh
       - name: BlazePwifi v0.6 signed native durable journal end-to-end fault tests
