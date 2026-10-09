@@ -216,7 +216,7 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     original_capture = module.capture
     last_capture = original["soaks"][-1]["capture_log"]
 
-    def injected_change(mutate) -> None:
+    def injected_change(mutate, expected_reason: str = "EVIDENCE_CHANGED_DURING_REVIEW") -> None:
         fired = [False]
 
         def inject(*args, **kwargs):
@@ -230,7 +230,7 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
             try:
                 module.review(str(root))
             except ValueError as exc:
-                assert str(exc) == "EVIDENCE_CHANGED_DURING_REVIEW", (
+                assert str(exc) == expected_reason, (
                     "Wrong late mutation rejection code: " + str(exc)
                 )
             else:
@@ -255,7 +255,8 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
 
     unknown_capture = root / "captures" / ("e" * 40 + ".log")
     injected_change(lambda: write_private(unknown_capture,
-                    b"MOCK EXTRA RECORD AFTER LAST CAPTURE; NOT REAL POWER DATA\n"))
+                    b"MOCK EXTRA RECORD AFTER LAST CAPTURE; NOT REAL POWER DATA\n"),
+                    expected_reason="UNREFERENCED_EVIDENCE")
     unknown_capture.unlink()
     assert run(root, "STRUCTURE_READY_FOR_INDEPENDENT_REVIEW")["physical_powercut_verified"] is False
 
