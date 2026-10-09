@@ -1111,13 +1111,17 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     new_password="$(bp_param new_password)"
     [ -n "$new_password" ] || bp_fail "missing new password"
+    [ "${#new_password}" -ge 12 ] || bp_fail "password must be at least 12 characters"
     bp_auth_lock || bp_fail "authentication busy"
+    # The credential and old-session store are not one durable transaction.
+    # Revoke first under the auth lock: if storage fails, the old password
+    # remains unchanged and no pre-change session is silently trusted.
+    if ! bp_auth_invalidate_user_sessions "$BP_AUTH_USER"; then
+      bp_auth_audit session_revoke_failure "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "password_not_changed" || true
+      bp_auth_unlock
+      bp_fail "could not revoke existing sessions; password was not changed"
+    fi
     if bp_auth_set_password "$BP_AUTH_USER" "$BP_AUTH_ROLE" "$new_password" 0; then
-      if ! bp_auth_invalidate_user_sessions "$BP_AUTH_USER"; then
-        bp_auth_audit session_revoke_failure "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "password_changed" || true
-        bp_auth_unlock
-        bp_fail "password changed but old sessions could not be revoked; operator reconciliation required"
-      fi
       if ! rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null ||
          ! bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"; then
         bp_auth_unlock
