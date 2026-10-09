@@ -107,6 +107,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh
       - name: BlazePwifi v0.6 signed native durable journal end-to-end fault tests
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_auth_endtoend.sh
+      - name: BlazePwifi v0.6 physical scratch mount fail-closed preflight (synthetic only)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_lab_storage_preflight.sh
       - name: BlazePwifi v0.6 native private HMAC and fsync synthetic journal authority
         run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
       - name: Read-only redacted v1 financial migration preflight fixture
