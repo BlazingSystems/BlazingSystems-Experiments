@@ -76,7 +76,7 @@ grep -Fq UNCERTAIN "$T/failure"
 unset BLAZE_DURABLE_TEST_FAULT
 [ "$(bank alice):$(bank bob)" = '110:230' ]
 [ "$(signed ctrlOne 2 ctrlOne:2 TM alice bob 30 1000)" = "$(printf 'REPLAY\t110')" ]
-[ "$(( $(bank alice) + $(bank bob) ))" -eq 340
+[ "$(( $(bank alice) + $(bank bob) ))" -eq 340 ]
 # Rental paid extension uses same single replay+balance/floor store.
 [ "$(signed ctrlOne 3 ctrlOne:3 LR dev01 - 600 1000)" = "$(printf 'COMMIT\t1600')" ]
 [ "$(signed ctrlOne 3 ctrlOne:3 LR dev01 - 600 1000)" = "$(printf 'REPLAY\t1600')" ]
