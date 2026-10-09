@@ -100,7 +100,7 @@ cp "$SOURCE/include/openssl-module.mk" "$SDK/include/openssl-module.mk"
 # Avoid conflicting duplicate Kconfig assignments from the imported SDK.
 for opt in OPENSSL_ENGINE OPENSSL_ENGINE_BUILTIN \
   OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto; do
-  sed -i "/^CONFIG_\$opt=/d; /^# CONFIG_\$opt is not set$/d" "$SDK/.config"
+  sed -i "/^CONFIG_$opt=/d; /^# CONFIG_$opt is not set$/d" "$SDK/.config"
   printf '# CONFIG_%s is not set\n' "$opt" >> "$SDK/.config"
 done
 printf '\nCONFIG_PACKAGE_libopenssl=m\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
@@ -109,7 +109,7 @@ make -C "$SDK" defconfig
 # kernel header by copying a host header or using FORCE=1.
 for opt in OPENSSL_ENGINE OPENSSL_ENGINE_BUILTIN \
   OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto; do
-  if grep -Eq "^CONFIG_\$opt=[ym]" "$SDK/.config"; then
+  if grep -Eq "^CONFIG_$opt=[ym]" "$SDK/.config"; then
     echo "V2TARGET-0670 BLOCKED: optional cryptodev engine remained enabled: $opt" >&2
     exit 9
   fi
