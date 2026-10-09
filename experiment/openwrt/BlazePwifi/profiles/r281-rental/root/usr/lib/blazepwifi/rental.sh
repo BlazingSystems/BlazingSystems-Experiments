@@ -4,11 +4,16 @@ BP_RENTAL_ENROLL="${BP_RENTAL_ENROLL:-$BP_STATE/rental-enroll.tsv}"
 BP_RENTAL_POLICY="${BP_RENTAL_POLICY:-$BP_STATE/rental-policy.tsv}"
 BP_RENTAL_INVENTORY="${BP_RENTAL_INVENTORY:-$BP_STATE/rental-inventory.tsv}"
 BP_RENTAL_EVENTS="${BP_RENTAL_EVENTS:-$BP_STATE/rental-events.tsv}"
+# Ephemeral presence metadata must never overwrite a paid rental lease row.
+BP_RENTAL_SEEN_DIR="${BP_RENTAL_SEEN_DIR:-$BP_RUN/rental-last-seen}"
 
 bp_rental_init() {
   bp_init_dirs
   touch "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
   chmod 600 "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
+  [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  mkdir -p "$BP_RENTAL_SEEN_DIR" || return 8
+  chmod 700 "$BP_RENTAL_SEEN_DIR" || return 8
 }
 
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
@@ -44,12 +49,77 @@ bp_rental_device_line() {
   awk -F '\t' -v d="$1" '$1==d {print; exit}' "$BP_RENTAL_DEVICES"
 }
 
+bp_rental_seen_update() {
+  seen_id="$1"; seen_time="$2"
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' || return 8
+  case "$seen_time" in ''|*[!0-9]*) return 8;; esac
+  [ -d "$BP_RENTAL_SEEN_DIR" ] && [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  [ ! -L "$seen_file" ] || return 8
+  seen_tmp="$BP_RENTAL_SEEN_DIR/.$seen_id.$(bp_tmp_suffix)"
+  umask 077
+  if ! printf '%s\n' "$seen_time" > "$seen_tmp" ||
+     ! chmod 600 "$seen_tmp" ||
+     ! mv "$seen_tmp" "$seen_file"; then
+    rm -f "$seen_tmp" 2>/dev/null || true
+    return 8
+  fi
+  return 0
+}
+
+bp_rental_seen_get() {
+  seen_id="$1"; seen_fallback="${2:-0}"
+  case "$seen_fallback" in ''|*[!0-9]*) seen_fallback=0;; esac
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' ||
+    { printf '%s' "$seen_fallback"; return 0; }
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  if [ -f "$seen_file" ] && [ ! -L "$seen_file" ]; then
+    seen_actual="$(cat "$seen_file" 2>/dev/null || true)"
+    case "$seen_actual" in ''|*[!0-9]*) ;; *)
+      printf '%s' "$seen_actual"; return 0;;
+    esac
+  fi
+  printf '%s' "$seen_fallback"
+}
+
 bp_rental_device_write() {
   id="$1"; secret="$2"; lease="$3"; label="$4"; last="$5"
+  # This is authoritative paid rental time plus private device identity.
+  # Never rename an incomplete/corrupt source snapshot over other leases.
+  [ -f "$BP_RENTAL_DEVICES" ] && [ ! -L "$BP_RENTAL_DEVICES" ] || return 8
+  printf '%s\n' "$id" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+  case "$lease:$last" in ''|*[!0-9:]*) return 8;; esac
+  [ -n "$lease" ] && [ -n "$last" ] && [ -n "$secret" ] || return 8
+  for field in "$secret" "$label"; do
+    case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+  done
   tmp="$BP_STATE/.rental-devices.$(bp_tmp_suffix)"
-  awk -F '\t' -v OFS='\t' -v d="$id" '$1!=d {print}' "$BP_RENTAL_DEVICES" > "$tmp"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"
-  chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_DEVICES"; bp_durable_sync
+  umask 077
+  if ! awk -F '\t' -v d="$id" '
+    {
+      if (NF!=5 || $1 !~ /^[A-Za-z0-9_.:-]+$/ ||
+          length($1)>96 || length($2)==0 ||
+          $3 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/ ||
+          ++seen[$1]>1) invalid=1
+      if ($1==d) {matches++; next}
+      print
+    }
+    END {if (invalid || matches>1) exit 8}
+  ' "$BP_RENTAL_DEVICES" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_RENTAL_DEVICES"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_list_json() {
@@ -62,6 +132,8 @@ bp_rental_list_json() {
     hash="$(printf '%s' "$p" | cut -f4)"
     preferred="$(printf '%s' "$p" | cut -f6)"
     [ "$preferred" = "-" ] && preferred=""
+    # Presence is volatile; last_seen does not belong in a paid lease rewrite.
+    last="$(bp_rental_seen_get "$id" "$last")"
     inventory="$(bp_rental_inventory_get "$id")"
     [ "$salt" != "-" ] && [ "$hash" != "-" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
