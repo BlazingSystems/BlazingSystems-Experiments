@@ -141,9 +141,14 @@ bp_member_create() {
   salt="$(printf '%s' "$verifier" | cut -f2)"
   hash="$(printf '%s' "$verifier" | cut -f3)"
   rounds="$(printf '%s' "$verifier" | cut -f4)"
-  rev="$(bp_member_next_revision)"; now="$(bp_now)"
-  bp_member_write "$user" "$label" 1 "$scheme" "$salt" "$hash" "$rounds" 0 "$rev" "$now" "$source"
-  bp_member_event_record "admin:$rev:$user" "$now" "$user" create 0 0 "$source" ""
+  bp_paid_begin || return 9
+  rev="$(bp_member_next_revision)" || { bp_paid_abort; return 8; }
+  now="$(bp_now)"
+  if ! bp_member_write "$user" "$label" 1 "$scheme" "$salt" "$hash" "$rounds" 0 "$rev" "$now" "$source" ||
+     ! bp_member_event_record "admin:$rev:$user" "$now" "$user" create 0 0 "$source" ""; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s' "$rev"
 }
 
@@ -162,9 +167,14 @@ bp_member_patch() {
   [ "$enabled" = "@keep" ] && enabled="$oldenabled"
   case "$enabled" in 0|1) ;; *) return 2;; esac
   label="$(bp_member_clean "$label")"
-  rev="$(bp_member_next_revision)"; now="$(bp_now)"
-  bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source"
-  bp_member_event_record "admin:$rev:$user" "$now" "$user" patch 0 "$banked" "$source" ""
+  bp_paid_begin || return 9
+  rev="$(bp_member_next_revision)" || { bp_paid_abort; return 8; }
+  now="$(bp_now)"
+  if ! bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source" ||
+     ! bp_member_event_record "admin:$rev:$user" "$now" "$user" patch 0 "$banked" "$source" ""; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s' "$rev"
 }
 
@@ -180,9 +190,14 @@ bp_member_set_password() {
   salt="$(printf '%s' "$verifier" | cut -f2)"
   hash="$(printf '%s' "$verifier" | cut -f3)"
   rounds="$(printf '%s' "$verifier" | cut -f4)"
-  rev="$(bp_member_next_revision)"; now="$(bp_now)"
-  bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source"
-  bp_member_event_record "admin:$rev:$user" "$now" "$user" password_reset 0 "$banked" "$source" ""
+  bp_paid_begin || return 9
+  rev="$(bp_member_next_revision)" || { bp_paid_abort; return 8; }
+  now="$(bp_now)"
+  if ! bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source" ||
+     ! bp_member_event_record "admin:$rev:$user" "$now" "$user" password_reset 0 "$banked" "$source" ""; then
+    bp_paid_abort; return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s' "$rev"
 }
 
