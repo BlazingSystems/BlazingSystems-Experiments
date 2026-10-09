@@ -127,6 +127,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Preserve R281 signed hotspot coin receipts and refuse storage false ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
+      - name: Refuse legacy MAC credit loss before account persistence in both source profiles
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_legacy_bind_zero_loss.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Prevent partial member ledger replacement and false password/admin ACK
