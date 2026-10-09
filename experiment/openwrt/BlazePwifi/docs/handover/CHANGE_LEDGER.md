@@ -1,3 +1,10 @@
+## 2026-10-09 — SHADOW-0667 — committed_untested
+
+- Code commit `febab8739960fa6ec77a5e7e50ad9f8251ff62df`: `openwrt/rootfs/usr/lib/blazepwifi/v2_shadow.sh`, explicitly rejects directory != mode 700/current user and paid record inode != mode 600/single-link/current user. Test commit `611c970b02547187e96231eb98fa1d357dc92f2e`: `tests/v060_v2_shadow_readonly.sh`, disposable hardlink, group-readable and directory-mode negative tests and original records SHA preservation.
+- Original feature SHADOW-0666 only READ ONLY and UCI OFF. No payment API, ACK, migration, signing, customer data or lab release modifications.
+- This entry intentionally records **committed_untested**; CI pending this handover checkpoint. Prior head `98e96fec...` Full push #37898372490/Full PR #37898377634/Windows #37898377646 successful but do not cover `febab873`/`611c970`.
+- **Next:** verify exact new head Full+Windows matrix and source regression; log success/failure before further code, then resume native disabled authenticated v2 transaction work. Rollback the two scoped changes if any deployment compatibility concern.
+
 ## 2026-10-09 — SHADOW-0667 — in_progress
 
 - **Pre-change evidence:** commit `98e96fec84c8e3db01b05ba8903752a84f20f5cd`; full push #37898372490, full PR #37898377634, Windows #37898377646 all completed success. Previous pending Android emulator #37897444289 also completed success. No new code covered by those green runs.
