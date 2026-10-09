@@ -78,7 +78,7 @@ static void hexout(const unsigned char *b,size_t n,char *hex) {
     for(i=0;i<n;i++){hex[2*i]=chars[b[i]>>4];hex[2*i+1]=chars[b[i]&15];}
     hex[2*n]=0;
 }
-static int uint(const char *s,unsigned long long max,unsigned long long *out) {
+static int parse_uint(const char *s,unsigned long long max,unsigned long long *out) {
     size_t i,n=s?strlen(s):0;
     unsigned long long v=0;
     if(n<1 || n>15 || (n>1&&s[0]=='0'))return 0;
@@ -169,26 +169,26 @@ static void parseledger(char *s,size_t len) {
             return;
         } else if(n==3 && !strcmp(v[0],"A")){
             unsigned long long z;
-            if(!valid_id(v[1])||!uint(v[2],2000000000ULL,&z) ||
+            if(!valid_id(v[1])||!parse_uint(v[2],2000000000ULL,&z) ||
                nb>=MAX_BANK||find(bank,nb,v[1]))die("malformed/duplicate bank");
             strcpy(bank[nb].name,v[1]);bank[nb++].value=z;
         } else if(n==3 && !strcmp(v[0],"L")){
             unsigned long long z;
-            if(!valid_id(v[1])||!uint(v[2],2000000000ULL,&z) ||
+            if(!valid_id(v[1])||!parse_uint(v[2],2000000000ULL,&z) ||
                nl>=MAX_LEASE||find(lease,nl,v[1]))die("malformed/duplicate lease");
             strcpy(lease[nl].name,v[1]);lease[nl++].value=z;
         } else if(n==3 && !strcmp(v[0],"C")){
             unsigned long long z;
-            if(!valid_id(v[1])||!uint(v[2],100000000ULL,&z) ||
+            if(!valid_id(v[1])||!parse_uint(v[2],100000000ULL,&z) ||
                nc>=MAX_CTL||find(ctl,nc,v[1]))die("malformed/duplicate controller");
             strcpy(ctl[nc].name,v[1]);ctl[nc++].value=z;
         } else if(n==6 && !strcmp(v[0],"R")){
             unsigned long long z,res;
             struct receipt *a;
             if(nr>=MAX_RECEIPT||!valid_id(v[1])||
-               !uint(v[2],100000000ULL,&z)||z==0||
+               !parse_uint(v[2],100000000ULL,&z)||z==0||
                strlen(v[3])>=sizeof(receipts[0].event)||
-               !hex64(v[4])||!uint(v[5],2000000000ULL,&res))
+               !hex64(v[4])||!parse_uint(v[5],2000000000ULL,&res))
                 die("malformed receipt");
             a=&receipts[nr++];strcpy(a->ctl,v[1]);a->seq=z;
             strcpy(a->event,v[3]);strcpy(a->digest,v[4]);
@@ -299,9 +299,9 @@ int main(int argc,char **argv) {
        die("not a strict synthetic fixture root");
     if(!valid_id(id)||!valid_id(src)||
        !(valid_id(dst)||!strcmp(dst,"-"))||
-       !hex64(hmac)||!uint(argv[3],100000000ULL,&seq)||seq==0 ||
-       !uint(argv[8],31536000ULL,&units)||units==0 ||
-       !uint(argv[9],2000000000ULL,&now))
+       !hex64(hmac)||!parse_uint(argv[3],100000000ULL,&seq)||seq==0 ||
+       !parse_uint(argv[8],31536000ULL,&units)||units==0 ||
+       !parse_uint(argv[9],2000000000ULL,&now))
        die("malformed controller envelope");
     valid_opcode=(!strcmp(op,"AM")||!strcmp(op,"SM")||
                   !strcmp(op,"TM")||!strcmp(op,"LR"));
