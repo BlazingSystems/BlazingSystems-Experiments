@@ -1,3 +1,10 @@
+## V2TARGET-0670 / GATED PINNED-SOURCE PREFLIGHT, OUTCOME PENDING — 2026-10-09 Asia/Manila
+
+- **Latest defect:** OpenWrt SDK verified download/extract succeeds on first builds, but staged openssl source was missing after non-cone and first cone sparse checkout under `--no-checkout`. Real SDK #37905726696 has Ruijie and x86 failures `matching OpenSSL build source missing`; not a libcrypto compile proof. Earlier umask and missing-target-header failures are preserved below.
+- **Fix commits:** `2d0e8f6d7c2945037e9dad13e967256cacb7a2c5` makes `git clone --sparse`, then `git sparse-checkout set package/libs/openssl include`, then `git checkout --detach` immutable tagged OpenWrt commit. `f60734ebb34bcf0aaabdcfcff7a53b06469bd841` adds independent fast `source-check` job `needs: source-check` before 3 costly SDK compiles to fail closed if source unavailable. SDK checksum verification, private macro and no normal rootfs inclusion unchanged.
+- **Unverified:** source-check [Actions #37906061836](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37906061836) was pending when last checked; no target outputs have passed yet. Full/Windows on new doc head are also unverified. **NEXT EXACT ACTION:** check source-check, then the three SDK builds; inspect job logs for upstream OpenSSL compilation/target libcrypto link, actual `.apk` and ELF architecture, and artifact upload. Correct narrowly and update three handovers on any further failure.
+- **Do not claim:** actual persistent paid v2 migration, OpenWrt real flash fsync/dirsync power-cut acceptance, production Lineage-2 APK signing or 30-device paid soak. `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`; frozen v0.6.0-alpha.4 LAB ONLY unchanged.
+
 ## V2TARGET-0670 / OPENSSL SOURCE/LINK FIX COMMITTED_UNVERIFIED — 2026-10-09 Asia/Manila
 
 - **Prior green baseline** `62dbe9fa5319ba386521dd0e41d71e6eda447bba` Full push #37902464250, Full PR #37902469005, Windows #37902468986 and native #37902469023 all success. Not evidence of cross-target SDK compilation.
