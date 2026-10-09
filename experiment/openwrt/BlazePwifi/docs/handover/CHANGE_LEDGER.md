@@ -1,3 +1,9 @@
+## 2026-10-09 — SHADOW-0667 — in_progress
+
+- **Pre-change evidence:** commit `98e96fec84c8e3db01b05ba8903752a84f20f5cd`; full push #37898372490, full PR #37898377634, Windows #37898377646 all completed success. Previous pending Android emulator #37897444289 also completed success. No new code covered by those green runs.
+- **Intended files:** `experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/v2_shadow.sh`, `experiment/openwrt/BlazePwifi/tests/v060_v2_shadow_readonly.sh`, then these three handovers. **Risk:** false reassurance if a root-only financial diagnostic reads group-accessible/hardlinked paid records or insecure state directory. Fail closed on inode hardlinks and unsafe permissions; preserve rootfs diagnostic OFF default and strictly READ ONLY.
+- **Status:** in_progress, pre-code checkpoint. No money endpoint or migration changes; no production release. **Next:** source patch, adversarial fixture tests, exact-source CI, handover synchronization. Rollback bounded files only.
+
 ## SHADOW-0666 / CROSS-PLATFORM GREEN CHECKPOINT — 2026-10-09 Asia/Manila
 
 - **Actual verified exact source/checkpoint:** `adfdd4c5d8667d2cd68617fb96f12d60e8d78fc0`; [full PR BlazePwifi Actions #37897449038](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37897449038) **COMPLETED SUCCESS** exact head; [Windows Setup EXE Actions #37897449035](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37897449035) **COMPLETED SUCCESS** exact head, both `handover` and `build-windows` green. [Full push #37897444289](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37897444289) had 24 green jobs, with `v04_android_emulator` still in progress on last check; **not claimed completed**. Independent [P0 accounting #37897214308](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37897214308) SUCCESS exact script source at `dd497a54...`.
