@@ -498,6 +498,39 @@ with sync_playwright() as p:
     page.click('button:has-text("Disable live WireGuard")')
     page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
 
+    # UX-0689: a delayed config GET must never replace pre-Save operator input.
+    # Hold ONLY the next remote_config_get response; this is an in-browser
+    # disposable mock, not a real remote connection or device configuration.
+    page.evaluate("""() => {
+        window.__ux0689OriginalApi = window.BlazeCore.api;
+        window.__ux0689Hold = true;
+        window.BlazeCore.api = function(action, ...args) {
+          if(action==='remote_config_get' && window.__ux0689Hold){
+            window.__ux0689Hold = false;
+            return new Promise(resolve => { window.__ux0689Release = resolve; });
+          }
+          return window.__ux0689OriginalApi.apply(this,[action,...args]);
+        };
+        window.BlazeConsole.loadRemote();
+    }""")
+    page.wait_for_function("typeof window.__ux0689Release === 'function'")
+    page.select_option("#remoteMode","zerotier")
+    page.fill("#remoteAllowlist","10.77.0.0/24")
+    page.fill("#ztNetworkId","0123456789abcdef")
+    # The late response still describes the previous WireGuard profile.
+    page.evaluate("""() => window.__ux0689Release({
+        ok:true,config:{mode:'wireguard',source_allowlist:'10.20.0.0/24',zt_network_id:''}
+    })""")
+    page.wait_for_function("document.getElementById('remoteConfigState').textContent.includes('unsaved profile edits were preserved')")
+    assert page.locator("#remoteMode").input_value()=="zerotier", "UX-0689 late fetch clobbered remote mode"
+    assert page.locator("#remoteAllowlist").input_value()=="10.77.0.0/24", "UX-0689 late fetch clobbered allowlist"
+    assert page.locator("#ztNetworkId").input_value()=="0123456789abcdef", "UX-0689 late fetch clobbered ZeroTier network"
+    page.evaluate("""() => {
+        window.BlazeCore.api = window.__ux0689OriginalApi;
+        delete window.__ux0689OriginalApi;
+        delete window.__ux0689Release;
+    }""")
+
     # dev.5 live ZeroTier: stable identity -> authorization-ready node -> transactional apply -> safe disable.
     page.select_option("#remoteMode","zerotier")
     page.fill("#remoteAllowlist","10.77.0.0/24")
