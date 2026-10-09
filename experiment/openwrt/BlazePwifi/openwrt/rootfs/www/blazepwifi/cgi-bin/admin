@@ -538,20 +538,51 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
+    confirm_forfeit="$(bp_param confirm_forfeit)"
     case "$seconds" in ''|*[!0-9]*) bp_fail "invalid lease duration";; esac
-    [ "$seconds" -le 2592000 ] || bp_fail "lease duration too large"
-    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown rental device"
-    secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
-    # Operator lease changes are financial authority, not a cosmetic edit.
-    # Refuse ACK and retain paid-state quarantine after any ambiguous write.
-    bp_paid_begin || bp_fail "paid state uncertain; operator reconciliation required"
+    [ "$seconds" -le 2592000 ] 2>/dev/null || bp_fail "lease duration too large"
+    # Avoid an implicit octal conversion of leading-zero decimal form values.
+    seconds="$(printf '%s' "$seconds" | sed 's/^0*//')"
+    [ -n "$seconds" ] || seconds=0
+    # Global account lock serializes this overwrite with signed coin events,
+    # then paid lock covers the mutation and its distinct audit record.
+    bp_lock || bp_fail "accounting busy"
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || {
+      bp_unlock; bp_fail "paid state uncertain; operator reconciliation required"
+    }
+    line="$(bp_rental_device_line "$did")"
+    [ -n "$line" ] || { bp_unlock; bp_fail "unknown rental device"; }
+    secret="$(printf '%s' "$line" | cut -f2)"
+    label="$(printf '%s' "$line" | cut -f4)"
+    last="$(printf '%s' "$line" | cut -f5)"
+    oldlease="$(printf '%s' "$line" | cut -f3)"
+    case "$oldlease" in
+      ''|*[!0-9]*) bp_unlock; bp_fail "invalid persisted rental lease; operator reconciliation required" ;;
+    esac
     lease=$((now+seconds))
-    if ! bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last"; then
-      bp_paid_abort
-      bp_fail "rental lease storage failed; operator reconciliation required"
+    forfeit=0
+    if [ "$oldlease" -gt "$lease" ] 2>/dev/null; then
+      [ "$confirm_forfeit" = CONFIRM_FORFEIT ] || {
+        bp_unlock
+        bp_fail "shortening paid rental time requires explicit CONFIRM_FORFEIT authorization"
+      }
+      forfeit=$((oldlease-lease))
     fi
-    bp_paid_commit || bp_fail "rental lease sync uncertain; operator reconciliation required"
-    bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
+    bp_paid_begin || {
+      bp_unlock; bp_fail "paid state uncertain; operator reconciliation required"
+    }
+    if ! bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last" ||
+       ! bp_rental_event_log lease_set "$did" "from:$oldlease:to:$lease:forfeit_seconds:$forfeit"; then
+      bp_paid_abort
+      bp_unlock
+      bp_fail "rental lease storage or audit failed; operator reconciliation required"
+    fi
+    if ! bp_paid_commit; then
+      bp_unlock
+      bp_fail "rental lease sync uncertain; operator reconciliation required"
+    fi
+    bp_unlock
+    bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds:forfeit_seconds:$forfeit"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
 
