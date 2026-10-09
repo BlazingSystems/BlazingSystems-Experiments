@@ -99,6 +99,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: BlazePwifi v0.6 synthetic HMAC authenticated controller journal
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
+      - name: BlazePwifi v0.6 native fsync and renameat transaction boundary
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh
       - name: Reject malformed and duplicate paid Wi-Fi account snapshots
         run: sh experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
