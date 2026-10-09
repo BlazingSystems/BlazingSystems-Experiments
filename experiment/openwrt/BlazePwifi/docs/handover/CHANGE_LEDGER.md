@@ -1,3 +1,10 @@
+## 2026-10-09 — V2NATIVE-0669 — focused_validated, broad_matrix_pending
+
+- **Actual compiled test evidence:** `225a41b997a8b171ec3f2fefd435acdb77b4e2ba`, focused native push #37902207844 SUCCESS, PR #37902213670 SUCCESS. The same source at doc-head `aebf8cbce7b6031087394032ab093715f5f1d263` focused PR #37902292666 SUCCESS. 11 signed debits and bounded 8-receipt replay window pass; expired authentic seq1/5 refused; locked concurrent write refused; SHA snapshot/tampering/faults remain asserted.
+- **Remaining runs:** Full push #37902285024, Full PR #37902292687 and Windows #37902292623 were pending/in progress at checkpoint; these are NOT green claims. Previous cancelled intermediate runs were concurrency supersession, not successes.
+- **Scope/rollback:** source/test/workflow only; no rootfs native executable, real payment path, migration, Android signer or release retag. Native host build provides synthetic syscall integration only, not guarantee of NAND flash or power interruption. `PRODUCTION_v0.6.0_RELEASED=0`.
+- **NEXT:** exact final checkpoint broad CI evidence; then controlled OFF-by-default native target compile and hardware acceptance without authorizing v1 migration.
+
 ## 2026-10-09 — V2NATIVE-0669 — committed_untested
 
 - Native prior focused push #37901902866 / PR #37901909728 `338cc995...` **SUCCESS** and doc-head PR #37901983190 `6c84a368...` **SUCCESS**, confirming first native C fixture and its HMAC/fsync synthetic tests now pass after the compiler parser fix. This is host CI only.
