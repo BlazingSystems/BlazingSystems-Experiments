@@ -69,16 +69,7 @@ def isolated(test):
     with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as d:
         root = Path(d)
         create(root)
-        before = {p.relative_to(root): hashlib.sha256(p.read_bytes()).hexdigest()
-                  for p in root.rglob("*") if p.is_file()}
         test(root)
-        # A diagnostic-only audit must NEVER modify existing fictional state.
-        for name, checksum in before.items():
-            p = root / name
-            if p.exists() and not p.is_symlink():
-                # Some tests deliberately edit input files; they verify exact
-                # read-only behavior by taking separate before/after snapshots.
-                pass
 
 
 def check_clean(root):
@@ -131,8 +122,12 @@ mutated(lambda p: write(p / "paid-state-uncertain", "PENDING\t1000\n"))
 mutated(lambda p: (p / "members.tsv").chmod(0o644))
 mutated(lambda p: (p / ".blaze-v1-fixture-only").unlink())
 mutated(lambda p: (p / "rental-devices.tsv").unlink())
-mutated(lambda p: (p / "accounts.tsv").rename(p / "saved") or
-        (p / "accounts.tsv").symlink_to(p / "saved"))
+def replace_with_symlink(p):
+    (p / "accounts.tsv").rename(p / "saved")
+    (p / "accounts.tsv").symlink_to(p / "saved")
+
+
+mutated(replace_with_symlink)
 mutated(lambda p: os.link(p / "members.tsv", p / "member-hardlink.tsv"))
 mutated(lambda p: write(p / "targets" / "vendo-01.tsv",
                         "bad-target\n"))
