@@ -173,4 +173,5 @@ with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as root:
 
 print("MIG-0645 PASS: redacted read-only inventory, clean balances and schema, "
       "reject corrupt/duplicate/private-source/uncertain paid state, no filesystem mutations")
+print("VINV-0675 PASS: unknown paid files, orphan member/rental/target references and huge numeric cells fail closed")
 print("NOT PRODUCTION: fixture-only, not an operator quiescence/signed recovery or customer data migration")
