@@ -52,11 +52,12 @@ def tree(root: Path) -> dict:
             for p in root.rglob("*") if p.is_file()}
 
 with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as temp_source, \
-     tempfile.TemporaryDirectory(prefix="blaze-v1-seal-", dir="/tmp") as temp_seal:
-    src, sealroot = Path(temp_source), Path(temp_seal)
+     tempfile.TemporaryDirectory(prefix="blaze-v1-seal-", dir="/tmp") as temp_seal, \
+     tempfile.TemporaryDirectory(prefix="blaze-v1-key-", dir="/tmp") as temp_key:
+    src, sealroot, keyroot = Path(temp_source), Path(temp_seal), Path(temp_key)
     make_fixture(src)
     baseline = tree(src)
-    keyfile, backup = sealroot / "key.bin", sealroot / "backup.blaze"
+    keyfile, backup = keyroot / "key.bin", sealroot / "backup.blaze"
     dst = Path(tempfile.mkdtemp(prefix="blaze-v1-audit-recovered-", dir="/tmp"))
     dst.rmdir()  # Reserve a valid path without allowing an existing restore destination.
     try:
@@ -75,6 +76,16 @@ with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as temp_s
         invoke("restore", "--backup", backup, "--key-file", keyfile, "--output", dst, expected=4)
         saved_cipher = backup.read_bytes()
         saved_key = keyfile.read_bytes()
+        # Transporting the backup root must never transport the recovery key.
+        assert not (sealroot / "key.bin").exists()
+        colocated = sealroot / "key.bin"
+        colocated.write_bytes(saved_key)
+        colocated.chmod(0o600)
+        forbidden_dst = Path("/tmp/blaze-v1-audit-colocated-" + str(os.getpid()))
+        invoke("restore", "--backup", backup, "--key-file", colocated,
+               "--output", forbidden_dst, expected=4)
+        assert not forbidden_dst.exists()
+        colocated.unlink()
 
         # Tampering, wrong-key, shortened authentication tag all fail closed,
         # with no newly created restore directory and no plaintext exposure.
