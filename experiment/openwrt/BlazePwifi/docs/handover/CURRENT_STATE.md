@@ -1,3 +1,12 @@
+## V2TARGET-0670 / OPENSSL SOURCE/LINK FIX COMMITTED_UNVERIFIED — 2026-10-09 Asia/Manila
+
+- **Prior green baseline** `62dbe9fa5319ba386521dd0e41d71e6eda447bba` Full push #37902464250, Full PR #37902469005, Windows #37902468986 and native #37902469023 all success. Not evidence of cross-target SDK compilation.
+- **SDK failed cases (actual):** run #37904896780: OpenWrt proper-umask 077 refused (3 targets). #37905183268: after `022`, target compile fails missing `openssl/crypto.h` (all 3, SDK lacked staged OpenSSL headers). #37905580594: attempted pinned upstream v25.12.5 source checkout with non-cone sparse path produced `matching OpenSSL build source missing` (Ruijie, ARM visible; no green SDK). Intermediate Full push #37905580597 mandatory handover freshness gate FAIL expected due unsynchronized code; do not count as pass.
+- **Commits:** `32fca404bd19f7721cd18d3e406adf691ad27f74` restrictively correct SDK umask; `efde785904cfaeeace00fcc1126abf35a208e95b` build official OpenWrt matching OpenSSL package from pinned signed 25.12.5 source commit `f0a60eee2fe051741c643ea6118718aae1ef17fb`; `399e3164a830728b43427ea5aca39a867fb71863` target staging includes/link flags; `ffebdce13cdc6d54a2e4d43931c30b31b1ef073d` fix Git sparse cone directory checkout. No production rootfs touched.
+- **CURRENT STATE:** new SDK candidate unverified; newest push SDK #37905726696 / PR SDK #37905735759 pending at last check. Verify fresh docs HEAD-specific full+Windows outcomes; do not reuse canceled intermediate CI to imply success.
+- **NEXT EXACT ACTION:** inspect all 3 SDK target jobs for actual OpenSSL compile and C link/ELF/.apk result; correct failure with narrow source change + record. If green, check all same-SHA Full/Windows/Android build candidate gates. Actual user hardware powerloss and encrypted reversible v1 migration are still required for any production transition.
+- **Hard STOP**: `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`; alpha.4 is LAB ONLY and unchanged; original Lineage-2 APK signer remains unchanged.
+
 ## V2TARGET-0670 / SDK UMASK FIX COMMITTED, RETEST REQUIRED — 2026-10-09 Asia/Manila
 
 - **First CI outcome:** #37904896780 Ruijie/x86/OrangePi all FAILED at official SDK prerequisite check, not C compile. Ruijie and x86 logs specifically say `proper-umask failed`, required `umask 022`; SDK refused build as designed. No target .apk or ELF is validated by that run.
