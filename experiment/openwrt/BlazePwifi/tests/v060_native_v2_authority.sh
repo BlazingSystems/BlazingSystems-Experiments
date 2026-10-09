@@ -17,15 +17,21 @@ cc -std=c11 -Wall -Wextra -Werror -O2 -DBLAZE_FIXTURE_ONLY "$SRC" \
   -lcrypto -o "$T/native"
 printf 'BLAZE-V2-SYNTHETIC-ONLY\n' >"$T/.blaze-v2-fixture-only"
 key=3333333333333333333333333333333333333333333333333333333333333333
-printf 'ctrlOne\t%s\n' "$key" > "$T/controller-keys.tsv"
+key2=4444444444444444444444444444444444444444444444444444444444444444
+printf 'ctrlOne\t%s\nctrlTwo\t%s\n' "$key" "$key2" > "$T/controller-keys.tsv"
 printf 'V\t2\nA\talice\t100\nA\tbob\t200\nL\tdev01\t0\n' >"$T/ledger.tsv"
 base="$(sha256sum "$T/ledger.tsv" | cut -d' ' -f1)"
 printf 'H\t%s\n' "$base" >>"$T/ledger.tsv"
 chmod 600 "$T/.blaze-v2-fixture-only" "$T/controller-keys.tsv" "$T/ledger.tsv"
 sign() {
+  case "$1" in
+    ctrlOne) controller_key="$key" ;;
+    ctrlTwo) controller_key="$key2" ;;
+    *) echo "unknown synthetic controller" >&2; return 1 ;;
+  esac
   printf 'BLAZE-V2-AUTH-FIXTURE/1\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" |
-    openssl dgst -sha256 -mac HMAC -macopt "hexkey:$key" -r | awk '{print $1}'
+    openssl dgst -sha256 -mac HMAC -macopt "hexkey:$controller_key" -r | awk '{print $1}'
 }
 run() {
   signed="$(sign "$@")"
@@ -133,10 +139,37 @@ while [ ! -e "$T/.lockready" ]; do sleep 0.1; done
 refuse ctrlOne 16 ctrlOne:16 AM alice - 10 1000
 wait "$locker"
 [ "$(bank alice)" -eq 89 ]
+# MULTICTL-0673: two authenticated controllers, two different private
+# keys, independent monotonic sequence floors, ONE atomic member ledger.
+[ "$(run ctrlTwo 1 ctrlTwo:1 AM alice - 3 1000)" = "$(printf 'COMMIT\t92')" ]
+[ "$(bank alice):$(bank bob)" = '92:230' ]
+two_digest="$(digest)"
+[ "$(run ctrlTwo 1 ctrlTwo:1 AM alice - 3 1000)" = "$(printf 'REPLAY\t92')" ]
+[ "$(digest)" = "$two_digest" ]
+# A retained receipt returns the result at the ORIGINAL commit, not the
+# current account balance; replay cannot undo another controller's credit.
+[ "$(run ctrlOne 15 ctrlOne:15 SM alice - 1 1000)" = "$(printf 'REPLAY\t89')" ]
+[ "$(digest)" = "$two_digest" ]
+refuse ctrlTwo 1 ctrlTwo:1 AM alice - 4 1000
+refuse ctrlTwo 3 ctrlTwo:3 SM bob - 5 1000
+# A controller cannot impersonate the other by signing the exact other
+# controller envelope with its own key. Rejection emits NO paid ACK.
+forged="$(printf 'BLAZE-V2-AUTH-FIXTURE/1\tctrlTwo\t2\tctrlTwo:2\tSM\tbob\t-\t5\t1000\n' |
+  openssl dgst -sha256 -mac HMAC -macopt "hexkey:$key" -r | awk '{print $1}')"
+if "$T/native" "$T" ctrlTwo 2 ctrlTwo:2 SM bob - 5 1000 "$forged" >"$T/out" 2>"$T/err"; then
+  echo 'cross-controller key forgery accepted' >&2;exit 1
+fi
+[ ! -s "$T/out" ] && [ "$(digest)" = "$two_digest" ]
+[ "$(run ctrlTwo 2 ctrlTwo:2 SM bob - 5 1000)" = "$(printf 'COMMIT\t225')" ]
+[ "$(bank alice):$(bank bob)" = '92:225' ]
+[ "$(awk -F '\t' '$1=="C"&&$2=="ctrlOne"{print $3}' "$T/ledger.tsv")" = 15 ]
+[ "$(awk -F '\t' '$1=="C"&&$2=="ctrlTwo"{print $3}' "$T/ledger.tsv")" = 2 ]
+[ "$(run ctrlTwo 2 ctrlTwo:2 SM bob - 5 1000)" = "$(printf 'REPLAY\t225')" ]
+refuse ctrlOne 5 ctrlOne:5 SM alice - 1 1000
 # Data corruption must not be treated as a zero-balance fallback.
-sed 's/A\talice\t89/A\talice\t90/' "$T/ledger.tsv" > "$T/bad"
+sed 's/A\talice\t92/A\talice\t93/' "$T/ledger.tsv" > "$T/bad"
 mv "$T/bad" "$T/ledger.tsv"
 refuse ctrlOne 5 ctrlOne:5 AM alice - 10 1000
 grep -Fq 'SHA-256 integrity footer mismatch' "$T/err"
-echo 'V2NATIVE-0669 PASS: native HMAC/fsync boundary, replay floor after receipt compaction, lock contention, tamper and crash no-ACK'
-echo 'LAB ONLY: fixture binary never installed; no target OpenWrt cross build, migration, or physical power-cut proof'
+echo 'MULTICTL-0673 PASS: independent controller keys, cross-key forgery refusal, shared prepaid balances, replay floor, lock and crash no-ACK'
+echo 'LAB ONLY: this host test is not hardware power-loss, v1 migration or a production release gate'
