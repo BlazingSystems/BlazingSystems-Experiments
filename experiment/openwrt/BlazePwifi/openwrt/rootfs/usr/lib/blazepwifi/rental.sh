@@ -431,6 +431,9 @@ bp_rental_events_json() {
   first=1; printf '['
   tail -n "$limit" "$BP_RENTAL_EVENTS" 2>/dev/null | while IFS="$(printf '\t')" read -r event did detail when kind; do
     [ -n "$event" ] || continue
+    # v0.6.0 development receipts put immutable pulse count in column 5.
+    # Hide that internal fingerprint from the original admin kind display.
+    case "$kind" in p:*) kind="" ;; esac
     [ -n "$kind" ] || kind="$(printf '%s' "$event" | sed 's/:.*//')"
     [ "$first" = 1 ] || printf ','
     first=0
@@ -442,21 +445,35 @@ bp_rental_events_json() {
 
 # Keep receipt append independently mockable for fault-injection tests.
 bp_rental_append_paid_receipt() {
-  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >> "$BP_RENTAL_EVENTS" || return 8
+  # Keep legacy fields 1-4 stable; column 5 binds the signed pulse
+  # quantity to this immutable receipt, so altered retries never false-ACK.
+  printf '%s\t%s\t%s\t%s\tp:%s\n' "$1" "$2" "$3" "$4" "$5" >> "$BP_RENTAL_EVENTS" || return 8
   chmod 600 "$BP_RENTAL_EVENTS" || return 8
   bp_durable_sync || return 8
 }
 
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
+  # Internal callers must not be able to mint negative/zero/overflowing paid
+  # leases even when bypassing the external Vendo CGI parameter checks.
+  case "$pulses" in ''|*[!0-9]*) return 2;; esac
+  [ "$pulses" -ge 1 ] 2>/dev/null && [ "$pulses" -le 20 ] 2>/dev/null || return 2
   # Refuse invalid receipt storage before touching a prepaid lease, and never
   # clear an operator-reconcilable uncertainty marker on an ordinary retry.
   [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
   [ ! -e "$BP_STATE/paid-state-uncertain" ] || return 9
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
-  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")"
+  # Reject duplicate/corrupt event IDs rather than trusting the first row.
+  # Legacy 4-column coin receipts cannot prove the original pulse quantity:
+  # refuse an ambiguous ACK, never re-credit or auto-migrate such records.
+  old="$(awk -F '\t' -v e="$event" '$1==e {found++; print} END {if(found>1) exit 5}' "$BP_RENTAL_EVENTS")" || return 5
   if [ -n "$old" ]; then
-    printf 'duplicate\t%s\n' "$(printf '%s' "$old" | cut -f3)"
+    old_did="$(printf '%s' "$old" | cut -f2)"
+    old_lease="$(printf '%s' "$old" | cut -f3)"
+    old_pulses="$(printf '%s' "$old" | cut -f5)"
+    [ "$old_did" = "$did" ] && [ "$old_pulses" = "p:$pulses" ] || return 5
+    case "$old_lease" in ''|*[!0-9]*) return 5;; esac
+    printf 'duplicate\t%s\n' "$old_lease"
     return 0
   fi
   line="$(bp_rental_device_line "$did")"
@@ -478,7 +495,7 @@ bp_rental_apply_coin() {
   if ! bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"; then
     bp_paid_abort; return 8
   fi
-  if ! bp_rental_append_paid_receipt "$event" "$did" "$newlease" "$now"; then
+  if ! bp_rental_append_paid_receipt "$event" "$did" "$newlease" "$now" "$pulses"; then
     bp_paid_abort; return 8
   fi
   bp_paid_commit || return 8
