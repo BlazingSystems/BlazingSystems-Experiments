@@ -1,3 +1,10 @@
+## V2NATIVE-0668 / FIRST COMPILER FAILURE TRIAGED — 2026-10-09 Asia/Manila
+
+- **Real failure evidence:** [focused Actions #37901810966](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901810966) completed **failure**, step `Compile and fault-test signed synthetic prepaid journal`. Direct job log reports `tools/v060_journal_authority_native.c:227:11: error: 'newline' undeclared`; `getkey` declared local `nl` but incorrectly advanced `p=newline+1` after an unrelated source-wide rename. Compiler had not reached runtime tests.
+- **Repair commit:** `338cc995a314d579bff1f6027df54242be64ac3c` replaces only the key parser advancement with `p=nl+1`. Earlier `uint` -> `parse_uint` correction `9a56ad25...` remains. No new paid API or installer changed; standalone/frozen release untouched.
+- **CURRENT STATUS:** REPAIRED_UNVERIFIED; green SHA before this feature remains SHADOW-0667 `af34604c...`. Do not treat pending/new actions as successful. `PRODUCTION_v0.6.0_RELEASED=0` and source migration OFF.
+- **NEXT EXACT ACTION:** inspect focused exact source CI and test failure output, apply bounded fix then update ledger+project handover and run exact final Full+Windows. After synthetic candidate verified, only then plan OpenWrt SDK cross-target packaging with financial writes OFF until power-cut, backup and migration proof.
+
 ## V2NATIVE-0668 / FOCUSED CI WIRED, OUTCOME PENDING — 2026-10-09 Asia/Manila
 
 - **Prior source:** V2NATIVE C `d3118426`, native shell tests `bfe3dfd6`, full CI `0d7b74f7`. **Fix:** rename C helper `uint` to `parse_uint` to avoid GNU typedef collision `9a56ad2516c76d8b270958a3c26bffe7be66f2da`. **Focused test workflow:** `.github/workflows/blazepwifi-v060-native-journal.yml` `a9211cc52c908c701280268de34ae4ab88a2c7db`. Source is only in `tools/`, not in `openwrt/rootfs`.
