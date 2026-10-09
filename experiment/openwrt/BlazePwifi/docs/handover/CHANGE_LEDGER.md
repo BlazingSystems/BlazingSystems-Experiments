@@ -1,3 +1,9 @@
+## 2026-10-09 — V2NATIVE-0668 — committed_untested
+
+- Created `tools/v060_journal_authority_native.c` scaffold `52b0cf2aa06e7190d642345a4adc9ec550b6dd69`, then functional prototype `d311842603462e51e33776dbc74a23f9a499f161`. It is never shipped or compiled into live firmware, enforces `BLAZE_FIXTURE_ONLY` and strict marker gated synthetic `/tmp`; controller HMAC verified inside C with private key not exposed via argv, single bank/lease/sequence/receipt SHA-sealed snapshot and file/parent fsync before success ACK. OpenSSL used only in synthetic candidate.
+- Added synthetic adversarial test `bfe3dfd6fb17a69d6e01c00b3fb2a01ce3d9f460`: native `-Werror` build, invalid unguarded build, HMAC tamper, replay/different amount, ordering, member transfer and rental lease, three fsync/ACK injection points, inode perms and corrupt footer. Added Full CI required gate `0d7b74f7b1bab71afcf781b157744277bbb748a5`.
+- **Result pending:** no green result is asserted for new code; exact CI required. No rootfs/customer payment writes, no target binary, migration, secret publication or release modification. Original v0.6.0-alpha.4 untouched. **Next:** fetch Full push/PR failures and fix, update log. Rollback V2NATIVE source/test/workflow only.
+
 ## 2026-10-09 — V2NATIVE-0668 — in_progress
 
 - **Validated preceding SHADOW-0667:** exact source `af34604c59cc700e6322dbb265d849576db12138`. Full push #37900085850, Full PR #37900091486, Windows Setup #37900091492 all GitHub `completed/success`. Earlier cancelled intermediate runs remain historically cancelled.
