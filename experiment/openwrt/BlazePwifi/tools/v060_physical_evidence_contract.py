@@ -16,7 +16,7 @@ import re
 import stat
 import sys
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 
 ROOT_PREFIX = "blaze-v2-evidence-"
 MARKER = ".blaze-physical-evidence-fixture-only"
@@ -136,7 +136,7 @@ def review(rootname: str) -> dict:
     coverage: set[tuple[str, str, int]] = set()
     used: set[str] = set()
     used_digests: set[str] = set()
-    seen_power_times: set[str] = set()
+    seen_power_times: set[datetime] = set()
     events: set[str] = set()
     arch_identity: dict[str, tuple[str, str, str, str]] = {}
     for t in trials:
