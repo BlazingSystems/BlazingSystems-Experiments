@@ -109,7 +109,8 @@ case "$action" in
 
     # Include target identity in each new v1 receipt so valid ACK retries
     # cannot be aged out while this physical controller window remains open.
-    event="c:$target.$(bp_event_hash "coin|$id|$nonce|$target")"
+    event_base="c:$target.$(bp_event_hash "coin|$id|$nonce|$target")"
+    event="$event_base:$pulses"
     bp_lock || bp_fail "accounting busy"
     # Duplicate ACKs are financial acknowledgements too. Check quarantine
     # *inside* the global accounting lock, never in a racy prelock shortcut.
@@ -126,6 +127,14 @@ case "$action" in
       exit 0
     fi
 
+    # An old receipt with the same signed physical nonce but a different
+    # pulse count is not a replay. Fail closed instead of minting extra cash
+    # time or falsely ACKing the changed quantity.
+    collision_device="$(bp_find_coin_base "$event_base")"
+    if [ -n "$collision_device" ]; then
+      bp_unlock
+      bp_fail "coin receipt pulse collision; operator reconciliation required"
+    fi
     line="$(bp_account_line "$device")"
     [ -n "$line" ] || { bp_unlock; bp_fail "target account not found"; }
     credit="$(printf '%s' "$line" | cut -f2)"
