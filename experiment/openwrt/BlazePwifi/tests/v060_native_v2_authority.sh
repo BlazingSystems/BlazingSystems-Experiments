@@ -104,10 +104,39 @@ chmod 750 "$T"
 refuse ctrlOne 5 ctrlOne:5 AM alice - 10 1000
 chmod 700 "$T"
 [ "$(digest)" = "$base" ]
+# V2NATIVE-0669: signed rolling receipt window is bounded, but the durable
+# controller sequence floor must never be rolled back or reused.
+expected=100
+for seq in 5 6 7 8 9 10 11 12 13 14 15; do
+  expected=$((expected-1))
+  [ "$(run ctrlOne "$seq" "ctrlOne:$seq" SM alice - 1 1000)" = "$(printf 'COMMIT\t%s' "$expected")" ]
+done
+[ "$expected" -eq 89 ]
+[ "$(bank alice):$(bank bob)" = '89:230' ]
+[ "$(awk -F '\t' '$1=="C"&&$2=="ctrlOne"{print $3}' "$T/ledger.tsv")" -eq 15 ]
+[ "$(awk -F '\t' '$1=="R"&&$2=="ctrlOne"{c++}END{print c+0}' "$T/ledger.tsv")" -eq 8 ]
+# Sequence 1 and sequence 5 have aged out; their authentic signed payloads
+# must still be rejected as stale, not credited or replayed as new.
+refuse ctrlOne 1 ctrlOne:1 AM alice - 40 1000
+refuse ctrlOne 5 ctrlOne:5 SM alice - 1 1000
+[ "$(run ctrlOne 15 ctrlOne:15 SM alice - 1 1000)" = "$(printf 'REPLAY\t89')" ]
+[ "$(bank alice)" -eq 89 ]
+# Another process holding the durable lock cannot race a new paid write.
+(
+  exec 9>"$T/.v2-native-lock"
+  flock -x 9
+  printf 'HELD\n' >"$T/.lockready"
+  sleep 2
+) &
+locker=$!
+while [ ! -e "$T/.lockready" ]; do sleep 0.1; done
+refuse ctrlOne 16 ctrlOne:16 AM alice - 10 1000
+wait "$locker"
+[ "$(bank alice)" -eq 89 ]
 # Data corruption must not be treated as a zero-balance fallback.
-sed 's/A\talice\t100/A\talice\t101/' "$T/ledger.tsv" > "$T/bad"
+sed 's/A\talice\t89/A\talice\t90/' "$T/ledger.tsv" > "$T/bad"
 mv "$T/bad" "$T/ledger.tsv"
 refuse ctrlOne 5 ctrlOne:5 AM alice - 10 1000
 grep -Fq 'SHA-256 integrity footer mismatch' "$T/err"
-echo 'V2NATIVE-0668 PASS: native HMAC, private sources, fsync+rename+dirsync, immutable replay, out-of-order, collisions, uncertain ACK, transfer conservation and corruption fail-closed'
+echo 'V2NATIVE-0669 PASS: native HMAC/fsync boundary, replay floor after receipt compaction, lock contention, tamper and crash no-ACK'
 echo 'LAB ONLY: fixture binary never installed; no target OpenWrt cross build, migration, or physical power-cut proof'
