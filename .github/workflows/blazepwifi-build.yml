@@ -111,6 +111,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh
       - name: Reject destructive paid rental revocation and audit failure
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_revoke_safety.sh
+      - name: Refuse paid rental lease storage and audit false ACK and implicit forfeiture
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Prevent partial member ledger replacement and false password/admin ACK
