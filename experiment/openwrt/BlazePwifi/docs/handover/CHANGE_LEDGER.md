@@ -1,3 +1,10 @@
+## 2026-10-09 — V2TARGET-0671 — sdk_openssl_devcrypto_build_failed → repair_committed_untested
+
+- **Direct GitHub CI evidence:** source `505959bcd3cf50ffc4d09a8ecdee36947ef31a29`. Full #37906247774/#37906253588, Windows #37906253942, native HMAC #37906253546 COMPLETED SUCCESS. OpenWrt LAB SDK run #37906253540 COMPLETED FAILURE on all 3: x86-64 job 113740958893, Ruijie MIPS job 113740958904 and OrangePi Zero3 ARM64 job 113740959153. Each OpenSSL 3.5.7 compile had `engines/e_devcrypto.c:27:10: fatal error: crypto/cryptodev.h: No such file or directory`. Matching pinned OpenWrt source preflight was green, so first actual target compile failure is optional devcrypto header.
+- **Code changes:** `168aab1710515919198e5fb7b7634db49daf66ac` disables only optional engine Kconfig symbols in isolated SDK, checks post-defconfig no reenable, leaves OpenSSL cryptographic algorithms and hardware independence intact, no `FORCE=1`. `589b3de40247006a0956349dcbc4cfdfd7dc47f7` fixes shell variable expansion guard. `a9987311d6bae0b474e0b776f6c3af55022eab4f` strengthens fail-closed source static test.
+- **Actual new source test status:** UNVERIFIED at this documentation checkpoint. No passed new architecture, ELF, OpenWrt APK or release asset claim. **NEXT:** read SDK CI exact commit, fix further dependency/compilation issues if any, document each, then verify full/Windows head.
+- **Financial boundary:** real accounts/members/rental/session paid data never accessed, no router firmware or Android APK signing changed. `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`.
+
 ## 2026-10-09 — V2TARGET-0670 — pinned source checkout repair and fast gate pending
 
 - Actual [SDK #37905726696](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37905726696) Ruijie/x86 logged `V2TARGET-0670 BLOCKED: matching OpenSSL build source missing`; official SDK SHA validation was successful; checkout did not materialize `package/libs/openssl/Makefile` and `include/openssl-module.mk`. No target compile pass.
