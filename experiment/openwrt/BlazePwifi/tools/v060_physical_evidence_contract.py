@@ -93,6 +93,21 @@ def private_bytes(p: Path, maximum: int) -> bytes:
         os.close(fd)
 
 
+def stamp(p: Path) -> tuple[int, ...]:
+    """Opaque local identity stamp; never print private paths or identifiers."""
+    st = os.lstat(p)
+    return (st.st_dev, st.st_ino, st.st_mode, st.st_uid, st.st_nlink,
+            st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def check_unchanged(p: Path, expected: tuple[int, ...], contents: bytes,
+                    maximum: int) -> None:
+    ensure(stamp(p) == expected, "EVIDENCE_CHANGED_DURING_REVIEW")
+    ensure(private_bytes(p, maximum) == contents,
+           "EVIDENCE_CHANGED_DURING_REVIEW")
+    ensure(stamp(p) == expected, "EVIDENCE_CHANGED_DURING_REVIEW")
+
+
 def hex64(s: object) -> bool:
     return isinstance(s, str) and HEX64.fullmatch(s) is not None
 
@@ -101,7 +116,7 @@ def nonneg(x: object) -> bool:
     return type(x) is int and 0 <= x <= 2**63 - 1
 
 
-def capture(root: Path, rel: object, digest: object, used: set[str], digests: set[str]) -> None:
+def capture(root: Path, rel: object, digest: object, used: set[str], digests: set[str], observed: dict[str, tuple[str, tuple[int, ...]]]) -> None:
     ensure(isinstance(rel, str) and re.fullmatch(r"captures/[0-9a-f]{40}\.log", rel) is not None,
            "CAPTURE_PATH_UNSAFE")
     ensure(rel not in used, "CAPTURE_REUSED")
@@ -112,6 +127,7 @@ def capture(root: Path, rel: object, digest: object, used: set[str], digests: se
            "CAPTURE_DIGEST_MISMATCH")
     ensure(digest not in digests, "CAPTURE_CONTENT_REUSED")
     digests.add(digest)
+    observed[rel] = (digest, stamp(root / rel))
 
 
 def review(rootname: str) -> dict:
@@ -121,9 +137,13 @@ def review(rootname: str) -> dict:
            os.path.realpath(root) == str(root), "NOT_ISOLATED_FIXTURE")
     private_dir(root)
     private_dir(root / "captures")
+    root_stamp = stamp(root)
+    captures_stamp = stamp(root / "captures")
+    marker_stamp = stamp(root / MARKER)
     ensure(private_bytes(root / MARKER, 128) == MAGIC, "MARKER_MISSING")
     ensure(set(os.listdir(root)) == {"captures", "manifest.json", MARKER},
            "ROOT_HAS_UNREVIEWED_FILES")
+    manifest_stamp = stamp(root / "manifest.json")
     raw = private_bytes(root / "manifest.json", MAX_MANIFEST)
     obj = json.loads(raw)
     ensure(type(obj) is dict and set(obj) == REPORT_FIELDS and
@@ -136,6 +156,7 @@ def review(rootname: str) -> dict:
     coverage: set[tuple[str, str, int]] = set()
     used: set[str] = set()
     used_digests: set[str] = set()
+    observed: dict[str, tuple[str, tuple[int, ...]]] = {}
     seen_power_times: set[datetime] = set()
     events: set[str] = set()
     arch_identity: dict[str, tuple[str, str, str, str]] = {}
@@ -182,8 +203,8 @@ def review(rootname: str) -> dict:
         # that any powered-off trial actually happened.
         ensure(parsed not in seen_power_times, "POWER_EVENT_TIME_REUSED")
         seen_power_times.add(parsed)
-        capture(root, t["power_log"], t["power_log_sha256"], used, used_digests)
-        capture(root, t["recovery_log"], t["recovery_log_sha256"], used, used_digests)
+        capture(root, t["power_log"], t["power_log_sha256"], used, used_digests, observed)
+        capture(root, t["recovery_log"], t["recovery_log_sha256"], used, used_digests, observed)
     seen_arch: set[str] = set()
     for soak in soaks:
         ensure(type(soak) is dict and set(soak) == SOAK_FIELDS,
@@ -200,11 +221,32 @@ def review(rootname: str) -> dict:
                soak["lost_ack_count"] == 0 and
                soak["claimed_outcome"] == "pass", "SOAK_EVIDENCE_INSUFFICIENT")
         seen_arch.add(a)
-        capture(root, soak["capture_log"], soak["capture_log_sha256"], used, used_digests)
+        capture(root, soak["capture_log"], soak["capture_log_sha256"], used, used_digests, observed)
     ensure(set(arch_identity) == set(ARCHES) and seen_arch == set(ARCHES) and
            len(coverage) == 150, "COVERAGE_MISSING")
     ensure({"captures/" + name for name in os.listdir(root / "captures")} == used,
            "UNREFERENCED_EVIDENCE")
+    # This second pass detects common edits after each first inspection:
+    # a changed manifest, replaced identical-byte capture, newly inserted
+    # file, or modified first capture while later entries are reviewed.
+    # It remains non-atomic and proves NOTHING about hardware authenticity.
+    ensure(stamp(root) == root_stamp and
+           stamp(root / "captures") == captures_stamp,
+           "EVIDENCE_CHANGED_DURING_REVIEW")
+    check_unchanged(root / MARKER, marker_stamp, MAGIC, 128)
+    check_unchanged(root / "manifest.json", manifest_stamp, raw, MAX_MANIFEST)
+    for rel, (digest, before) in observed.items():
+        path = root / rel
+        ensure(stamp(path) == before, "EVIDENCE_CHANGED_DURING_REVIEW")
+        data = private_bytes(path, MAX_CAPTURE)
+        ensure(hashlib.sha256(data).hexdigest() == digest,
+               "EVIDENCE_CHANGED_DURING_REVIEW")
+        ensure(stamp(path) == before, "EVIDENCE_CHANGED_DURING_REVIEW")
+    ensure({"captures/" + name for name in os.listdir(root / "captures")} == used and
+           set(os.listdir(root)) == {"captures", "manifest.json", MARKER} and
+           stamp(root) == root_stamp and
+           stamp(root / "captures") == captures_stamp,
+           "EVIDENCE_CHANGED_DURING_REVIEW")
     return {
         "status": "STRUCTURE_READY_FOR_INDEPENDENT_REVIEW",
         "trial_records": len(coverage), "soak_records": len(seen_arch),
