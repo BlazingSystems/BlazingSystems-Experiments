@@ -9,12 +9,14 @@ from __future__ import annotations
 import copy
 from datetime import datetime, timedelta, timezone
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 
 TOOL = Path(__file__).resolve().parents[1] / "tools/v060_physical_evidence_contract.py"
 ARCHES = ("ruijie", "orangepi_zero3", "x86_64")
@@ -205,6 +207,59 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     write_private(marker, b"BLAZE-POWER-CUT-STRUCTURE-NOT-HARDWARE-PROOF\n")
     assert run(root, "STRUCTURE_READY_FOR_INDEPENDENT_REVIEW")["physical_powercut_verified"] is False
 
+    # PEVID-0682: an early capture/manifest replaced AFTER its first review
+    # must be caught at the final second pass. No actual equipment is touched.
+    spec = importlib.util.spec_from_file_location("pevid0682_lab", TOOL)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original_capture = module.capture
+    last_capture = original["soaks"][-1]["capture_log"]
+
+    def injected_change(mutate) -> None:
+        fired = [False]
+
+        def inject(*args, **kwargs):
+            result = original_capture(*args, **kwargs)
+            if args[1] == last_capture and not fired[0]:
+                fired[0] = True
+                mutate()
+            return result
+
+        with patch.object(module, "capture", side_effect=inject):
+            try:
+                module.review(str(root))
+            except ValueError as exc:
+                assert str(exc) == "EVIDENCE_CHANGED_DURING_REVIEW", (
+                    "Wrong late mutation rejection code: " + str(exc)
+                )
+            else:
+                raise AssertionError("Mutated evidence returned review-ready")
+        assert fired[0], "Late mutation injection not exercised"
+
+    first_capture = root / original["trials"][0]["power_log"]
+    first_saved = first_capture.read_bytes()
+    injected_change(lambda: write_private(first_capture, first_saved + b"CHANGED IN REVIEW"))
+    write_private(first_capture, first_saved)
+
+    def replace_identical():
+        first_capture.unlink()
+        write_private(first_capture, first_saved)
+
+    injected_change(replace_identical)
+    write_private(first_capture, first_saved)
+
+    manifest_saved = manifest.read_bytes()
+    injected_change(lambda: write_private(manifest, manifest_saved + b" "))
+    write_private(manifest, manifest_saved)
+
+    unknown_capture = root / "captures" / ("e" * 40 + ".log")
+    injected_change(lambda: write_private(unknown_capture,
+                    b"MOCK EXTRA RECORD AFTER LAST CAPTURE; NOT REAL POWER DATA\n"))
+    unknown_capture.unlink()
+    assert run(root, "STRUCTURE_READY_FOR_INDEPENDENT_REVIEW")["physical_powercut_verified"] is False
+
 print("PEVID-0679 PASS: 150 mock trials+3 mock 24h soaks structurally checked, missing/duplicate/tamper/path/permission/financial claims refused")
 print("PEVID-0680 PASS: repeated power-cut timestamps, invalid calendar dates and copied capture contents rejected without hardware approval")
+print("PEVID-0682 PASS: late capture content/replacement, manifest edit and added evidence during review rejected; hardware remains unverified")
 print("PHYSICAL_POWER_CUT_VERIFIED=0; CUSTOMER_INSTALL_AUTHORIZED=0; mocked CI input is NOT hardware acceptance")
