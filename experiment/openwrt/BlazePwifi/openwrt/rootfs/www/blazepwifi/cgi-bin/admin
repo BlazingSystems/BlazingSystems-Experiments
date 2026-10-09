@@ -480,7 +480,14 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
-    lease="$(bp_rental_lease_add "$did" "$seconds")" || bp_fail "invalid rental device or duration"
+    rc=0
+    lease="$(bp_rental_lease_add "$did" "$seconds")" || rc=$?
+    case "$rc" in
+      0) ;;
+      1|2) bp_fail "invalid rental device or duration" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental time addition storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_lease_add "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
@@ -489,7 +496,16 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"
-    lease="$(bp_rental_lease_expire "$did")" || bp_fail "unknown rental device"
+    confirm_forfeit="$(bp_param confirm_forfeit)"
+    rc=0
+    lease="$(bp_rental_lease_expire "$did" "$confirm_forfeit")" || rc=$?
+    case "$rc" in
+      0) ;;
+      1) bp_fail "unknown rental device" ;;
+      6) bp_fail "paid rental time remains; explicit CONFIRM_FORFEIT authorization required" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental expiry storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_expire "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
