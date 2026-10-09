@@ -325,16 +325,10 @@ case "${1:-}" in
 	bp_auth_init
 	bp_auth_lock || { echo "authentication state busy" >&2; exit 1; }
 	must=0; [ "$mode" = "--set-bootstrap" ] && must=1
-	printf '%s' "$2" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.-]{1,32}
-	bp_auth_unlock
-	exit "$rc"
-	;;
-esac
- || { bp_auth_unlock; echo "invalid admin username" >&2; exit 2; }
+	printf '%s' "$2" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.-]{1,32}$' || { bp_auth_unlock; echo "invalid admin username" >&2; exit 2; }
 	case "$3" in admin|operator|viewer) ;; *) bp_auth_unlock; echo "invalid admin role" >&2; exit 2;; esac
 	[ "${#4}" -ge 12 ] || { bp_auth_unlock; echo "password must be at least 12 characters" >&2; exit 2; }
-	# CLI password reset/bootstrap is also credential rotation. Invalidate
-	# old session tokens first, while the auth lock prevents new logins.
+	# CLI reset/bootstrap also revokes pre-change sessions under auth lock.
 	if ! bp_auth_invalidate_user_sessions "$2"; then
 		bp_auth_unlock
 		echo "session revocation failed; admin password was not changed" >&2
