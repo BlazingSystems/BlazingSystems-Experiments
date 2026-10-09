@@ -126,7 +126,14 @@ case "$action" in
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
-    token="$(bp_rental_enroll_create "$label" 600)"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "$label" 600)" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
     qr_payload="$(bp_admin_binding_payload "$server" "$token" "$label" "$cert_pin")"
@@ -153,7 +160,14 @@ EOF
     checksum="$(bp_admin_sha256_b64url "$apk_sha")" || bp_fail "unable to encode provisioning APK checksum"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
     [ -n "$cert_pin" ] || bp_fail "Device Owner provisioning requires the local pinned admin certificate"
-    token="$(bp_rental_enroll_create "$label" 600)"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "$label" 600)" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label:$apk_version" | cut -c1-96)"
     bp_json "$(printf '{"ok":true,"qr_type":"device_owner","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_checksum":"%s","qr_payload":"%s"}' \
