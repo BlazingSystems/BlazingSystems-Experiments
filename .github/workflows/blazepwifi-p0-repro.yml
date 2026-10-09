@@ -24,6 +24,8 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_revoke_safety.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/rental.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/rental.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/common.sh'
@@ -67,6 +69,10 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh
       - name: Refuse revoking active paid rental time or false ACK after failed removal
         run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_revoke_safety.sh
+      - name: Require checked rental paid time addition and confirmed forfeiture
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh
+      - name: Preserve real signed rental portal and operator lease compatibility
+        run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Exercise live portal-to-vendo window reuse, write failures and closure
         run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
       - name: Preserve signed-coin replay receipts throughout the live target window
