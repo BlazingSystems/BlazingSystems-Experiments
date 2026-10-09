@@ -1,3 +1,9 @@
+## 2026-10-09 — V2TARGET-0671 — missing disposable SDK configuration → fixed_untested
+
+- Run [#37910999637](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37910999637), OrangePi job `113756111247`, real failure `sed: can't read .../openwrt-sdk.../.config: No such file or directory`. Source-check success. SDK may ship without `.config`; current extra optional engine Kconfig update ran before `make defconfig`. **No architecture success inferred.**
+- Patch `de69142da8565f4044dbdcfa6f99f08bd446aec0` only initializes private temporary SDK `.config` on absence, preserves upstream source SHA checking, normal OpenWrt prereqs, strict optional cryptodev refusal, and HMAC libcrypto. Test `557b2efd18be5198f15f5176f367431e677bd224` statically enforces creation. Status: committed_untested.
+- NEXT: verify full SDK run on all 3 targets, preserve error logs, no cross-architecture success or artifact claims until exact evidence. No production rootfs/customer paid data/Android signer/public release changes. `PRODUCTION_v0.6.0_RELEASED=0`.
+
 ## 2026-10-09 — V2TARGET-0671 — sdk_openssl_devcrypto_build_failed → repair_committed_untested
 
 - **Direct GitHub CI evidence:** source `505959bcd3cf50ffc4d09a8ecdee36947ef31a29`. Full #37906247774/#37906253588, Windows #37906253942, native HMAC #37906253546 COMPLETED SUCCESS. OpenWrt LAB SDK run #37906253540 COMPLETED FAILURE on all 3: x86-64 job 113740958893, Ruijie MIPS job 113740958904 and OrangePi Zero3 ARM64 job 113740959153. Each OpenSSL 3.5.7 compile had `engines/e_devcrypto.c:27:10: fatal error: crypto/cryptodev.h: No such file or directory`. Matching pinned OpenWrt source preflight was green, so first actual target compile failure is optional devcrypto header.
