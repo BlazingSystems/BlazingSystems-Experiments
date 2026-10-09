@@ -127,3 +127,26 @@ Before a v2 state restore or migration can ever take payment, require all of the
 5. Prove on isolated disposable physical storage with real independent power-control telemetry, signed current+rescue Android enrollment, original signer continuity, and 30+ real client/24-hour acceptance before any 0.6 release. An unverified synthetic result is never physical acceptance.
 
 **Status: OPEN P0, NO PRODUCTION v0.6.0; migration/update preflight denial remains intact.** This reproduction involves deliberate manual file replacement inside a 0700 fake `/tmp` lab and does not establish a remote compromise or actual customer event. Linked trackers: member [#31](https://github.com/BlazingSystems/BlazingSystems-Experiments/issues/31), rental [#32](https://github.com/BlazingSystems/BlazingSystems-Experiments/issues/32), hardware [#34](https://github.com/BlazingSystems/BlazingSystems-Experiments/issues/34).
+
+## WITNESS-0692 — hypothetical independent freshness witness (IN-MEMORY MODEL, NOT DEPLOYED)
+
+The self-contained `tests/v060_trusted_witness_model.py` is an **off-device security-model fixture** for designing a future mitigation to ROLLBACK-0691. It does **not** modify BlazePwifi's current installed `member.sh`/`rental.sh` paths, the native `-DBLAZE_FIXTURE_ONLY` C ledger, APK, ESP firmware, OpenWrt startup or any release channel. It uses fictional member and rental balances, mock HMAC envelopes, and Python memory only (no filesystem/network). A green test confirms an abstract policy's behavior under its *assumed* trusted witness; it is **not** evidence that such a witness exists or is operationally durable on any device.
+
+The model states the trusted side stores an authenticated manifest of **device identity + migration epoch + monotonically increasing revision + canonical ledger snapshot digest + all controller sequence floors** outside the rollback domain of the ledger backup. Before *any paid mutation or replay*, the authority must fetch and authenticate the witness and require an exact snapshot match. Offline, absent, corrupt, foreign-epoch, stale or partially committed state must **reject** all paid operations. The protocol never silently chooses the highest checksum or resets the witness to match an old file.
+
+**Modeled transition / crash outcomes:**
+
+| Cut / input | Required modeled result | Owner recovery |
+| --- | --- | --- |
+| Before ledger snapshot replacement | No ACK, no paid change; same signed operation can commit when witness still matches | Normal exact retry |
+| Ledger newer than witness after an interrupted update | No ACK; all subsequent member and rental writes blocked | Quarantine / reconcile under independent trust |
+| Witness newer than ledger | Reject paid writes and replay; never rewind witness | Quarantine / reconcile |
+| Ledger and witness updated, ACK lost | Same signed transaction returns `REPLAY` with original result, without a new credit | Exact retry |
+| Older internally valid ledger restored after acknowledged credit | Refuse new payment and even a previously accepted replay; old receipts/floors cannot be trusted | Owner-controlled reconciliation |
+| Missing, offline, corrupted or mismatched trust record | Deny all paid writes rather than fall back to unverified local state | Restore authenticated independent authority |
+| Altered controller payload or stale/out-of-order sequence | Reject without ledger mutation | Validate original signed event |
+| Multiple controllers and member/rental writes | Require one shared ledger state and independent sequence floors; conserve transfers | Validate all last-ACKed devices |
+
+**Important limitation:** Two logically separate state stores do not automatically have an atomic cross-device commit or a valid recovery algorithm. A witness first/ledger second or ledger first/witness second write can produce divergence during power loss, requiring paid-state quarantine. The model's HMAC and Python in-memory witness are illustrative, not a hardware secure element, attested remote authority, durable monotonic counter, or original production Android signer. Do not implement this by copying the witness into `/etc`, another file on the same router, the same firmware backup, or any rollback-controlled partition. A genuinely independent witness needs authenticated device binding, administrative custody, durable monotonicity, availability policy, disaster-recovery and offline fail-closed behavior. If both ledger **and** witness can be restored together, this model provides **no rollback resistance**.
+
+**Outstanding P0 acceptance:** specify and implement an independently operated trusted authority; prove crash-consistent commit/ACK ordering and safe reconciliation across it; benchmark real BusyBox/OpenWrt fsync and flash/SSD behavior, controller disconnected/partition scenarios, malicious or accidentally stale backup replays, backup/restore epochs, time-based rental expiry, multi-device financial reconciliation, 30-device endurance, signed rescue rollback and migration owner approval. None of these are implemented or certified by WITNESS-0692. Keep P0 #31/#32/#34 OPEN and the v0.6.0 preflight blocked.
