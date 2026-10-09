@@ -227,9 +227,12 @@ bp_rental_inventory_get() {
 bp_rental_event_log() {
   kind="$(bp_rental_clean "$1")"; did="$(bp_rental_clean "$2")"; detail="$(bp_rental_clean "$3")"; now="$(bp_now)"
   event="a:$now:$(bp_tmp_suffix)"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$event" "$did" "$detail" "$now" "$kind" >> "$BP_RENTAL_EVENTS"
-  chmod 600 "$BP_RENTAL_EVENTS"
-  bp_durable_sync
+  [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
+  # Never mask the audit append failure with the result of chmod/sync.
+  printf '%s\t%s\t%s\t%s\t%s\n' "$event" "$did" "$detail" "$now" "$kind" >> "$BP_RENTAL_EVENTS" || return 8
+  chmod 600 "$BP_RENTAL_EVENTS" || return 8
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_device_rename() {
@@ -265,20 +268,66 @@ bp_rental_lease_expire() {
 }
 
 bp_rental_device_revoke() {
-  did="$1"; [ -n "$(bp_rental_device_line "$did")" ] || return 1
+  did="$1"
+  printf '%s\n' "$did" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 2
+  [ -f "$BP_RENTAL_DEVICES" ] && [ ! -L "$BP_RENTAL_DEVICES" ] || return 8
+  # A corrupt/duplicate paid lease store cannot authorize any deletion.
+  if ! awk -F '\t' -v d="$did" '
+    NF!=5 || $1 !~ /^[A-Za-z0-9_.:-]+$/ || length($1)>96 ||
+      length($2)==0 || $3 !~ /^[0-9]+$/ ||
+      $5 !~ /^[0-9]+$/ || ++seen[$1]>1 {bad=1}
+    $1==d {found++; lease=$3}
+    END {if(bad || found>1)exit 8; if(!found)exit 1}
+  ' "$BP_RENTAL_DEVICES"; then
+    return 8
+  fi
+  line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
+  lease="$(printf '%s' "$line" | cut -f3)"
+  case "$lease" in ''|*[!0-9]*) return 8;; esac
+  # An administrator may expire/settle time via a separate, audited process.
+  # Revoke is NEVER consent to silently destroy a paid active rental lease.
+  [ "$lease" -le "$(bp_now)" ] 2>/dev/null || return 6
+  # Preflight destination paths before the very first mutation, to avoid
+  # destructive partial removal when a file is a symlink or special entry.
+  for file in "$BP_RENTAL_DEVICES" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "${BP_RENTAL_POLICY_V2:-}"; do
+    [ -n "$file" ] || continue
+    [ ! -e "$file" ] && [ ! -L "$file" ] && continue
+    [ -f "$file" ] && [ ! -L "$file" ] || return 8
+  done
+  for target_file in "$BP_TARGET_DIR"/*.tsv; do
+    [ ! -e "$target_file" ] && [ ! -L "$target_file" ] && continue
+    [ -f "$target_file" ] && [ ! -L "$target_file" ] || return 8
+  done
+  # Destructive changes touch several v1 files. Mark uncertainty BEFORE any
+  # rename and retain the halt across an interrupted audit or target removal.
+  bp_paid_begin || return 9
   for file in "$BP_RENTAL_DEVICES" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "${BP_RENTAL_POLICY_V2:-}"; do
     [ -n "$file" ] || continue
     [ -f "$file" ] || continue
     tmp="$BP_STATE/.rental-revoke.$(bp_tmp_suffix)"
-    awk -F '\t' -v d="$did" '$1!=d {print}' "$file" > "$tmp" || return 1
-    chmod 600 "$tmp" && mv "$tmp" "$file" || return 1
+    if ! awk -F '\t' -v d="$did" '$1!=d {print}' "$file" > "$tmp" ||
+       ! chmod 600 "$tmp" ||
+       ! mv "$tmp" "$file"; then
+      rm -f "$tmp" 2>/dev/null || true
+      bp_paid_abort
+      return 8
+    fi
   done
   for target_file in "$BP_TARGET_DIR"/*.tsv; do
     [ -f "$target_file" ] || continue
-    [ "$(cut -f1 "$target_file")" = "$did" ] && rm -f "$target_file"
+    if [ "$(cut -f1 "$target_file")" = "$did" ]; then
+      if ! rm -f "$target_file"; then
+        bp_paid_abort
+        return 8
+      fi
+    fi
   done
-  bp_rental_event_log revoke "$did" "revoked"
-  bp_durable_sync
+  if ! bp_rental_event_log revoke "$did" "revoked"; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
+  return 0
 }
 
 bp_rental_events_json() {
