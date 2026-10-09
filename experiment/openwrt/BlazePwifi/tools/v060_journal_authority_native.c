@@ -224,7 +224,7 @@ static void getkey(const char *wanted,unsigned char key[32]) {
             die("invalid controller key registry");
         if(!strcmp(v[0],wanted)){if(seen++)die("duplicate controller key");
             unhex(v[1],key,32);}
-        p=newline+1;
+        p=nl+1;
     }
     OPENSSL_cleanse(data,n);free(data);
     if(seen!=1)die("unknown controller key");
