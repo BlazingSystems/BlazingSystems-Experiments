@@ -27,11 +27,35 @@ bp_rental_hmac() {
 
 bp_rental_enroll_create() {
   label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; now="$(bp_now)"
-  case "$ttl" in ''|*[!0-9]*) ttl=600;; esac
-  [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
-  id="$(bp_rental_hex 6)"; secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
-  printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"
-  chmod 600 "$BP_RENTAL_ENROLL"; bp_durable_sync
+  case "$ttl" in ''|*[!0-9]*) return 8;; esac
+  [ "$ttl" -ge 60 ] 2>/dev/null && [ "$ttl" -le 3600 ] 2>/dev/null || return 8
+  id="$(bp_rental_hex 6)" || return 8
+  secret="$(bp_rental_hex 18)" || return 8
+  printf '%s' "$id" | LC_ALL=C grep -Eq '^[a-f0-9]{12}$' || return 8
+  printf '%s' "$secret" | LC_ALL=C grep -Eq '^[a-f0-9]{36}$' || return 8
+  [ -f "$BP_RENTAL_ENROLL" ] && [ ! -L "$BP_RENTAL_ENROLL" ] || return 8
+  # Reject corrupt or duplicated QR tokens before ever emitting a new one.
+  # Full profile also accepts its seven-column redeemed receipt schema.
+  if ! awk -F '\t' -v i="$id" '
+    { if (NF!=4 || length($1)!=12 || $1 !~ /^[a-f0-9]+$/ ||
+          length($2)!=36 || $2 !~ /^[a-f0-9]+$/ ||
+          $3 !~ /^[0-9]+$/ || ++seen[$1]>1) bad=1 }
+    END {if (bad || seen[i]) exit 8}
+  ' "$BP_RENTAL_ENROLL" > /dev/null; then
+    return 8
+  fi
+  token="$id.$secret"; expiry=$((now+ttl))
+  enroll_tmp="$BP_STATE/.rental-enroll-create.$(bp_tmp_suffix)"
+  umask 077
+  if ! cat "$BP_RENTAL_ENROLL" > "$enroll_tmp" ||
+     ! printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$enroll_tmp" ||
+     ! chmod 600 "$enroll_tmp" ||
+     ! mv "$enroll_tmp" "$BP_RENTAL_ENROLL"; then
+    rm -f "$enroll_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  # A failed storage update must never produce a scannable but invalid QR.
   printf '%s\n' "$token"
 }
 
