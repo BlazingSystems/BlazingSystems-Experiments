@@ -80,8 +80,10 @@ git clone --quiet --filter=blob:none --depth=1 --no-checkout \
 [ "$(git -C "$SOURCE" rev-parse HEAD)" = "$OPENWRT_SRC_SHA" ] || {
   echo 'V2TARGET-0670 BLOCKED: OpenWrt release source tag changed' >&2;exit 9;
 }
-git -C "$SOURCE" sparse-checkout set --no-cone \
-  'package/libs/openssl/' 'include/openssl-module.mk'
+# Cone-pattern sparse checkout takes real directories, including OpenSSL
+# sources and the matching OpenWrt build include macros. A non-cone trailing
+# slash alone did not materialize these sources on GitHub's runner.
+git -C "$SOURCE" sparse-checkout set package/libs/openssl include
 [ -s "$SOURCE/package/libs/openssl/Makefile" ] &&
 [ -s "$SOURCE/include/openssl-module.mk" ] || {
   echo 'V2TARGET-0670 BLOCKED: matching OpenSSL build source missing' >&2;exit 9;
