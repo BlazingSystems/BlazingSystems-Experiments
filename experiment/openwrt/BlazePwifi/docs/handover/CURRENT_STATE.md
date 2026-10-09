@@ -1,3 +1,11 @@
+## PEVID-0680 / CLAIMED EVENT CHRONOLOGY & DUPLICATE CAPTURE REJECTION — COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
+
+- **Prior exact green:** `542bcaea83485bfce70c3a838982fc6b38b709d3` Full #37933339792, Windows #37933341276, native #37933339775, SDK #37933339795 all SUCCESS, but not for PEVID-0680.
+- **Code:** `tools/v060_physical_evidence_contract.py` `3ef93273e7e7d4b5c445111b9e10a50b6c368e46` and cleanup `7aaa04d57e3547123df780a627897a2d45080803` refuse duplicate 150-event timestamps, calendar-impossible timestamps, duplicate log contents even when separate files and correct matching digest. Test `tests/v060_physical_evidence_contract.py` `69ddc3b91fe027661718c0c5ea83a6f7fe8c235c` has positive distinct 150 mock times and negative cloned-log and timestamp cases; runbook `docs/V060_PHYSICAL_DURABILITY_ACCEPTANCE.md` `f4e597cecbd6054cede1585357351fac3b27eb5f` documents limits.
+- **Acceptance/status:** COMMITTED_UNTESTED, awaiting actual mandatory Full `validate` `PEVID-0679 verify mocked power-cut evidence never authorizes hardware acceptance` direct log `PEVID-0680 PASS`, then Full/Windows/native/SDK exact-head pass. Mock complete structure MUST still report physical_powercut_verified=false, production_release_authorized=false; claim origin never attests power controller. No actual physical/persistent device tested, no money or production output modified.
+- **Hazards/rollback:** legitimate same-second events require independent higher-resolution measured proof and reviewed schema update, NEVER fabricated timestamps. Revert this lab-only checker/test/runbook if failed. PR #30 draft, VERSION=0.5.3, PRODUCTION_v0.6.0_RELEASED=0, CUSTOMER_INSTALL_AUTHORIZED=0.
+- **NEXT EXACT ACTION:** inspect new GitHub run log/results and fix any narrow failing parser test; sync all 3 handovers with exact CI. Hardware powercut, quiesced financial migration/rollback, 30 actual devices and OEM signer remain P0 blockers.
+
 ## PEVID-0680 / EVIDENCE CLAIM CHRONOLOGY AND COPY REJECTION — IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Verified starting SHA:** `542bcaea83485bfce70c3a838982fc6b38b709d3`, draft PR #30, `blazepwifi-v0.6.0-audit-foundation`; Full `37933339792`, Windows `37933341276`, native `37933339775`, three-target SDK `37933339795` all COMPLETED SUCCESS. This validates prior PEVID-0679, not the proposed PEVID-0680.
