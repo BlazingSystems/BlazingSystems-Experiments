@@ -1,3 +1,10 @@
+## V2TARGET-0670 / SOURCE WORKTREE PREFLIGHT CHECKPOINT — 2026-10-09 Asia/Manila
+
+- **Real SDK failure:** [SDK #37905726696](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37905726696) Ruijie and x86 failed `matching OpenSSL build source missing` after the official SDK checksum passed. An annotated tag can resolve to the correct Git SHA without the `--no-checkout` sparse worktree having materialized required files. No compiled target ELF or .apk was proven by that run.
+- **Two source fixes:** `2d0e8f6d7c2945037e9dad13e967256cacb7a2c5` changes cloned repo to `--sparse` and explicitly checks out pinned OpenWrt v25.12.5 commit `f0a60eee2fe051741c643ea6118718aae1ef17fb` after cone sparse selection. `f60734ebb34bcf0aaabdcfcff7a53b06469bd841` adds a fast independent `source-check` GitHub job as a prerequisite to downloading/building each 25.12.5 SDK. **These are not yet proven successful** by exact source CI.
+- **NEXT EXACT ACTION:** inspect source-check job then actual Ruijie MIPS, Orange Pi Zero3 ARM64, x86-64 SDK builds and mandatory APK/ELF checks. Confirm matching Full/Windows native CI on final three-file documentation checkpoint, log every failed step. Never claim a cross-compiled APK that is not verified uploaded.
+- **Safety:** all native artifacts are LAB ONLY, `DEFAULT=n`, `BLAZE_FIXTURE_ONLY`, runtime only under marked `/tmp/blaze-v2-native-*`, not packaged into normal firmware, published GitHub Release or customer-installed. `PRODUCTION_v0.6.0_RELEASED=0`; `CUSTOMER_INSTALL_AUTHORIZED=0`; alpha.4 immutable.
+
 ## V2TARGET-0670 / LIBCRYPTO SDK FIX CANDIDATE — SOURCE COMMITTED, VALIDATION PENDING — 2026-10-09 Asia/Manila
 
 - **Previous green v2 native baseline:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`, Full push #37902464250, Full PR #37902469005, Windows #37902468986, focused native #37902469023 all completed SUCCESS.
