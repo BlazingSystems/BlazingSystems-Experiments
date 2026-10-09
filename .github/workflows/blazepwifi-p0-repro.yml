@@ -33,6 +33,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
@@ -105,6 +106,8 @@ jobs:
           sh -n experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/auth.sh
       - name: Verify both R281 and full OpenWrt secure tokens fail closed
         run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
+      - name: Forbid empty admin password salts, sessions and CSRF on RNG failure
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh
       - name: Refuse false-success R281 signed one-time Android enrollment and token reuse
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Refuse full and R281 one-time QR issued before registry durability
