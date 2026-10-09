@@ -1,3 +1,12 @@
+## V2TARGET-0670 / SDK LAB SOURCE COMMITTED, CROSS-BUILD OUTCOME PENDING — 2026-10-09 Asia/Manila
+
+- **Known good baseline:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`: full push #37902464250, PR #37902469005, Windows #37902468986, and focused native #37902469023 all **completed success**. It was host-based synthetic transaction proof, not target OpenWrt native compile or power cut.
+- **New code files/SHAs:** OpenWrt opt-in SDK-only package `openwrt/lab-native/Makefile` `8897a43f`; builder `tools/v060_cross_compile_native_lab.sh` `95445f92`; 3-target workflow `.github/workflows/blazepwifi-v060-sdk-lab.yml` `1c832d9a`; test `tests/v060_sdk_lab_guard.sh` `70bc7691`; Full CI static gate `.github/workflows/blazepwifi-build.yml` `7fd9b7ed`. All source scopes isolated from `openwrt/rootfs` and normal `build/build-openwrt-image.sh` package list.
+- **Cross-target contract:** only Ruijie ramips/mt7621 MIPS, x86/64 and Orange Pi Zero3 sunxi/cortexa53 AArch64; pinned OpenWrt 25.12.5 GCC14.3/musl SDK filename, official checksum lookup and sha256 verification; standalone `libopenssl` lab package with `-DBLAZE_FIXTURE_ONLY` and `DEFAULT=n`; require actual ELF architecture and `.apk` output, upload short-retention GH Actions artifacts with `production_released=0`. No target ELF or `.apk` is claimed yet.
+- **Evidence boundary:** SDK #37904896780 running 3 jobs when last checked; intermediate Windows PR #37904850294 failed due to handover not yet synchronized, which remains an actual failure. Full/Windows CI on final synchronized checkpoint must be rechecked. No live v1 migration enabled.
+- **NEXT EXACT ACTION:** inspect new SDK job conclusion/log; fix only failed SDK/toolchain step, resync three docs, reverify final Full/Windows and host native. If cross compile succeeds, perform separate physical target/flash recovery and source-owned encrypted reversible migration review; do not push unsafe LAB APK to customer devices.
+- **No-go:** `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`. Full owner Lineage-2 native Android signing, OEM Device Owner, paid powercut and real 30 client test still missing.
+
 ## V2TARGET-0670 / IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Verified last fully green SHA:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`. Full push #37902464250, Full PR #37902469005, Windows #37902468986, focused native #37902469023 all GitHub completed success. New code not yet written; do not attribute these runs to V2TARGET-0670.
