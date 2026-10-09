@@ -5,6 +5,7 @@ Every test creates a fresh /tmp fixture. It does not open production accounts,
 signing keys, live routers, uploads or connected business resources.
 """
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/v060_v1_inventory_fixture.py"
 ACCOUNT = "a" * 32
@@ -162,6 +164,62 @@ mutated(lambda p: write(p / "accounts.tsv",
                         (p / "accounts.tsv").read_text().replace(
                             "\t100\t", "\t" + ("9" * 5000) + "\t", 1)))
 
+
+# VINV-0676: deterministic in-process interleavings, no actual live writer.
+# Exercise both a previously-read financial row and a targets directory that
+# changes after its entries were enumerated. None may return "readable".
+def injected_race(root, trigger: str, mutate, expected_code: str) -> None:
+    spec = importlib.util.spec_from_file_location("v1_fixture_race", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original = module.private_file
+    fired = [False]
+
+    def meddle(dirfd: int, name: str, required: bool = True):
+        value = original(dirfd, name, required=required)
+        if name == trigger and not fired[0]:
+            fired[0] = True
+            mutate(root)
+        return value
+
+    with patch.object(module, "private_file", side_effect=meddle):
+        try:
+            report = module.audit(root)
+        except module.InvalidState as exc:
+            assert exc.code == expected_code, (
+                f"Wrong fail-closed reason: {exc.code} (expected {expected_code})"
+            )
+        else:
+            raise AssertionError("Mutation race produced readable inventory")
+    assert fired[0], "Race injection never reached the chosen scan point"
+
+
+isolated(lambda p: injected_race(
+    p, "member-events.tsv",
+    lambda root: write(root / "accounts.tsv",
+                       (root / "accounts.tsv").read_text().replace("\t100\t", "\t101\t")),
+    "SOURCE_CHANGED_DURING_AUDIT"))
+isolated(lambda p: injected_race(
+    p, "member-events.tsv",
+    lambda root: write(root / "unrecognized-ledger.tsv", "unknown\t300\n"),
+    "SOURCE_CHANGED_DURING_AUDIT"))
+isolated(lambda p: injected_race(
+    p, "accounts.tsv",
+    lambda root: write(root / ".blaze-v1-fixture-only", "CORRUPT-MARKER\n"),
+    "SOURCE_CHANGED_DURING_AUDIT"))
+isolated(lambda p: injected_race(
+    p, "vendo-01.tsv",
+    lambda root: write(root / "targets" / "late.tsv",
+                       (root / "targets" / "vendo-01.tsv").read_text()),
+    "TARGET_CHANGED_DURING_AUDIT"))
+isolated(lambda p: injected_race(
+    p, "vendo-01.tsv",
+    lambda root: write(root / "targets" / "vendo-01.tsv",
+                       (root / "targets" / "vendo-01.tsv").read_text().replace(
+                           "1700001200", "1700001300")),
+    "TARGET_CHANGED_DURING_AUDIT"))
+
 with tempfile.TemporaryDirectory(prefix="not-blaze-v1-") as invalid:
     result = run(Path(invalid), "BLOCKED", "NONFIXTURE_ROOT")
 with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as root:
@@ -174,4 +232,5 @@ with tempfile.TemporaryDirectory(prefix="blaze-v1-audit-", dir="/tmp") as root:
 print("MIG-0645 PASS: redacted read-only inventory, clean balances and schema, "
       "reject corrupt/duplicate/private-source/uncertain paid state, no filesystem mutations")
 print("VINV-0675 PASS: unknown paid files, orphan member/rental/target references and huge numeric cells fail closed")
-print("NOT PRODUCTION: fixture-only, not an operator quiescence/signed recovery or customer data migration")
+print("VINV-0676 PASS: deterministic synthetic concurrent source/marker/target edits rejected on second verification pass")
+print("NOT PRODUCTION: fixture-only, reread cannot establish quiescence or customer data migration")
