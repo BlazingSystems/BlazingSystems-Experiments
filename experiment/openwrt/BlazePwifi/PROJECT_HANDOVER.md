@@ -1,3 +1,10 @@
+## SHADOW-0667 / CODE+TEST COMMITTED, AWAITING EXACT CI — 2026-10-09 Asia/Manila
+
+- **Actual source:** `v2_shadow.sh` fail-closed private ownership/mode and single-hardlink check committed `febab8739960fa6ec77a5e7e50ad9f8251ff62df`. Synthetic three-store hardlink/mode/parent-directory regression committed `611c970b02547187e96231eb98fa1d357dc92f2e`; **NOT YET TESTED** on this head as this checkpoint is written.
+- All security controls are READ ONLY with no mkdir/chmod/migration/payment write/ACK; the installed probe still defaults UCI OFF and only manually runs. `stat -c` permissions enforcement is restrictive: deployment-specific older mode discrepancies safely BLOCK diagnostics rather than silently repair paid state. This is **not a coherent money snapshot** and does not close the real authenticated target-native ledger P0.
+- **NEXT EXACT ACTION:** confirm all exact-head Full push/PR and Windows runs and inspect hardlink regression; fix narrowly if any failure. Do not touch production releases. After this, implement OFF-by-default native controller-authenticated fsync+parent-dirsync v2 authority only for fictional transactions, then reversible encrypted quiesced v1 migration tests.
+- Original **v0.6.0-alpha.4 LAB ONLY** unchanged, source `7ad71ff4...`, 12 GitHub assets. **`PRODUCTION_v0.6.0_RELEASED=0` / `CUSTOMER_INSTALL_AUTHORIZED=0`.**
+
 ## SHADOW-0667 / ACTIVE SECURITY HARDENING — IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Verified refreshed exact head:** `98e96fec84c8e3db01b05ba8903752a84f20f5cd`, [Full push #37898372490](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37898372490), [Full PR #37898377634](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37898377634), [Windows Setup #37898377646](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37898377646): all **COMPLETED SUCCESS**. Earlier pending Android emulator run #37897444289 also **COMPLETED SUCCESS**. This validates SHADOW-0666 only, not any new changes below.
