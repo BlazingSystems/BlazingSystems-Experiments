@@ -24,9 +24,13 @@ LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi"
 export BP_LIB="$LIB/common.sh" BP_AUTH_LIB="$LIB/auth.sh"
 export BP_RENTAL_LIB="$LIB/rental.sh" BP_CONTROLLER_LIB="$LIB/controller.sh"
 export REQUEST_METHOD=POST SERVER_PORT=4455 REMOTE_ADDR=10.0.0.9
+stage=source-r281-common
 . "$BP_LIB"
+stage=source-r281-auth
 . "$BP_AUTH_LIB"
+stage=source-r281-rental
 . "$BP_RENTAL_LIB"
+stage=init-rental-store
 bp_rental_init
 DEVICE=0123456789abcdef01234567
 SECRET=00112233445566778899aabbccddeeff0011223344556677
@@ -35,9 +39,12 @@ VENDO="$ROOT/profiles/r281-rental/root/www/cgi-bin/vendo"
 now="$(bp_now)"
 lease=$((now+300))
 expires=$((now+600))
+stage=create-initial-device
 bp_rental_device_write "$DEVICE" "$SECRET" "$lease" "Disposable rental" 123
+stage=create-coin-target
 printf '%s\t-\t%s\t%s\tvendo-01\trental\n' "$DEVICE" "$TARGET" "$expires" > "$BP_TARGET_DIR/vendo-01.tsv"
 chmod 600 "$BP_TARGET_DIR/vendo-01.tsv"
+stage=ready-to-accept-first-synthetic-coin
 paid() { printf '%s' "$(bp_rental_device_line "$DEVICE")" | cut -f3; }
 moneysha() { sha256sum "$BP_RENTAL_DEVICES" | cut -d' ' -f1; }
 send_coin() {
