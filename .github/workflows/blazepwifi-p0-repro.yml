@@ -22,6 +22,9 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/rental.sh'
+      - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/cgi-bin/rental'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/common.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh'
@@ -59,6 +62,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh
       - name: Refuse duplicate paid Wi-Fi account rows and truncated source copy
         run: sh experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh
+      - name: Refuse corrupt or incomplete prepaid rental leases
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh
       - name: Exercise live portal-to-vendo window reuse, write failures and closure
         run: sh experiment/openwrt/BlazePwifi/tests/integration.sh
       - name: Preserve signed-coin replay receipts throughout the live target window
