@@ -123,6 +123,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh
       - name: Keep standalone R281 Android coin-start target idempotent and storage checked
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh
+      - name: Reject partial and weak R281 cryptographic rental enrollment secrets
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
       - name: Refuse signed R281 Android enrollment false ACK and reusable setup QR
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Preserve R281 signed hotspot coin receipts and refuse storage false ACK
