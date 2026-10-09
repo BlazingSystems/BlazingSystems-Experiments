@@ -129,6 +129,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh
       - name: Preserve full/R281 privileged password verifier database on copy/storage failure
         run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_password_write_integrity.sh
+      - name: Require durable old-session logout and password-change revoke on both admin portals
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_session_revocation.sh
       - name: Refuse signed R281 Android enrollment false ACK and reusable setup QR
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Keep ordinary binding and Device Owner QR issuance storage-authoritative
