@@ -1,3 +1,11 @@
+## SHADOW-0667 / SOURCE+TEST COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
+
+- Branch `blazepwifi-v0.6.0-audit-foundation`, draft PR #30. Code commit `febab8739960fa6ec77a5e7e50ad9f8251ff62df` adds read-only validation of private `700` state directory (uid must be caller) and private `600` single-link source files (uid must be caller), avoiding silently trusted hardlinks or group/world exposed financial files. Test commit `611c970b02547187e96231eb98fa1d357dc92f2e` checks hardlinks in all three v1 financial stores, group-readable file, group/world accessible state directory and recovery without financial bytes changing.
+- **STATUS:** COMMITTED_UNTESTED on these new commits. Earlier Full push #37898372490, Full PR #37898377634, Windows #37898377646 were green on `98e96fec...`, NOT this source. Do not promote those historical runs as new results.
+- **Safeguards:** Manual root-only diagnostic remains UCI OFF, the command only supports `status`, emits non-authoritative counts, never authenticates or writes a paid event. Production v0.6 migration, native HMAC receipt ledger, original Lineage-2 signer, real device acceptance all still P0/STOP. Alpha.4 immutable older SHA; no new release.
+- **NEXT EXACT ACTION:** obtain exact-source GitHub CI for this checkpoint. If PASS, update all three handovers, capture run IDs; if FAIL, diagnose exact job and preserve failure in ledger. Then proceed rootfs-disabled, target-native v2 journal stage with no live paid writes, verified signed receipt/sequence and file+dirsync on target; don't enable real money migration without encrypted reversible operator approved v1 backup and powercut proof.
+- **Rollback:** revert SHADOW-0667 script/test commits only; never change v1 paid files or frozen releases.
+
 ## SHADOW-0667 / IN PROGRESS — 2026-10-09 Asia/Manila
 
 - **Exact last green baseline before this work:** branch `blazepwifi-v0.6.0-audit-foundation`, PR #30, source `98e96fec84c8e3db01b05ba8903752a84f20f5cd`. Verified actual Full push #37898372490, Full PR #37898377634, Windows #37898377646 all COMPLETED SUCCESS. Previous #37897444289 Full push and its Android emulator now COMPLETED SUCCESS.
