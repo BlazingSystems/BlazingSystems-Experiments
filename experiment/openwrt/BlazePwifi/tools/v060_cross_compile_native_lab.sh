@@ -1,0 +1,105 @@
+#!/bin/sh
+# V2TARGET-0670 — OpenWrt 25.12.5 SDK cross compiler for LAB-ONLY fixture.
+# No router image, boot hook, payment endpoint, production key, or v1 migration.
+set -eu
+export LC_ALL=C
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+VERSION=25.12.5
+GCC_VERSION=14.3.0
+[ "$#" -eq 1 ] || { echo 'usage: ruijie|x86_64|orangepi_zero3' >&2; exit 2; }
+TARGET="$1"
+case "$TARGET" in
+  ruijie)
+    SUB="ramips/mt7621"; STEM="ramips-mt7621"; MACHINE="MIPS" ;;
+  x86_64)
+    SUB="x86/64"; STEM="x86-64"; MACHINE="X86-64" ;;
+  orangepi_zero3)
+    SUB="sunxi/cortexa53"; STEM="sunxi-cortexa53"; MACHINE="AArch64" ;;
+  *)
+    echo 'V2TARGET-0670 BLOCKED: use ruijie, x86_64 or orangepi_zero3' >&2; exit 2;;
+esac
+[ -n "$RUNNER_TEMP" ] || {
+  echo 'V2TARGET-0670 BLOCKED: only supported in isolated GitHub Actions runner' >&2;exit 2;
+}
+command -v curl >/dev/null
+command -v sha256sum >/dev/null
+command -v zstd >/dev/null
+command -v readelf >/dev/null
+command -v make >/dev/null
+# Never assume ImageBuilder provides a compiler; download the matching SDK.
+BASE="https://downloads.openwrt.org/releases/$VERSION/targets/$SUB"
+SDK_FILE="$(printf 'openwrt-sdk-%s-%s_gcc-%s_musl.Linux-x86_64.tar.zst' "$VERSION" "$STEM" "$GCC_VERSION")"
+TMP="$(mktemp -d "$RUNNER_TEMP/blaze-v2target-XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT HUP INT TERM
+umask 077
+cd "$TMP"
+curl --http1.1 -fL --retry 5 --retry-all-errors --retry-delay 3 \
+  --connect-timeout 30 --max-time 300 "$BASE/sha256sums" -o sha256sums
+# sha256sums on OpenWrt may denote files with a leading "*" for binary.
+DIGEST="$(awk -v requested="$SDK_FILE" '
+  {
+    file=$2; sub(/^\*/, "", file)
+    if(file==requested && $1 ~ /^[a-fA-F0-9]+$/ && length($1)==64) {
+      found++; hash=$1
+    }
+  }
+  END {if(found==1) print hash}
+' sha256sums)"
+[ -n "$DIGEST" ] || { echo "V2TARGET-0670 BLOCKED: SDK checksum not in official index: $SDK_FILE" >&2;exit 9; }
+curl --http1.1 -fL --retry 5 --retry-all-errors --retry-delay 3 \
+  --connect-timeout 30 --max-time 1800 "$BASE/$SDK_FILE" -o sdk.tar.zst
+echo "$DIGEST  sdk.tar.zst" | sha256sum -c -
+mkdir extracted
+tar -I zstd -xf sdk.tar.zst -C extracted
+SDK="$(find "$TMP/extracted" -mindepth 1 -maxdepth 1 -type d -name 'openwrt-sdk-*' | head -n 1)"
+[ -n "$SDK" ] && [ -f "$SDK/rules.mk" ] || {
+  echo 'V2TARGET-0670 BLOCKED: verified SDK archive invalid' >&2;exit 9;
+}
+DEST="$SDK/package/blazepwifi-v2-native-lab"
+mkdir -p "$DEST/src"
+cp "$ROOT/openwrt/lab-native/Makefile" "$DEST/Makefile"
+cp "$ROOT/tools/v060_journal_authority_native.c" "$DEST/src/"
+# Assert the test-only macro is compile time mandatory and source never gets
+# installed into production rootfs/images by this workflow.
+grep -Fq '#ifndef BLAZE_FIXTURE_ONLY' "$DEST/src/v060_journal_authority_native.c"
+grep -Fq -- '-DBLAZE_FIXTURE_ONLY' "$DEST/Makefile"
+! grep -R -Fq 'blazepwifi-v2-native-lab' "$ROOT/build/build-openwrt-image.sh"
+# Build only the opted-in package in its own verified official OpenWrt SDK.
+printf '\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
+make -C "$SDK" defconfig
+make -C "$SDK" -j2 package/blazepwifi-v2-native-lab/compile V=s
+ELF="$(find "$SDK/build_dir" -type f -name v2-native-fixture -print -quit)"
+[ -n "$ELF" ] && [ -s "$ELF" ] || {
+  echo 'V2TARGET-0670 BLOCKED: SDK produced no native ELF' >&2;exit 9;
+}
+readelf -h "$ELF" > elf-header.txt
+grep -Fq 'ELF' elf-header.txt
+grep -Fq "$MACHINE" elf-header.txt || {
+  echo "V2TARGET-0670 BLOCKED: wrong ELF machine, expected $MACHINE" >&2
+  cat elf-header.txt >&2
+  exit 9
+}
+# Require actual OpenWrt SDK package; no fake artifact or host binary.
+APK="$(find "$SDK/bin" -type f -name 'blazepwifi-v2-native-lab*.apk' -print -quit)"
+[ -n "$APK" ] && [ -s "$APK" ] || {
+  echo 'V2TARGET-0670 BLOCKED: no compiled OpenWrt .apk package' >&2;exit 9;
+}
+OUT="$ROOT/dist/v060-native-sdk-lab/$TARGET"
+mkdir -p "$OUT"
+cp "$ELF" "$OUT/v2-native-fixture-$TARGET"
+cp "$APK" "$OUT/"
+cp elf-header.txt "$OUT/ELF-HEADER.txt"
+{
+  printf 'V2TARGET-0670 LAB ONLY — NO CUSTOMER PAYMENTS\n'
+  printf 'version=%s\nsdk=%s\n' "$VERSION" "$SDK_FILE"
+  printf 'sdk_sha256=%s\n' "$DIGEST"
+  printf 'target=%s\nmachine=%s\n' "$TARGET" "$MACHINE"
+  printf 'commit=%s\n' "$GITHUB_SHA"
+  printf 'source=tools/v060_journal_authority_native.c\n'
+  printf 'macro=BLAZE_FIXTURE_ONLY\n'
+  printf 'production_released=0\ncustomer_install_authorized=0\n'
+  printf 'openwrt_rootfs_integration=0\npaid_migration_authorized=0\n'
+  printf 'hardware_powercut_verified=0\n'
+} >"$OUT/MANIFEST.txt"
+(cd "$OUT" && sha256sum v2-native-fixture-* ./*.apk > SHA256SUMS)
+printf 'V2TARGET-0670 SDK COMPILE PASS: %s (%s) — LAB ONLY\n' "$TARGET" "$MACHINE"
