@@ -249,21 +249,44 @@ bp_rental_lease_add() {
   did="$1"; seconds="$2"; now="$(bp_now)"
   case "$seconds" in ''|*[!0-9]*) return 2;; esac
   [ "$seconds" -le 2592000 ] 2>/dev/null || return 2
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
   line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
   secret="$(printf '%s' "$line" | cut -f2)"; lease="$(printf '%s' "$line" | cut -f3)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
+  case "$lease" in ''|*[!0-9]*) return 8;; esac
   base="$lease"; [ "$base" -ge "$now" ] 2>/dev/null || base="$now"
   newlease=$((base+seconds))
-  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$last"
-  bp_rental_event_log lease_add "$did" "$seconds"
+  bp_paid_begin || return 9
+  if ! bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$last" ||
+     ! bp_rental_event_log lease_add "$did" "$seconds"; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s\n' "$newlease"
 }
 
 bp_rental_lease_expire() {
-  did="$1"; now="$(bp_now)"
+  did="$1"; confirm="${2:-}"; now="$(bp_now)"
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
   line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || return 1
   secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
-  bp_rental_device_write "$did" "$secret" "$now" "$label" "$last"
-  bp_rental_event_log expire "$did" "0"
+  lease="$(printf '%s' "$line" | cut -f3)"
+  case "$lease" in ''|*[!0-9]*) return 8;; esac
+  # Removing still-paid time requires a second, explicit admin operation,
+  # never an ordinary expire/close or an accidental stale UI action.
+  [ "$lease" -le "$now" ] 2>/dev/null ||
+    [ "$confirm" = CONFIRM_FORFEIT ] || return 6
+  detail="expired"
+  if [ "$lease" -gt "$now" ] 2>/dev/null; then
+    detail="confirmed_forfeit_seconds:$((lease-now))"
+  fi
+  bp_paid_begin || return 9
+  if ! bp_rental_device_write "$did" "$secret" "$now" "$label" "$last" ||
+     ! bp_rental_event_log expire "$did" "$detail"; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
   printf '%s\n' "$now"
 }
 
