@@ -102,13 +102,34 @@ bp_member_write() {
   shift 9
   updated="$1"; source="$2"
 
+  # Member rows are paid-state material. Never replace them if copying
+  # existing members or appending the new record failed. Also refuse an
+  # existing malformed/duplicated record rather than truncating balances.
+  [ -f "$BP_MEMBERS" ] && [ ! -L "$BP_MEMBERS" ] || return 8
+  case "$banked:$revision" in *[!0-9:]*|'') return 8;; esac
   tmp="$BP_STATE/.members.$(bp_tmp_suffix)"
-  awk -F '\t' -v u="$user" '$1!=u {print}' "$BP_MEMBERS" > "$tmp"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'     "$user" "$(bp_member_clean "$label")" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$revision" "$updated" "$(bp_member_clean "$source")" >> "$tmp"
-  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBERS"; then
-    rm -f "$tmp"; return 1
+  umask 077
+  if ! awk -F '\t' -v u="$user" '
+    NF!=11 || $1 !~ /^[A-Za-z0-9_.-]+$/ ||
+      $8 !~ /^[0-9]+$/ {bad=1}
+    $1==u {same++; next}
+    {print}
+    END {if (bad || same>1) exit 7}
+  ' "$BP_MEMBERS" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
   fi
-  bp_durable_sync || return 1
+  if ! printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$user" "$(bp_member_clean "$label")" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$revision" "$updated" "$(bp_member_clean "$source")" >> "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_MEMBERS"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_member_create() {
