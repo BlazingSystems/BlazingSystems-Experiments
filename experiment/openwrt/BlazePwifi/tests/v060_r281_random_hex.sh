@@ -5,10 +5,18 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/blaze-r281-rng-XXXXXX)"
 trap 'rm -rf "$T"' EXIT HUP INT TERM
-mkdir -p "$T/bin" "$T/state" "$T/run"
-export BP_STATE="$T/state" BP_RUN="$T/run"
-LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi"
-. "$LIB/auth.sh"
+# Independently exercise both rootfs and standalone profiles; subshells
+# isolate the sourced auth function, test shims and PATH command hash.
+for profile in r281 full; do
+(
+  T="$T/$profile"
+  mkdir -p "$T/bin" "$T/state" "$T/run"
+  export BP_STATE="$T/state" BP_RUN="$T/run"
+  case "$profile" in
+    r281) LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi" ;;
+    full) LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi" ;;
+  esac
+  . "$LIB/auth.sh"
 for size in 6 12 18 24 32; do
   i=0
   : > "$T/seen"
@@ -68,5 +76,7 @@ if bp_auth_random_hex 24 > "$T/bad-secret" 2>/dev/null; then
   echo 'R281 RNG minted a token with no valid random source' >&2; exit 1
 fi
 [ ! -s "$T/bad-secret" ]
-echo 'RNG-0657 PASS: R281 private tokens always exact length/hex, unique at test scale, short BusyBox output rejected, backup CSPRNG used, total entropy failure refuses with no leaked key'
-echo 'NOT PRODUCTION SIGNING: owner Lineage-2 keys and physical OEM Device Owner provisioning remain unresolved'
+  echo "RNG-0657/0659 PASS $profile: full-length private crypto tokens, short entropy backend failover, no deterministic fallback"
+)
+done
+echo 'RNG-0659 PASS BOTH full OpenWrt and standalone R281 CSPRNG profiles; NO production signer or Device Owner acceptance proven'
