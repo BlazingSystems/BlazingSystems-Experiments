@@ -109,6 +109,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_auth_endtoend.sh
       - name: BlazePwifi v0.6 physical scratch mount fail-closed preflight (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_lab_storage_preflight.sh
+      - name: HWPRE-0683 refuse unsafe physical pretrial sources (negative-only, no hardware)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_physical_pretrial_readonly.sh
       - name: PEVID-0679 verify mocked power-cut evidence never authorizes hardware acceptance
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_physical_evidence_contract.py
       - name: BlazePwifi v0.6 native private HMAC and fsync synthetic journal authority
