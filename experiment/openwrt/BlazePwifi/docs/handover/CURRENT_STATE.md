@@ -1,3 +1,10 @@
+## V2TARGET-0670 / SDK UMASK FIX COMMITTED, RETEST REQUIRED — 2026-10-09 Asia/Manila
+
+- **First CI outcome:** #37904896780 Ruijie/x86/OrangePi all FAILED at official SDK prerequisite check, not C compile. Ruijie and x86 logs specifically say `proper-umask failed`, required `umask 022`; SDK refused build as designed. No target .apk or ELF is validated by that run.
+- **Fix SHA:** `32fca404bd19f7721cd18d3e406adf691ad27f74` inserts `umask 022` immediately before SDK make steps; startup `077` staging remains; explicitly does not use `FORCE=1`. Other code and real customer states untouched.
+- **STATUS:** repaired_untested, target SDK builds pending. **NEXT EXACT ACTION:** recheck exact-SHA 3-target workflow; inspect failure logs, fix minimal source/package errors, document evidence, rerun; then Full/Windows exact-source gates. Do not publish OpenWrt LAB .apk as production or enable it through UCI.
+- **Hard STOP:** no encrypted v1 financial migration, real target sudden powercut proof, original Lineage-2 signed APK, 30 real stations or customer consent; production v0.6 remains NO-GO.
+
 ## V2TARGET-0670 / SDK LAB SOURCE COMMITTED, CROSS-BUILD OUTCOME PENDING — 2026-10-09 Asia/Manila
 
 - **Known good baseline:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`: full push #37902464250, PR #37902469005, Windows #37902468986, and focused native #37902469023 all **completed success**. It was host-based synthetic transaction proof, not target OpenWrt native compile or power cut.
