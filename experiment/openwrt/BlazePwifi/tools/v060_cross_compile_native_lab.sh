@@ -92,10 +92,28 @@ git -C "$SOURCE" checkout --quiet --detach "$OPENWRT_SRC_SHA"
 mkdir -p "$SDK/package/libs"
 cp -a "$SOURCE/package/libs/openssl" "$SDK/package/libs/openssl"
 cp "$SOURCE/include/openssl-module.mk" "$SDK/include/openssl-module.mk"
-# Build both dependency and opt-in fixture in SDK only. SDK package logic
-# ensures libcrypto is target-native. No FORCE, no host-header fallback.
+# Build only standard libcrypto algorithms required by SHA-256/HMAC.
+# The SDK's imported configuration can enable the optional devcrypto engine.
+# That engine needs kernel cryptodev.h, which is neither bundled with SDK nor
+# required by this fixture. Disable only optional engines in the LAB SDK;
+# preserve target-native OpenSSL and all core cryptographic algorithms.
+# Avoid conflicting duplicate Kconfig assignments from the imported SDK.
+for opt in OPENSSL_ENGINE OPENSSL_ENGINE_BUILTIN \
+  OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto; do
+  sed -i "/^CONFIG_\$opt=/d; /^# CONFIG_\$opt is not set$/d" "$SDK/.config"
+  printf '# CONFIG_%s is not set\n' "$opt" >> "$SDK/.config"
+done
 printf '\nCONFIG_PACKAGE_libopenssl=m\nCONFIG_PACKAGE_blazepwifi-v2-native-lab=m\n' >> "$SDK/.config"
 make -C "$SDK" defconfig
+# Fail closed if defconfig re-enables the engine; do NOT paper over a missing
+# kernel header by copying a host header or using FORCE=1.
+for opt in OPENSSL_ENGINE OPENSSL_ENGINE_BUILTIN \
+  OPENSSL_ENGINE_BUILTIN_DEVCRYPTO PACKAGE_libopenssl-devcrypto; do
+  if grep -Eq "^CONFIG_\$opt=[ym]" "$SDK/.config"; then
+    echo "V2TARGET-0670 BLOCKED: optional cryptodev engine remained enabled: $opt" >&2
+    exit 9
+  fi
+done
 make -C "$SDK" -j2 package/openssl/compile V=s
 OPENSSL_HDR="$(find "$SDK/staging_dir" -path '*/usr/include/openssl/crypto.h' -print -quit)"
 [ -n "$OPENSSL_HDR" ] || {
