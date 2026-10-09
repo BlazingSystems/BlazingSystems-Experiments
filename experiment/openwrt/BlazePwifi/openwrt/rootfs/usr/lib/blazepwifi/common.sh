@@ -190,14 +190,45 @@ bp_account_write() {
 	return 0
 }
 
+# Legacy MAC financial source is NOT a v2 migration. Do not silently
+# coerce malformed/duplicate credit records into a zero balance.
+bp_legacy_value() {
+  legacy_file="$1"; legacy_mac="$2"
+  [ -f "$legacy_file" ] && [ ! -L "$legacy_file" ] || return 8
+  awk -F '\t' -v m="$legacy_mac" '
+    $1==m {
+      if (NF<2 || $2 !~ /^[0-9]+$/ || ++matches>1) invalid=1
+      value=$2
+    }
+    END {if (invalid) exit 8; print matches?value:0}
+  ' "$legacy_file"
+}
+
 bp_remove_legacy_mac() {
-	mac="$1"
-	if [ -f "$BP_LEGACY_CREDITS" ]; then
-		tmp="$BP_STATE/.legacy-credits.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
-	fi
-	if [ -f "$BP_LEGACY_SESSIONS" ]; then
-		tmp="$BP_STATE/.legacy-sessions.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
-	fi
+  legacy_mac="$1"
+  for legacy_file in "$BP_LEGACY_CREDITS" "$BP_LEGACY_SESSIONS"; do
+    [ -e "$legacy_file" ] || { [ ! -L "$legacy_file" ] || return 8; continue; }
+    [ -f "$legacy_file" ] && [ ! -L "$legacy_file" ] || return 8
+    legacy_tmp="$BP_STATE/.legacy-remove.$(bp_tmp_suffix)"
+    umask 077
+    if ! awk -F '\t' -v m="$legacy_mac" '
+      {
+        if ($1==m) {
+          if (NF<2 || $2 !~ /^[0-9]+$/ || ++matches>1) bad=1
+          next
+        }
+        print
+      }
+      END {if (bad) exit 8}
+    ' "$legacy_file" > "$legacy_tmp" ||
+       ! chmod 600 "$legacy_tmp" ||
+       ! mv "$legacy_tmp" "$legacy_file"; then
+      rm -f "$legacy_tmp" 2>/dev/null || true
+      return 8
+    fi
+  done
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_authorize_mac() { [ -n "$1" ] && nft add element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
@@ -219,18 +250,25 @@ bp_bind_device() {
 		credit=0; expiry=0
 		claimed=""
 		[ -n "$mac" ] && claimed="$(awk -F '\t' -v m="$mac" '$7==m {print $1; exit}' "$BP_ACCOUNTS")"
-		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_CREDITS")"; fi
-		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(bp_legacy_value "$BP_LEGACY_CREDITS" "$mac")" || return 8; fi
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(bp_legacy_value "$BP_LEGACY_SESSIONS" "$mac")" || return 8; fi
 		if [ -n "$claimed" ] && [ -n "$mac" ]; then
-			bp_remove_legacy_mac "$mac"
-			bp_durable_sync
+			# MAC already owns another paid identity; preserve original records.
+			return 8
 		fi
 		if [ "$create" != 1 ] && [ "$credit" -eq 0 ] 2>/dev/null && { [ -z "$expiry" ] || [ "$expiry" -le "$(bp_now)" ] 2>/dev/null; }; then
 			return 0
 		fi
-		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" "" || return 8
-		[ -n "$mac" ] && [ -z "$claimed" ] && bp_remove_legacy_mac "$mac"
-		bp_durable_sync || return 8
+		# Pre-pin operator quarantine across old MAC source and new account.
+		# On any failed stage preserve source evidence; do not ACK a cash carry.
+		bp_paid_begin || return 8
+		if ! bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""; then
+			bp_paid_abort; return 8
+		fi
+		if [ -n "$mac" ] && ! bp_remove_legacy_mac "$mac"; then
+			bp_paid_abort; return 8
+		fi
+		bp_paid_commit || return 8
 		[ "$expiry" -gt "$(bp_now)" ] 2>/dev/null && bp_authorize_mac "$mac"
 		return 0
 	fi
