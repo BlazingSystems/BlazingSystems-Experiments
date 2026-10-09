@@ -52,7 +52,7 @@ sed 's# /mnt/blaze-v2-lab-media-test01 # /overlay #g' "$TEMP/good" > "$TEMP/bad"
 check_bad "$TEMP/bad" 'missing approved scratch root'
 sed 's# /mnt/blaze-v2-lab-media-test01 # / #g' "$TEMP/good" > "$TEMP/bad"
 check_bad "$TEMP/bad" 'customer filesystem root'
-sed 's/rw,relatime/ro,relatime/2' "$TEMP/good" > "$TEMP/bad"
+sed '2s/rw,relatime/ro,relatime/' "$TEMP/good" > "$TEMP/bad"
 check_bad "$TEMP/bad" 'read-only target mount'
 sed 's# /fixture /tmp/blaze-v2-native-test01 # /fixture /tmp/blaze-v2-native-OTHER #g' "$TEMP/good" > "$TEMP/bad"
 check_bad "$TEMP/bad" 'unmounted generic tmp path'
