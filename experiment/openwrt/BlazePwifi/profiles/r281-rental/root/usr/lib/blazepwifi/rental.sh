@@ -297,10 +297,24 @@ bp_rental_events_json() {
 
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
+  # Called only under the Vendo CGI's global accounting lock. No ACK,
+  # including an old duplicate, while a previous paid write is disputed.
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
+  case "$pulses" in ''|*[!0-9]*) return 2;; esac
+  [ "$pulses" -ge 1 ] 2>/dev/null && [ "$pulses" -le 20 ] 2>/dev/null || return 2
+  [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
-  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")"
+  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")" || return 8
   if [ -n "$old" ]; then
-    printf 'duplicate\t%s\n' "$(printf '%s' "$old" | cut -f3)"
+    old_did="$(printf '%s' "$old" | cut -f2)"
+    old_lease="$(printf '%s' "$old" | cut -f3)"
+    old_kind="$(printf '%s' "$old" | cut -f5)"
+    # Legacy four-field receipts lack the original pulse quantity and
+    # cannot prove an exact replay. Do not falsely ACK a changed amount.
+    [ "$old_did" = "$did" ] && [ "$old_kind" = "coin:$pulses" ] ||
+      return 9
+    case "$old_lease" in ''|*[!0-9]*) return 9;; esac
+    printf 'duplicate\t%s\n' "$old_lease"
     return 0
   fi
   line="$(bp_rental_device_line "$did")"
@@ -308,6 +322,8 @@ bp_rental_apply_coin() {
   secret="$(printf '%s' "$line" | cut -f2)"
   lease="$(printf '%s' "$line" | cut -f3)"
   label="$(printf '%s' "$line" | cut -f4)"
+  last="$(printf '%s' "$line" | cut -f5)"
+  case "$lease:$last" in ''|*[!0-9:]*) return 8;; esac
   per="$(bp_cfg rental_seconds_per_pulse)"
   [ -n "$per" ] || per=600
   case "$per" in ''|*[!0-9]*) per=600;; esac
@@ -315,9 +331,19 @@ bp_rental_apply_coin() {
   base="$lease"
   [ "$base" -gt "$now" ] 2>/dev/null || base="$now"
   newlease=$((base + per * pulses))
-  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"
-  printf '%s\t%s\t%s\t%s\n' "$event" "$did" "$newlease" "$now" >> "$BP_RENTAL_EVENTS"
-  chmod 600 "$BP_RENTAL_EVENTS"
-  bp_durable_sync
+  # Both paid lease and receipt are still separate legacy TSV writes. A
+  # persisted uncertain marker prevents unsafe retry on either failure.
+  bp_paid_begin || return 9
+  if ! bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$last"; then
+    bp_paid_abort
+    return 8
+  fi
+  if ! printf '%s\t%s\t%s\t%s\tcoin:%s\n' "$event" "$did" "$newlease" "$now" "$pulses" >> "$BP_RENTAL_EVENTS" ||
+     ! chmod 600 "$BP_RENTAL_EVENTS" ||
+     ! bp_durable_sync; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
   printf 'credited\t%s\n' "$newlease"
 }
