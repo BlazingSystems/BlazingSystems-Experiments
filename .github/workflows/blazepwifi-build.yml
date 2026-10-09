@@ -131,6 +131,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_password_write_integrity.sh
       - name: Require durable old-session logout and password-change revoke on both admin portals
         run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_session_revocation.sh
+      - name: Revoke old admin tokens before any new credential commit or false reset ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_password_rotation_order.sh
       - name: Refuse signed R281 Android enrollment false ACK and reusable setup QR
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
       - name: Keep ordinary binding and Device Owner QR issuance storage-authoritative
