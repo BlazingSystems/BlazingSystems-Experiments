@@ -1,3 +1,11 @@
+## V2TARGET-0670 / IN PROGRESS — 2026-10-09 Asia/Manila
+
+- **Verified last fully green SHA:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`. Full push #37902464250, Full PR #37902469005, Windows #37902468986, focused native #37902469023 all GitHub completed success. New code not yet written; do not attribute these runs to V2TARGET-0670.
+- **Scope:** SDK-compiled (not firmware-installed) synthetic native C fixture for 3 OpenWrt 25.12.5 targets. Separate `lab-native` packaging, script checks official downloaded SDK checksums from target sha256sums, builds exact same `tools/v060_journal_authority_native.c` behind `-DBLAZE_FIXTURE_ONLY`, depends libopenssl, classifies binary architecture, and emits LAB ONLY artifact and manifest. Not a payment-authorizing provider; no automatic install or public release.
+- **Acceptance:** each target's SDK download checksum verified, compile/link succeeds with target libcrypto, ELF matches expected machine, package contains fixture-only binary and no startup/CGI/cron, native host test stays green; record exact build SHA and failures. Environment may lack SDK deps; never substitute host binary or fake package.
+- **NEXT EXACT ACTION:** create isolated package/workflow, run real GitHub CI, inspect exact failures and reconcile. After all targets pass, physical flash/powercut testing and reversible operator-controlled encrypted v1 migration remain open, with user acceptance required before customer deployment.
+- **Safety:** `PRODUCTION_v0.6.0_RELEASED=0`; alpha.4 immutable LAB ONLY; no signing lineage changes.
+
 ## V2NATIVE-0669 / VERIFIED FOCUSED TEST, FULL+WINDOWS PENDING — 2026-10-09 Asia/Manila
 
 - **Evidence:** commit `225a41b997a8b171ec3f2fefd435acdb77b4e2ba` adds 11 sequential signed debits, requires high-water mark 15, retain exactly eight receipts, evicted seq1/5 fail closed even when authentic, and reject concurrent writer lock without payment ACK. Actual [focused push #37902207844](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902207844) and [focused PR #37902213670](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902213670) both completed SUCCESS. Later doc-head `aebf8cbce7b6031087394032ab093715f5f1d263` focused PR [#37902292666](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902292666) completed SUCCESS.
