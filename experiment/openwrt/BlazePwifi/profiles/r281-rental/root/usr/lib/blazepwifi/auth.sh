@@ -70,8 +70,8 @@ bp_auth_clean_field() {
 
 bp_auth_audit() {
 	now="$(bp_auth_now)"; event="$(bp_auth_clean_field "$1")"; user="$(bp_auth_clean_field "${2:-}")"; ip="$(bp_auth_clean_field "${3:-}")"; detail="$(bp_auth_clean_field "${4:-}")"
-	printf '%s\t%s\t%s\t%s\t%s\n' "$now" "$event" "$user" "$ip" "$detail" >> "$BP_AUDIT"
-	chmod 600 "$BP_AUDIT"
+	printf '%s\t%s\t%s\t%s\t%s\n' "$now" "$event" "$user" "$ip" "$detail" >> "$BP_AUDIT" || return 8
+	chmod 600 "$BP_AUDIT" || return 8
 }
 
 bp_auth_sha256i() {
@@ -100,16 +100,41 @@ bp_auth_set_password() {
 	salt="$(bp_auth_random_hex 8)" || return 8
 	printf '%s' "$salt" | LC_ALL=C grep -Eq '^[a-f0-9]{16}$' || return 8
 	if command -v openssl >/dev/null 2>&1 && openssl passwd -6 -salt "$salt" "$pass" >/dev/null 2>&1; then
-		scheme=openssl6; rounds=0; hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)"
+		scheme=openssl6; rounds=0
+		hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)" || return 8
 	else
-		scheme=sha256i; rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"; hash="$(bp_auth_sha256i "$pass" "$salt" "$rounds")"
+		scheme=sha256i; rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"
+		hash="$(bp_auth_sha256i "$pass" "$salt" "$rounds")" || return 8
 	fi
+	[ -n "$hash" ] || return 8
+	[ -f "$BP_ADMIN_USERS" ] && [ ! -L "$BP_ADMIN_USERS" ] || return 8
+	# Existing administrator/operator passwords are security-critical.
+	# Never replace with an incomplete/malformed/duplicated copied snapshot.
 	tmp="$BP_STATE/.admin-users.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v u="$user" '$1!=u {print}' "$BP_ADMIN_USERS" > "$tmp"
-	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$user" "$role" "$scheme" "$salt" "$hash" "$rounds" "$must_change" >> "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_USERS"
-	bp_durable_sync
-	bp_auth_audit password_set "$user" "${REMOTE_ADDR:-local}" "$role"
+	umask 077
+	if ! awk -F '\t' -v OFS='\t' -v u="$user" '
+		{
+			if (NF!=7 || $1 !~ /^[A-Za-z0-9_.-]+$/ || length($1)>32 ||
+			    $2 !~ /^(admin|operator|viewer)$/ ||
+			    $3 !~ /^(openssl6|sha256i)$/ || $4=="" || $5=="" ||
+			    $6 !~ /^[0-9]+$/ || $7 !~ /^[01]$/ ||
+			    ++seen[$1]>1) bad=1
+			if ($1!=u) print
+		}
+		END{if(bad) exit 8}
+	' "$BP_ADMIN_USERS" > "$tmp"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	if ! printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$user" "$role" "$scheme" "$salt" "$hash" "$rounds" "$must_change" >> "$tmp" ||
+	   ! chmod 600 "$tmp" ||
+	   ! mv "$tmp" "$BP_ADMIN_USERS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_durable_sync || return 8
+	bp_auth_audit password_set "$user" "${REMOTE_ADDR:-local}" "$role" || return 8
+	return 0
 }
 
 bp_auth_verify_password() {
