@@ -112,6 +112,11 @@ def hex64(s: object) -> bool:
     return isinstance(s, str) and HEX64.fullmatch(s) is not None
 
 
+def hex40(s: object) -> bool:
+    """The project's GitHub commit identity uses SHA-1 (40 hex digits)."""
+    return isinstance(s, str) and HEX40.fullmatch(s) is not None
+
+
 def nonneg(x: object) -> bool:
     return type(x) is int and 0 <= x <= 2**63 - 1
 
@@ -149,7 +154,7 @@ def review(rootname: str) -> dict:
     ensure(type(obj) is dict and set(obj) == REPORT_FIELDS and
            obj["schema"] == SCHEMA and obj["fixture_only"] is True and
            obj["claim_origin"] == "operator-claimed-unverified" and
-           hex64(obj["candidate_git_sha"]), "MANIFEST_SCHEMA")
+           hex40(obj["candidate_git_sha"]), "MANIFEST_SCHEMA")
     trials, soaks = obj["trials"], obj["soaks"]
     ensure(type(trials) is list and len(trials) == 150 and
            type(soaks) is list and len(soaks) == 3, "MINIMUM_COVERAGE_MISSING")
