@@ -107,16 +107,16 @@ case "$action" in
       exit 0
     fi
 
-    event="c:$(bp_event_hash "coin|$id|$nonce|$target")"
-    duplicate_device="$(bp_find_event_device "$event")"
-    if [ -n "$duplicate_device" ]; then
-      credit="$(bp_get_credit "$duplicate_device")"
-      body="$(printf '{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":%s,"target_nonce":"%s"}' "$credit" "$(bp_json_escape "$target")")"
-      bp_json "$body"
-      exit 0
-    fi
-
+    # Include target identity in each new v1 receipt so valid ACK retries
+    # cannot be aged out while this physical controller window remains open.
+    event="c:$target.$(bp_event_hash "coin|$id|$nonce|$target")"
     bp_lock || bp_fail "accounting busy"
+    # Duplicate ACKs are financial acknowledgements too. Check quarantine
+    # *inside* the global accounting lock, never in a racy prelock shortcut.
+    if [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+      bp_unlock
+      bp_fail "paid state uncertain; operator reconciliation required"
+    fi
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
@@ -140,8 +140,20 @@ case "$action" in
     [ -n "$unit" ] || unit=100
     add=$((unit*pulses))
     newcredit=$((credit+add))
-    newevents="$(bp_events_push "$events" "$event")"
-    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
+    if ! newevents="$(bp_events_push "$events" "$event")"; then
+      bp_unlock
+      bp_fail "coin receipt retention unavailable; operator reconciliation required"
+    fi
+    bp_paid_begin || { bp_unlock; bp_fail "paid state uncertain or accounting busy"; }
+    if ! bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"; then
+      bp_paid_abort
+      bp_unlock
+      bp_fail "coin credit storage failed; operator reconciliation required"
+    fi
+    if ! bp_paid_commit; then
+      bp_unlock
+      bp_fail "coin credit durability failed; operator reconciliation required"
+    fi
     bp_unlock
     body="$(printf '{"ok":true,"duplicate":false,"credited_cents":%s,"credit_cents":%s,"target_nonce":"%s"}' "$add" "$newcredit" "$(bp_json_escape "$target")")"
     bp_json "$body"
