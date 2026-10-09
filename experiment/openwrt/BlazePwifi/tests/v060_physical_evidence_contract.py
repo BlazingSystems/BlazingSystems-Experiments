@@ -7,6 +7,7 @@ The structurally complete fixture MUST STILL say physical_verified=false.
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -89,7 +90,8 @@ def create(root: Path) -> dict:
                     "receipts_consistent": True,
                     "duplicate_ack_count": 0,
                     "event_ref_redacted": f"{event:012x}",
-                    "power_event_time_utc": "2026-10-09T12:00:00Z",
+                    "power_event_time_utc": (datetime(2026, 10, 9, 12, tzinfo=timezone.utc)
+                                             + timedelta(minutes=event)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "power_log": power,
                     "power_log_sha256": ph,
                     "recovery_log": boot,
@@ -148,6 +150,9 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     blocked(lambda d: d["trials"][5].__setitem__("duplicate_ack_count", 1))
     blocked(lambda d: d["trials"][5].__setitem__("duplicate_ack_count", False))
     blocked(lambda d: d["trials"][2].__setitem__("power_event_time_utc", "unknown"))
+    blocked(lambda d: d["trials"][2].__setitem__("power_event_time_utc", "2026-02-30T12:04:00Z"))
+    blocked(lambda d: d["trials"][2].__setitem__(
+        "power_event_time_utc", d["trials"][0]["power_event_time_utc"]))
     blocked(lambda d: d["trials"][2].__setitem__("power_log", "../../etc/passwd"))
     blocked(lambda d: d["trials"][2].__setitem__("target_arch", "customer"))
     blocked(lambda d: d["trials"][2].__setitem__("package_sha256", "not-a-hash"))
@@ -156,6 +161,21 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     blocked(lambda d: d.__setitem__("claim_origin", "physical-certified"))
     blocked(lambda d: d.__setitem__("fixture_only", False))
     blocked(lambda d: d.__setitem__("production_release_authorized", True))
+
+    # Copies of legitimate capture contents under a distinct filename must
+    # still fail, even when the copied file has a matching SHA-256 in the
+    # manifest. Unique filenames alone are not independent observations.
+    first_claim = original["trials"][0]["power_log"]
+    second_claim = original["trials"][1]["power_log"]
+    original_second = (root / second_claim).read_bytes()
+    first_bytes = (root / first_claim).read_bytes()
+    write_private(root / second_claim, first_bytes)
+    forged_copy = copy.deepcopy(original)
+    forged_copy["trials"][1]["power_log_sha256"] = hashlib.sha256(first_bytes).hexdigest()
+    store(forged_copy)
+    run(root, "BLOCKED")
+    store(original)
+    write_private(root / second_claim, original_second)
 
     # The bytes must match each claim, and private files must not be symlinks
     # or world-readable. No modification to genuine lab media occurs.
@@ -186,4 +206,5 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     assert run(root, "STRUCTURE_READY_FOR_INDEPENDENT_REVIEW")["physical_powercut_verified"] is False
 
 print("PEVID-0679 PASS: 150 mock trials+3 mock 24h soaks structurally checked, missing/duplicate/tamper/path/permission/financial claims refused")
+print("PEVID-0680 PASS: repeated power-cut timestamps, invalid calendar dates and copied capture contents rejected without hardware approval")
 print("PHYSICAL_POWER_CUT_VERIFIED=0; CUSTOMER_INSTALL_AUTHORIZED=0; mocked CI input is NOT hardware acceptance")
