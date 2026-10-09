@@ -40,9 +40,30 @@ bp_rental_enroll_lookup() {
 }
 
 bp_rental_enroll_consume() {
-  id="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
-  awk -F '\t' -v i="$id" '$1!=i {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
-    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+  enroll_id="$1"
+  printf '%s' "$enroll_id" | LC_ALL=C grep -Eq '^[0-9a-f]{12}$' || return 8
+  [ -f "$BP_RENTAL_ENROLL" ] && [ ! -L "$BP_RENTAL_ENROLL" ] || return 8
+  enroll_tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  umask 077
+  # Do not confirm a one-time token was spent if it was missing, duplicated
+  # or the enrollment registry was already malformed. Preserve old bytes.
+  if ! awk -F '\t' -v i="$enroll_id" '
+    {
+      if (NF!=4 || length($1)!=12 || $1 !~ /^[a-f0-9]+$/ ||
+          length($2)!=36 || $2 !~ /^[a-f0-9]+$/ ||
+          $3 !~ /^[0-9]+$/ || ++seen[$1]>1) invalid=1
+      if ($1==i) {removed++; next}
+      print
+    }
+    END {if (invalid || removed!=1) exit 8}
+  ' "$BP_RENTAL_ENROLL" > "$enroll_tmp" ||
+     ! chmod 600 "$enroll_tmp" ||
+     ! mv "$enroll_tmp" "$BP_RENTAL_ENROLL"; then
+    rm -f "$enroll_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_device_line() {
@@ -151,12 +172,32 @@ bp_rental_policy_line() {
 }
 
 bp_rental_policy_ensure() {
-  did="$1"
-  grep -q "^$did$(printf '\t')" "$BP_RENTAL_POLICY" 2>/dev/null || {
-    printf '%s\t*\t-\t-\t4096\t-\n' "$did" >> "$BP_RENTAL_POLICY"
-    chmod 600 "$BP_RENTAL_POLICY"
-    bp_durable_sync
-  }
+  policy_did="$1"
+  printf '%s' "$policy_did" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' || return 8
+  [ -f "$BP_RENTAL_POLICY" ] && [ ! -L "$BP_RENTAL_POLICY" ] || return 8
+  policy_tmp="$BP_STATE/.rental-policy.$(bp_tmp_suffix)"
+  umask 077
+  # Check every source row and duplicate ID before copying a replacement.
+  # Existing policies must be preserved; never append a truncated record.
+  if ! awk -F '\t' -v d="$policy_did" '
+    {
+      if (NF!=6 || length($1)!=24 || $1 !~ /^[a-f0-9]+$/ ||
+          ++seen[$1]>1) invalid=1
+      if ($1==d) found++
+      print
+    }
+    END {
+      if (invalid || found>1) exit 8
+      if (!found) print d,"*","-","-","4096","-"
+    }
+  ' OFS="$(printf '\t')" "$BP_RENTAL_POLICY" > "$policy_tmp" ||
+     ! chmod 600 "$policy_tmp" ||
+     ! mv "$policy_tmp" "$BP_RENTAL_POLICY"; then
+    rm -f "$policy_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_policy_write() {
