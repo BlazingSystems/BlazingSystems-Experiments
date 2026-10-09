@@ -1,3 +1,10 @@
+## V2NATIVE-0669 / IN PROGRESS — REPLAY WINDOW & LOCK CONCURRENCY STRESS — 2026-10-09 Asia/Manila
+
+- **New verified checkpoint:** V2NATIVE-0668 native synthetic gate push #37901902866 and PR #37901909728 at compiler fix `338cc995a314d579bff1f6027df54242be64ac3c` both completed SUCCESS; later doc-head focused PR #37901983190 also SUCCESS on SHA `6c84a36828b3a61236b18eb7dd1afbf6b07cf167`. Full platform #37901975670/#37901983284 and Windows #37901983262 remained pending when checked. No hardware proof.
+- **Scope V2NATIVE-0669:** extend ONLY disposable native fixture regression `tests/v060_native_v2_authority.sh` to submit enough sequential authenticated operations to force receipt-window pruning, prove stale evicted replay fails closed with unchanged balances, verify retained controller high-water mark and test concurrent file-lock conflict. Keep native C source and production payment paths unchanged unless these stronger tests expose a defect.
+- **Expected safety evidence:** initial native signed operations still pass; after 11 further signed debits, only 8 latest receipts remain and an old signed payload cannot reapply money; held lock refuses new event with no ACK/data mutation. Rollback test-only change if flakiness; never loosen production fraud protection.
+- **NEXT EXACT ACTION:** edit bounded synthetic test, run focused exact-head CI, inspect failure; if green sync all handovers and Full/Windows before any SDK packaging. Real paid ledger/migration and production 0.6 remain OFF.
+
 ## V2NATIVE-0668 / FIRST COMPILER FAILURE TRIAGED — 2026-10-09 Asia/Manila
 
 - **Real failure evidence:** [focused Actions #37901810966](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901810966) completed **failure**, step `Compile and fault-test signed synthetic prepaid journal`. Direct job log reports `tools/v060_journal_authority_native.c:227:11: error: 'newline' undeclared`; `getkey` declared local `nl` but incorrectly advanced `p=newline+1` after an unrelated source-wide rename. Compiler had not reached runtime tests.
