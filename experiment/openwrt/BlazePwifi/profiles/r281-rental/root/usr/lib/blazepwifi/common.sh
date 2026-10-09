@@ -279,6 +279,12 @@ bp_coin_event_is_live() {
 	coin_body="${1#c:}"
 	coin_window="${coin_body%%.*}"
 	coin_digest="${coin_body#*.}"
+	coin_pulses="${coin_digest#*:}"
+	if [ "$coin_pulses" != "$coin_digest" ]; then
+		case "$coin_pulses" in ''|*[!0-9]*) return 1;; esac
+		[ "$coin_pulses" -ge 1 ] 2>/dev/null && [ "$coin_pulses" -le 20 ] 2>/dev/null || return 1
+	fi
+	coin_digest="${coin_digest%%:*}"
 	printf '%s' "$coin_window" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || return 1
 	printf '%s' "$coin_digest" | grep -Eq '^[a-f0-9]{64}$' || return 1
 	for coin_target_file in "$BP_TARGET_DIR"/*.tsv; do
@@ -325,6 +331,17 @@ bp_events_push() {
 	bytes="$(printf '%s' "$out" | wc -c)" || return 8
 	[ "$bytes" -le 131072 ] 2>/dev/null || return 8
 	printf '%s' "$out"
+}
+
+# Detect a controller reusing the same signed nonce for a DIFFERENT
+# quantity. An unqualified old receipt without pulse proof is ambiguous.
+bp_find_coin_base() {
+	base="$1"
+	awk -F '\t' -v p="$base" '{
+		n=split($9,a,",")
+		for(i=1;i<=n;i++)
+			if(a[i]==p || index(a[i],p ":")==1) {print $1; exit}
+	}' "$BP_ACCOUNTS"
 }
 
 bp_find_event_device() {
