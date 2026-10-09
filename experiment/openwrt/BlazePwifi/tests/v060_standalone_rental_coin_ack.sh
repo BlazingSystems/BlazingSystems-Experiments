@@ -5,7 +5,8 @@
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d /tmp/blaze-r281-coin-XXXXXX)"
-trap 'rm -rf "$T"' EXIT HUP INT TERM
+stage=initialize
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "RENT-0652 test FAILED at stage: $stage (rc=$rc)" >&2; fi; rm -rf "$T"' EXIT HUP INT TERM
 mkdir -p "$T/bin" "$T/state/targets" "$T/run"
 cat > "$T/bin/uci" <<'UCI'
 #!/bin/sh
@@ -44,17 +45,23 @@ send_coin() {
   proof="$(printf 'disposable-standalone-fixture-key|coin|vendo-01|%s|%s|%s|disposable-standalone-fixture-key' "$n" "$pulses" "$TARGET" | sha256sum | cut -d' ' -f1)"
   printf 'action=coin&id=vendo-01&nonce=%s&pulses=%s&target=%s&sig=%s' "$n" "$pulses" "$TARGET" "$proof" | sh "$VENDO"
 }
+stage=first-signed-payment
 initial="$(moneysha)"
 ok="$(send_coin 0102030405060708 1)"
+printf 'R281 first credit response: %s\n' "$ok" >&2
 printf '%s' "$ok" | grep -q '"ok":true'
 printf '%s' "$ok" | grep -q '"duplicate":false'
 [ "$(paid)" -eq $((lease+600)) ]
 [ ! -e "$BP_PAID_UNCERTAIN" ]
+stage=repeat-signed-payment
 before="$(moneysha)"
 replayed="$(send_coin 0102030405060708 1)"
+printf 'R281 matching replay response: %s\n' "$replayed" >&2
 printf '%s' "$replayed" | grep -q '"duplicate":true'
 [ "$(moneysha)" = "$before" ]
+stage=reused-id-changed-amount
 different_pulses="$(send_coin 0102030405060708 2)"
+printf 'R281 changed-amount response: %s\n' "$different_pulses" >&2
 printf '%s' "$different_pulses" | grep -q '"ok":false'
 printf '%s' "$different_pulses" | grep -q 'receipt collision'
 [ "$(moneysha)" = "$before" ]
@@ -67,7 +74,9 @@ exec /bin/mv "$@"
 MV
 chmod 700 "$T/bin/mv"
 hash -r 2>/dev/null || true
+stage=paid-rename-injected-failure
 fail="$(send_coin 1112131415161718 1)"
+printf 'R281 paid-rename failure response: %s\n' "$fail" >&2
 printf '%s' "$fail" | grep -q '"ok":false'
 printf '%s' "$fail" | grep -q 'operator reconciliation required'
 [ "$(moneysha)" = "$before" ] && [ -e "$BP_PAID_UNCERTAIN" ]
@@ -88,7 +97,9 @@ CHMOD
 /bin/chmod 700 "$T/bin/chmod"
 hash -r 2>/dev/null || true
 before2="$(moneysha)"
+stage=audit-chmod-injected-failure
 audit_fail="$(send_coin 2122232425262728 1)"
+printf 'R281 audit failure response: %s\n' "$audit_fail" >&2
 printf '%s' "$audit_fail" | grep -q '"ok":false'
 printf '%s' "$audit_fail" | grep -q 'operator reconciliation required'
 # Lease may ALREADY have committed; failed receipt may be ambiguous.
@@ -101,7 +112,9 @@ printf '%s' "$audit_retry" | grep -q '"ok":false'
 printf '%s' "$audit_retry" | grep -q 'operator reconciliation required'
 [ -e "$BP_PAID_UNCERTAIN" ]
 pollsig="$(printf 'disposable-standalone-fixture-key|poll|vendo-01|3132333435363738|0||disposable-standalone-fixture-key' | sha256sum | cut -d' ' -f1)"
+stage=uncertain-physical-poll-block
 poll="$(printf 'action=poll&id=vendo-01&nonce=3132333435363738&pulses=0&sig=%s' "$pollsig" | sh "$VENDO")"
+printf 'R281 uncertain physical poll response: %s\n' "$poll" >&2
 printf '%s' "$poll" | grep -q '"insert":0'
 echo 'RENT-0652 R281 signed coin CGI PASS: normal ACK+matching replay, changed pulse refused, failed paid rename NO ACK, failed audit keeps quarantine, unsafe retries disabled'
 echo 'NOT production: legacy paid lease and receipt remain separate TSV; powercut WAL/source migration/Android signer/R281 hardware tests outstanding'
