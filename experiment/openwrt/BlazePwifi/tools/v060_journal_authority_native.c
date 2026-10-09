@@ -144,21 +144,28 @@ static struct item *find(struct item *arr,int n,const char *id) {
 static void parseledger(char *s,size_t len) {
     char *p=s,*end=s+len,*v[7];size_t count=0;
     unsigned char hash[32];char expected[65];
+    size_t i,footer_start=0;
     if(!len || s[len-1]!='\n')die("ledger missing final newline");
+    for(i=0;i+1<len;i++)if(s[i]=='\n')footer_start=i+1;
+    if(len-footer_start!=67 || s[footer_start]!='H' ||
+       s[footer_start+1]!='\t')die("missing final integrity footer");
+    {char footer_hex[65];memcpy(footer_hex,s+footer_start+2,64);
+     footer_hex[64]=0;if(!hex64(footer_hex))die("malformed footer hash");
+     SHA256((const unsigned char*)s,footer_start,hash);
+     hexout(hash,32,expected);
+     if(CRYPTO_memcmp(expected,footer_hex,64)!=0)
+       die("SHA-256 integrity footer mismatch");
+    }
     while(p<end){
-        char *nl=memchr(p,'\n',(size_t)(end-p));
+        char *newline=memchr(p,'\n',(size_t)(end-p));
         int n;
-        if(!nl)die("incomplete record");
-        *nl=0;count++;
+        if(!newline)die("incomplete record");
+        *newline=0;count++;
         n=parts(p,v,7);
         if(count==1){if(n!=2||strcmp(v[0],"V")||strcmp(v[1],"2"))
           die("unsupported ledger version");
         } else if(n==2 && strcmp(v[0],"H")==0){
-            if(nl!=end-1 || !hex64(v[1]))die("invalid integrity footer");
-            SHA256((const unsigned char*)s,(size_t)(p-s),hash);
-            hexout(hash,32,expected);
-            if(CRYPTO_memcmp(expected,v[1],64)!=0)
-                die("SHA-256 integrity footer mismatch");
+            if(newline!=end-1 || !hex64(v[1]))die("invalid integrity footer");
             return;
         } else if(n==3 && !strcmp(v[0],"A")){
             unsigned long long z;
@@ -189,7 +196,7 @@ static void parseledger(char *s,size_t len) {
             {char eid[64];snprintf(eid,sizeof(eid),"%s:%llu",v[1],z);
              if(strcmp(eid,a->event))die("receipt event/sequence mismatch");}
         } else die("malformed journal record");
-        p=nl+1;
+        p=newline+1;
     }
     die("missing ledger integrity footer");
 }
@@ -217,7 +224,7 @@ static void getkey(const char *wanted,unsigned char key[32]) {
             die("invalid controller key registry");
         if(!strcmp(v[0],wanted)){if(seen++)die("duplicate controller key");
             unhex(v[1],key,32);}
-        p=nl+1;
+        p=newline+1;
     }
     OPENSSL_cleanse(data,n);free(data);
     if(seen!=1)die("unknown controller key");
@@ -276,31 +283,120 @@ static void commit(unsigned long long answer) {
 }
 int main(int argc,char **argv) {
     const char *root,*id,*event,*op,*src,*dst,*hmac;
-    unsigned long long seq,units,now,answer=0;
+    unsigned long long seq,units,now,answer=0,high=0,base=0;
     unsigned char key[32],mac[EVP_MAX_MD_SIZE],sig[32],dig[32];
     unsigned int maclen=0;char signed_msg[400],digest_input[400],fingerprint[65];
-    size_t n;char *data;
+    size_t n;char *data;struct stat st;
     struct item *floor,*x,*to;
-    int i;
-    if(argc!=10)die("usage: ROOT CTRL SEQ EVENT OP SUBJECT TARGET UNITS NOW HMAC");
+    int i,valid_opcode=0;
+    if(argc!=11)die("usage: ROOT CTRL SEQ EVENT OP SUBJECT TARGET UNITS NOW HMAC");
     root=argv[1];id=argv[2];event=argv[4];op=argv[5];
-    src=argv[6];dst=argv[7];hmac=argv[9];
+    src=argv[6];dst=argv[7];hmac=argv[10];
     if(strncmp(root,ROOT_PREFIX,strlen(ROOT_PREFIX)) ||
        !root[strlen(ROOT_PREFIX)] ||
        strchr(root+strlen(ROOT_PREFIX),'/') ||
        strstr(root+strlen(ROOT_PREFIX),".."))
        die("not a strict synthetic fixture root");
-    if(!valid_id(id)||!valid_id(src)||!(valid_id(dst)||!strcmp(dst,"-"))||
+    if(!valid_id(id)||!valid_id(src)||
+       !(valid_id(dst)||!strcmp(dst,"-"))||
        !hex64(hmac)||!uint(argv[3],100000000ULL,&seq)||seq==0 ||
-       !uint(argv[8],2000000000ULL,&now))
+       !uint(argv[8],31536000ULL,&units)||units==0 ||
+       !uint(argv[9],2000000000ULL,&now))
        die("malformed controller envelope");
-    /*
-     * Callers pass units in argv[?]; see contract:
-     * ROOT CTRL SEQ EVENT OP SUBJECT TARGET UNITS NOW HMAC = 11 argc.
-     */
-    (void)units;(void)answer;(void)key;(void)mac;(void)sig;(void)dig;
-    (void)maclen;(void)signed_msg;(void)digest_input;(void)fingerprint;
-    (void)n;(void)data;(void)floor;(void)x;(void)to;(void)i;(void)dirfd;(void)lockfd;
-    die("argument count guard (disabled until complete source checkpoint)");
-    return 8;
+    valid_opcode=(!strcmp(op,"AM")||!strcmp(op,"SM")||
+                  !strcmp(op,"TM")||!strcmp(op,"LR"));
+    {char expected[64];
+     snprintf(expected,sizeof(expected),"%s:%llu",id,seq);
+     if(!valid_opcode || strcmp(event,expected) ||
+        (!strcmp(op,"TM") && (!strcmp(dst,"-")||!strcmp(src,dst))) ||
+        (strcmp(op,"TM") && strcmp(dst,"-")))
+        die("signed event/operation mismatched");
+    }
+    dirfd=open(root,O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC);
+    if(dirfd<0 || fstat(dirfd,&st)!=0 || !S_ISDIR(st.st_mode) ||
+       st.st_uid!=geteuid() || (st.st_mode&0777)!=0700)
+        die("private fixture directory validation failed");
+    data=readfile(".blaze-v2-fixture-only",80,&n);
+    if(n!=strlen("BLAZE-V2-SYNTHETIC-ONLY\n") ||
+       memcmp(data,"BLAZE-V2-SYNTHETIC-ONLY\n",n))
+       die("synthetic marker required");
+    free(data);
+    lockfd=openat(dirfd,".v2-native-lock",
+                  O_CREAT|O_RDWR|O_NOFOLLOW|O_CLOEXEC,0600);
+    if(lockfd<0 || !private_fd(lockfd,0600) ||
+       flock(lockfd,LOCK_EX|LOCK_NB)!=0)
+       die("unsafe/busy v2 native writer lock");
+    getkey(id,key);
+    unhex(hmac,sig,32);
+    if(snprintf(signed_msg,sizeof(signed_msg),
+      "BLAZE-V2-AUTH-FIXTURE/1\t%s\t%llu\t%s\t%s\t%s\t%s\t%llu\t%llu\n",
+      id,seq,event,op,src,dst,units,now)<0)
+       die("envelope format failed");
+    if(!HMAC(EVP_sha256(),key,32,(unsigned char*)signed_msg,
+         strlen(signed_msg),mac,&maclen) || maclen!=32 ||
+         CRYPTO_memcmp(sig,mac,32)!=0)
+       die("signed controller envelope mismatch");
+    OPENSSL_cleanse(key,sizeof(key));
+    if(snprintf(digest_input,sizeof(digest_input),
+         "%s|%llu|%s|%s|%s|%s|%llu|%llu|v2",
+         id,seq,event,op,src,dst,units,now)<0)
+       die("fingerprint format failed");
+    SHA256((unsigned char*)digest_input,strlen(digest_input),dig);
+    hexout(dig,32,fingerprint);
+    data=readfile("ledger.tsv",MAX_LEDGER,&n);
+    parseledger(data,n);free(data);
+    validate_receipts();
+    floor=find(ctl,nc,id);
+    high=floor?floor->value:0;
+    for(i=0;i<nr;i++)if(!strcmp(receipts[i].ctl,id) &&
+                       receipts[i].seq==seq){
+        if(strcmp(receipts[i].event,event) ||
+           CRYPTO_memcmp(receipts[i].digest,fingerprint,64)!=0)
+            die("controller sequence payload collision");
+        printf("REPLAY\t%s\n",receipts[i].result);
+        return 0;
+    }
+    if(seq<=high)die("stale controller sequence");
+    if(seq!=high+1)die("out-of-order controller sequence");
+    if(!floor && nc==MAX_CTL)die("controller ceiling");
+    if(!strcmp(op,"LR")){
+        x=find(lease,nl,src);
+        if(!x)die("unknown rental lease");
+        base=(x->value>now?x->value:now);
+        if(base>2000000000ULL-units)die("rental lease overflow");
+        x->value=base+units;answer=x->value;
+    }else{
+        x=find(bank,nb,src);
+        if(!x)die("unknown member bank");
+        if(!strcmp(op,"AM")){
+            if(x->value>2000000000ULL-units)die("member credit overflow");
+            x->value+=units;
+        }else if(!strcmp(op,"SM")){
+            if(x->value<units)die("insufficient time");
+            x->value-=units;
+        }else{
+            to=find(bank,nb,dst);
+            if(!to||x->value<units||
+               to->value>2000000000ULL-units)
+               die("invalid prepaid transfer");
+            x->value-=units;to->value+=units;
+        }
+        answer=x->value;
+    }
+    if(!floor){floor=&ctl[nc++];strcpy(floor->name,id);}
+    floor->value=seq;
+    for(i=0;i<nr;){
+        if(!strcmp(receipts[i].ctl,id) &&
+           seq>=8 && receipts[i].seq<=seq-8)
+            receipts[i]=receipts[--nr];
+        else i++;
+    }
+    if(nr>=MAX_RECEIPT)die("receipt quota exhausted");
+    {struct receipt *entry=&receipts[nr++];
+     strcpy(entry->ctl,id);entry->seq=seq;strcpy(entry->event,event);
+     strcpy(entry->digest,fingerprint);
+     snprintf(entry->result,sizeof(entry->result),"%llu",answer);
+    }
+    commit(answer);
+    return 0;
 }
