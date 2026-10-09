@@ -67,13 +67,42 @@ bp_rental_device_line() {
 
 bp_rental_device_write() {
   id="$1"; secret="$2"; lease="$3"; label="$4"; last="$5"
+  # This is authoritative paid rental time plus private device identity.
+  # Never rename an incomplete/corrupt source snapshot over other leases.
+  [ -f "$BP_RENTAL_DEVICES" ] && [ ! -L "$BP_RENTAL_DEVICES" ] || return 8
+  printf '%s\n' "$id" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+  case "$lease:$last" in ''|*[!0-9:]*) return 8;; esac
+  [ -n "$lease" ] && [ -n "$last" ] && [ -n "$secret" ] || return 8
+  for field in "$secret" "$label"; do
+    case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+  done
   tmp="$BP_STATE/.rental-devices.$(bp_tmp_suffix)"
-  awk -F '\t' -v OFS='\t' -v d="$id" '$1!=d {print}' "$BP_RENTAL_DEVICES" > "$tmp"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"
+  umask 077
+  if ! awk -F '\t' -v d="$id" '
+    {
+      if (NF!=5 || $1 !~ /^[A-Za-z0-9_.:-]+$/ ||
+          length($1)>96 || length($2)==0 ||
+          $3 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/ ||
+          ++seen[$1]>1) invalid=1
+      if ($1==d) {matches++; next}
+      print
+    }
+    END {if (invalid || matches>1) exit 8}
+  ' "$BP_RENTAL_DEVICES" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
   if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_RENTAL_DEVICES"; then
-    rm -f "$tmp"; return 8
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
   fi
   bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_list_json() {
