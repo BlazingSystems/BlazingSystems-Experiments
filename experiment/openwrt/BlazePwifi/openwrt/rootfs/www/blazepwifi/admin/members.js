@@ -6,6 +6,12 @@ function mins(sec){sec=Math.max(0,+sec||0);const h=Math.floor(sec/3600),m=Math.f
 function esc(v){return C().esc(v)}
 function card(x){
   const user=esc(x.username||'');
+  const paidSeconds=Number(x.banked_seconds);
+  const zeroBanked=Number.isSafeInteger(paidSeconds)&&paidSeconds===0;
+  // Guidance only: server-side member_delete is still money authority.
+  const deleteDisabled=zeroBanked?'':' disabled aria-disabled="true" title="Banked paid time must be zero before deletion"';
+  const bankedNote=zeroBanked?'Deletion allowed only after a fresh zero-balance check.':
+    'Deletion blocked: transfer or settle remaining banked time first.';
   return '<div class="card member-card" data-member="'+user+'"><div class="card-body">'+
     '<div class="device-top"><div><div class="device-name">'+user+'</div><div class="device-meta">'+esc(x.label||'No label')+'</div></div>'+
     '<div class="toolbar"><span class="badge '+((+x.enabled)?'good':'bad')+'">'+((+x.enabled)?'ENABLED':'DISABLED')+'</span><span class="badge">rev '+esc(x.revision||0)+'</span></div></div>'+
@@ -17,7 +23,8 @@ function card(x){
     '<label><span class="field-label">Balance action</span><select class="field balanceMode"><option value="add">Add</option><option value="subtract">Subtract</option><option value="set">Set exact</option></select></label></div>'+
     '<button class="btn sm" style="margin-top:10px" onclick="BlazeMembers.balance(\''+user+'\')">Apply banked time</button>'+
     '<div class="form-grid" style="margin-top:14px"><label class="span2"><span class="field-label">New member password</span><input class="field password" type="password" autocomplete="new-password" placeholder="Admin reset only"></label></div>'+
-    '<div class="toolbar" style="margin-top:10px"><button class="btn sm" onclick="BlazeMembers.password(\''+user+'\')">Reset password</button><button class="btn danger sm" onclick="BlazeMembers.remove(\''+user+'\')">Delete member</button></div>'+
+    '<div class="toolbar" style="margin-top:10px"><button class="btn sm" onclick="BlazeMembers.password(\''+user+'\')">Reset password</button><button class="btn danger sm"'+deleteDisabled+' onclick="BlazeMembers.remove(\''+user+'\')">Delete member</button></div>'+
+    '<div class="small muted" role="status" style="margin-top:8px">'+bankedNote+'</div>'+
     '<div class="small muted" style="margin-top:10px">Updated '+(x.updated?new Date((+x.updated)*1000).toLocaleString():'—')+' · '+esc(x.source||'unknown')+'</div>'+
     '</div></div>';
 }
@@ -131,9 +138,23 @@ async function password(user){
   C().toast(x.ok?'Member password reset':(x.error||'Password reset failed'),!x.ok);if(x.ok)loadEvents(user);
 }
 async function remove(user){
-  if(!confirm('Delete Pisonet member '+user+'? Banked time and the account will be removed.'))return;
+  // Never trust stale DOM amounts: another cashier/controller may have
+  // updated banked time after this card was rendered.
+  const fresh=await C().api('member_list');
+  if(!fresh.ok){C().toast(fresh.error||'Could not recheck member balance; deletion refused',true);return}
+  const account=(fresh.members||[]).find(m=>String(m.username||'')===user);
+  if(!account){C().toast('Member no longer exists. Refreshing list.',true);await load();return}
+  const seconds=Number(account.banked_seconds);
+  if(!Number.isSafeInteger(seconds)||seconds!==0){
+    C().toast('Delete blocked: transfer or settle banked paid time before deleting this member.',true);
+    await load();
+    return;
+  }
+  if(!confirm('Delete member '+user+'? Banked time is currently zero. This action cannot be undone.'))return;
   const x=await C().api('member_delete',{username:user});
-  C().toast(x.ok?'Member deleted':(x.error||'Delete failed'),!x.ok);if(x.ok){await load();await loadEvents('')}
+  C().toast(x.ok?'Member deleted':(x.error||'Delete failed'),!x.ok);
+  await load();
+  if(x.ok)await loadEvents('');
 }
 async function transfer(){
   const from=q('#memberTransferFrom').value.trim(),to=q('#memberTransferTo').value.trim(),minutes=Math.max(1,parseInt(q('#memberTransferMinutes').value||'0',10)||0);
