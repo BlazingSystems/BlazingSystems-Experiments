@@ -1,3 +1,10 @@
+## V2NATIVE-0668 / FOCUSED CI WIRED, OUTCOME PENDING — 2026-10-09 Asia/Manila
+
+- **Prior source:** V2NATIVE C `d3118426`, native shell tests `bfe3dfd6`, full CI `0d7b74f7`. **Fix:** rename C helper `uint` to `parse_uint` to avoid GNU typedef collision `9a56ad2516c76d8b270958a3c26bffe7be66f2da`. **Focused test workflow:** `.github/workflows/blazepwifi-v060-native-journal.yml` `a9211cc52c908c701280268de34ae4ab88a2c7db`. Source is only in `tools/`, not in `openwrt/rootfs`.
+- **CI:** focused push [#37901712211](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901712211) in progress and PR [#37901715502](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37901715502) queued on last check; Full/Windows exact final head pending. Prior cancelled intermediate runs are superseded, not green. No new signed APK or production tag.
+- **Scope boundary:** strict synthetic-only root, compile-time guard, private controller HMAC key loaded from fixture file, atomic single-file balances + per-controller sequence + receipts with fsync/rename/dirsync. Host fixture passing alone would not prove target architecture support, real flash persistence, or customer migration. **NEXT EXACT ACTION:** inspect focused test logs and fix any failing cases; sync documentation after fix; verify Full+Windows final CI. Then write OpenWrt target packaging in separate OFF-by-default milestone only after host candidate verified.
+- **Rollback:** revert only V2NATIVE new source/test/workflows if necessary. `PRODUCTION_v0.6.0_RELEASED=0`; alpha.4 immutable.
+
 ## V2NATIVE-0668 / COMMITTED_UNTESTED — 2026-10-09 Asia/Manila
 
 - **Change commits:** `tools/v060_journal_authority_native.c` `52b0cf2aa06e7190d642345a4adc9ec550b6dd69`, implementation `d311842603462e51e33776dbc74a23f9a499f161`; `tests/v060_native_v2_authority.sh` `bfe3dfd6fb17a69d6e01c00b3fb2a01ce3d9f460`; full CI gate `0d7b74f7b1bab71afcf781b157744277bbb748a5`.
