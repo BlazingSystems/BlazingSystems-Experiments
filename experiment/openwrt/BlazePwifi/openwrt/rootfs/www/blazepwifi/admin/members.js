@@ -79,15 +79,17 @@ async function previewImport(){
     const enabled=(+v.requested_enabled)?'requested enabled':'disabled';
     return status+'  '+(v.username||'')+'  '+(v.label||'')+'  '+Math.floor((+v.banked_seconds||0)/60)+'m  '+enabled;
   });
-  if(summary)summary.textContent='Preview: '+(x.count||0)+' records · '+(x.creates||0)+' new · '+(x.collisions||0)+' collisions · '+(x.requested_enabled||0)+' requested enabled. New members will still be created disabled until password reset.';
+  const unverifiedPaid=items.filter(v=>v.status==='unverified_paid_balance').length;
+  if(summary)summary.textContent='Preview: '+(x.count||0)+' records · '+(x.creates||0)+' new · '+(x.collisions||0)+' collisions · '+unverifiedPaid+' unsafe imported paid balances. Metadata-only updates preserve every existing member’s live banked time. New paid balances require a separate verified migration.';
   const out=q('#memberImportPreview');if(out)out.textContent=lines.length?lines.join('\n'):'File contains no member records.';
-  const btn=q('#memberImportApply');if(btn)btn.disabled=!importPreviewToken;
+  const btn=q('#memberImportApply');if(btn)btn.disabled=!importPreviewToken||unverifiedPaid>0;
+  if(unverifiedPaid)C().toast('Import blocked: unsigned metadata cannot mint paid time for new members.',true);
 }
 async function applyImport(){
   if(!importPreviewToken){C().toast('Preview the import file first.',true);return}
   const pass=q('#memberImportPassword'),password=(pass&&pass.value)||'',policy=(q('#memberImportPolicy')&&q('#memberImportPolicy').value)||'abort';
   if(!password){C().toast('Admin password is required to apply an import.',true);return}
-  if(policy==='update'&&!confirm('Metadata-only update existing members? Existing password verifier material will be preserved, but label, enabled state and banked balance may change.'))return;
+  if(policy==='update'&&!confirm('Metadata-only update existing members? Existing password verifiers and CURRENT BANKED PAID TIME are preserved. New members with paid-time claims require a verified financial migration.'))return;
   if(policy!=='update'&&!confirm('Apply the reviewed member import with collision policy "'+policy+'"? New members will be created disabled and require password reset.'))return;
   const token=importPreviewToken;
   importPreviewToken='';
@@ -100,7 +102,7 @@ async function applyImport(){
     return;
   }
   const summary=q('#memberImportSummary');
-  if(summary)summary.textContent='Import applied: '+(x.created||0)+' created · '+(x.updated||0)+' updated · '+(x.skipped||0)+' skipped · central revision '+(x.revision||0)+'. New imported accounts require password reset before enabling.';
+  if(summary)summary.textContent='Import applied: '+(x.created||0)+' created · '+(x.updated||0)+' updated · '+(x.skipped||0)+' skipped · central revision '+(x.revision||0)+'. Existing member banked paid time was NOT overwritten. New accounts require password reset.';
   clearImportPreview('Import applied successfully. Preview is single-use and has been cleared.');
   if(q('#memberImportFile'))q('#memberImportFile').value='';
   await load();await loadEvents('');
