@@ -441,7 +441,10 @@ EOF
       0) ;;
       2) bp_fail "invalid member" ;;
       3) bp_fail "unknown member" ;;
-      *) bp_fail "member deletion failed" ;;
+      6) bp_fail "member has paid time remaining; bank or transfer it before deleting" ;;
+      7) bp_fail "invalid member balance; operator reconciliation required" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "member deletion storage failed; reconcile the account before retrying" ;;
     esac
     bp_auth_audit member_delete "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
