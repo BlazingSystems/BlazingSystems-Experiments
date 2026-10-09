@@ -1,3 +1,10 @@
+## V2TARGET-0671 / SDK MISSING .CONFIG HANDLED, RETEST PENDING — 2026-10-09 Asia/Manila
+
+- At `e71a317722fd9d48f4acc08c8e17bb50146b9dd3`, LAB SDK PR run #37910999637 source-check SUCCESS but OrangePi ARM job #113756111247 failed with `sed: can't read .../.config: No such file or directory` before building target OpenSSL. Therefore the previous optional devcrypto disable repair has **NOT YET BEEN PROVEN BY NATIVE TARGET COMPILATION**. Host native journal CI #37910999548 SUCCESS at that SHA; Windows / Full still processing on observation.
+- **Targeted change** `de69142da8565f4044dbdcfa6f99f08bd446aec0` initializes only `$SDK/.config` if absent, then keeps post-defconfig enforcement that optional `OPENSSL_ENGINE*` and `PACKAGE_libopenssl-devcrypto` cannot reenable. Source test `557b2efd18be5198f15f5176f367431e677bd224` checks guard. No system `/etc` files, customer data or installed RootFS were edited.
+- **Actual state:** SDK repair committed, final 3-arch LAB binary/package NOT verified; no hardware power-cut; no v1 encrypted quiesced migration; no original Lineage-2 signer verification. Next: exact-head SDK CI and log, then Full/Windows/Android CI; if failed, preserve evidence and adjust only bounded SDK lab script.
+- **Hard stops:** `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`, alpha.4 immutable.
+
 ## V2TARGET-0671 / SDK CRYPTODEV OPTIONAL ENGINE FIX UNVERIFIED — 2026-10-09 Asia/Manila
 
 - **Last all-green partial source** `505959bcd3cf50ffc4d09a8ecdee36947ef31a29`: Full push #37906247774, PR #37906253588, Windows #37906253942, native synthetic #37906253546 all SUCCESS. But required new OpenWrt LAB SDK #37906253540 FAILURE for ruijie, orangepi_zero3 and x86_64 in `package/openssl/compile`. Direct job logs `fatal error: crypto/cryptodev.h: No such file or directory` from OpenSSL 3.5.7 `engines/e_devcrypto.c`. SDK source-check SUCCESS, OpenSSL target header compile FAILED, no target package.
