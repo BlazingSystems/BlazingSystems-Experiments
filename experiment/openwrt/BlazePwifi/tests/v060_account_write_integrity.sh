@@ -33,7 +33,7 @@ assert_refused() {
   update >"$T/failure.log" 2>&1
   status=$?
   set -e
-  [ "$status" -eq 8 ] || { echo "unsafe account replacement returned $status" >&2; exit 1; }
+  [ "$status" -eq 8 ] || { echo "unsafe account replacement returned $status at stage ${stage:-unknown}" >&2; exit 1; }
   [ "$(checksum)" = "$original" ] || { echo "failed account write changed a paid snapshot" >&2; exit 1; }
 }
 [ "$(balance "$B")" = 900 ]
@@ -46,18 +46,22 @@ update
 # a duplicated target account: either corrupts authoritative financial state.
 cp -p "$BP_ACCOUNTS" "$T/pristine"
 entry "$B" 900 >> "$BP_ACCOUNTS"
+stage=duplicate-unrelated
 assert_refused
 cp -p "$T/pristine" "$BP_ACCOUNTS"
 entry "$A" 220 >> "$BP_ACCOUNTS"
+stage=duplicate-target
 assert_refused
 cp -p "$T/pristine" "$BP_ACCOUNTS"
 
 printf 'not-a-real-account\t120\n' >> "$BP_ACCOUNTS"
+stage=short-row
 assert_refused
 cp -p "$T/pristine" "$BP_ACCOUNTS"
 
 # Full-width row with wrong bank digits must not be silently passed through.
 printf '%s\tinvalid-credit\t0\t0\t0\t0\t%s\t10.1.1.1\t\n' "$B" "$MAC" >> "$BP_ACCOUNTS"
+stage=invalid-bank
 assert_refused
 cp -p "$T/pristine" "$BP_ACCOUNTS"
 
@@ -72,6 +76,7 @@ exec /usr/bin/awk "$@"
 AWK
 chmod 700 "$T/bin/awk"
 export FAULT_AWK=partial
+stage=partial-awk
 assert_refused
 unset FAULT_AWK
 [ "$(balance "$B")" = 900 ]
