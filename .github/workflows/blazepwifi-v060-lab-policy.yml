@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'LAB_TAG: v0.6.0-alpha.2' .github/workflows/blazepwifi-build.yml
+          grep -Fq 'LAB_TAG: v0.6.0-alpha.3' .github/workflows/blazepwifi-build.yml
           grep -Fq 'production_signed=False,hardware_powercut_verified=False' .github/workflows/blazepwifi-build.yml
           grep -Fq 'customer_install_authorized=False' .github/workflows/blazepwifi-build.yml
           sh experiment/openwrt/BlazePwifi/tests/v060_migration_guard.sh
