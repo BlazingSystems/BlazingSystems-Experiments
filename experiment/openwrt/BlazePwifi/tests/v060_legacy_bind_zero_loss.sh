@@ -35,6 +35,7 @@ EXPIRY=$((NOW+1200))
 for profile in full r281; do
   (
     stage="$profile:init"
+    trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "MIG-0656 FAILED stage=$stage profile=$profile rc=$rc" >&2; [ -f "$T/error.log" ] && cat "$T/error.log" >&2; fi' EXIT
     case "$profile" in
       full) LIB="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh";;
       r281) LIB="$ROOT/profiles/r281-rental/root/usr/lib/blazepwifi/common.sh";;
