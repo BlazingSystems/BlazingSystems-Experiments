@@ -4,6 +4,9 @@ BP_RENTAL_ENROLL="${BP_RENTAL_ENROLL:-$BP_STATE/rental-enroll.tsv}"
 BP_RENTAL_POLICY="${BP_RENTAL_POLICY:-$BP_STATE/rental-policy.tsv}"
 BP_RENTAL_INVENTORY="${BP_RENTAL_INVENTORY:-$BP_STATE/rental-inventory.tsv}"
 BP_RENTAL_EVENTS="${BP_RENTAL_EVENTS:-$BP_STATE/rental-events.tsv}"
+# Volatile heartbeat metadata is NOT paid credit and must never share the
+# authoritative rental-devices.tsv row update path.
+BP_RENTAL_SEEN_DIR="${BP_RENTAL_SEEN_DIR:-$BP_RUN/rental-last-seen}"
 
 bp_rental_init() {
   bp_init_dirs
@@ -12,6 +15,9 @@ bp_rental_init() {
   if [ -n "${BP_RENTAL_POLICY_V2:-}" ]; then
     touch "$BP_RENTAL_POLICY_V2"; chmod 600 "$BP_RENTAL_POLICY_V2"
   fi
+  [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  mkdir -p "$BP_RENTAL_SEEN_DIR" || return 8
+  chmod 700 "$BP_RENTAL_SEEN_DIR" || return 8
 }
 
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
@@ -63,6 +69,39 @@ bp_rental_enroll_consume_device() {
 
 bp_rental_device_line() {
   awk -F '\t' -v d="$1" '$1==d {print; exit}' "$BP_RENTAL_DEVICES"
+}
+
+bp_rental_seen_update() {
+  seen_id="$1"; seen_time="$2"
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' || return 8
+  case "$seen_time" in ''|*[!0-9]*) return 8;; esac
+  [ -d "$BP_RENTAL_SEEN_DIR" ] && [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  [ ! -L "$seen_file" ] || return 8
+  seen_tmp="$BP_RENTAL_SEEN_DIR/.$seen_id.$(bp_tmp_suffix)"
+  umask 077
+  if ! printf '%s\n' "$seen_time" > "$seen_tmp" ||
+     ! chmod 600 "$seen_tmp" ||
+     ! mv "$seen_tmp" "$seen_file"; then
+    rm -f "$seen_tmp" 2>/dev/null || true
+    return 8
+  fi
+  return 0
+}
+
+bp_rental_seen_get() {
+  seen_id="$1"; seen_fallback="${2:-0}"
+  case "$seen_fallback" in ''|*[!0-9]*) seen_fallback=0;; esac
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' ||
+    { printf '%s' "$seen_fallback"; return 0; }
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  if [ -f "$seen_file" ] && [ ! -L "$seen_file" ]; then
+    seen_actual="$(cat "$seen_file" 2>/dev/null || true)"
+    case "$seen_actual" in ''|*[!0-9]*) ;; *)
+      printf '%s' "$seen_actual"; return 0;;
+    esac
+  fi
+  printf '%s' "$seen_fallback"
 }
 
 bp_rental_device_write() {
@@ -135,6 +174,9 @@ bp_rental_list_json() {
     [ "$hidden" = "-" ] && hidden=""
     [ "$preferred" = "-" ] && preferred=""
     [ "$quick" = "-" ] && quick=""
+    # Rental heartbeat is volatile. Never replace a paid lease row to
+    # update presence, even when another coin is currently being credited.
+    last="$(bp_rental_seen_get "$id" "$last")"
     inventory="$(bp_rental_inventory_get "$id")"
     [ "$salt" != "-" ] && [ -n "$salt" ] && [ "$hash" != "-" ] && [ -n "$hash" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
