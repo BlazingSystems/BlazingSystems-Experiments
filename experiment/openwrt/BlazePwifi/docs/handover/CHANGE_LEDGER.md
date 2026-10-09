@@ -1,3 +1,9 @@
+## 2026-10-09 — V2NATIVE-0668 — committed_untested follow-up
+
+- **Static code-review correction** `9a56ad2516c76d8b270958a3c26bffe7be66f2da`: `uint` C function collides with typedef on GNU systems. Renamed to `parse_uint` before compiler evidence; this is a source correction, not a green test claim.
+- **Focused GitHub Actions workflow** `a9211cc52c908c701280268de34ae4ab88a2c7db` creates `BlazePwifi V2 Native Synthetic Journal Gate` in isolated 8-minute Ubuntu job, requires OpenSSL/libcrypto and rejects any installed rootfs native authority. Focused runs #37901712211 / #37901715502 not yet completed at checkpoint. Earlier rapid multi-commit Full/Windows runs cancelled; superseded by the final doc-head.
+- **NEXT EXACT ACTION:** investigate actual CI and log any fix/failure with commit SHA. Keep production v0.6 NO-GO and prior real lab alpha.4 frozen.
+
 ## 2026-10-09 — V2NATIVE-0668 — committed_untested
 
 - Created `tools/v060_journal_authority_native.c` scaffold `52b0cf2aa06e7190d642345a4adc9ec550b6dd69`, then functional prototype `d311842603462e51e33776dbc74a23f9a499f161`. It is never shipped or compiled into live firmware, enforces `BLAZE_FIXTURE_ONLY` and strict marker gated synthetic `/tmp`; controller HMAC verified inside C with private key not exposed via argv, single bank/lease/sequence/receipt SHA-sealed snapshot and file/parent fsync before success ACK. OpenSSL used only in synthetic candidate.
