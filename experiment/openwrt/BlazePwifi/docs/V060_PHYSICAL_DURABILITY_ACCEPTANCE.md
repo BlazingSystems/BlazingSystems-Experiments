@@ -76,6 +76,53 @@ Store a redacted immutable JSON report off-device with:
 
 Do not store plaintext keys, customer identifying information, production HMACs, transfer-password recovery contents or private Android signing material in these reports or public Git.
 
+## PEVID-0679 — read-only *structural* trial-evidence review (NOT hardware certification)
+
+The repository includes \`tools/v060_physical_evidence_contract.py\`, which accepts only a
+private **local inspection fixture** (\`/tmp/blaze-v2-evidence-*\`, owner 0700) with
+a 0600 \`manifest.json\`, a private 0600
+\`.blaze-physical-evidence-fixture-only\` containing exactly
+\`BLAZE-POWER-CUT-STRUCTURE-NOT-HARDWARE-PROOF\n\`, and a 0700 \`captures/\`
+directory containing privately held 0600 digest-referenced log files.
+
+\`\`\`sh
+python3 tools/v060_physical_evidence_contract.py --root /tmp/blaze-v2-evidence-OPERATOR_REVIEW_COPY
+\`\`\`
+
+The closed-format \`manifest.json\` uses schema
+\`blaze-v060-physical-evidence-structure/1\`, \`fixture_only: true\`,
+\`claim_origin: "operator-claimed-unverified"\`, a candidate 64-hex commit SHA,
+150 claimed trials (each of three architectures × five physical fault
+checkpoints × trials 1–10), and one claimed ≥86,400-second/≥30-client soak
+for each architecture. Required trial observations include exact target
+identity, package digest, persistent scratch source and filesystem, before/after
+state hashes, claimed applied seconds and observed totals, unique redacted
+event references, zero duplicate ACKs, replay/receipt consistency, UTC power
+event timestamp, and two **distinct** content-hash-verified capture logs for
+power-controller observation and recovered state. The five checkpoint classes
+are \`before-source-fsync\`, \`before-rename\`,
+\`after-rename-before-dir-fsync\`, \`after-dir-fsync-before-ack\`, and
+\`after-ack-observed\`. The final class requires operator-confirmed ACK receipt,
+not merely a simulator calling an ACK handler.
+
+This parser can reject omitted trials, wrong amounts, duplicate IDs, reused
+captures, missing soak results, altered or linked log files, insufficient
+private permissions and synthetic-claim schema misuse. It CANNOT independently
+attest a power interruption took place, prove boot media persistence, verify an
+operator's identity, authenticate an external power controller, or infer an
+actual 24-hour soak from a reported duration. Therefore even when every
+structural check passes, the **only** success status is
+\`STRUCTURE_READY_FOR_INDEPENDENT_REVIEW\`, accompanied by
+\`physical_powercut_verified: false\` and
+\`production_release_authorized: false\`. A result of \`BLOCKED\` is a refusal.
+
+The matching \`tests/v060_physical_evidence_contract.py\` creates entirely
+**MOCKED CI records**, not real operator captures. They exercise the checker
+but MUST NEVER be submitted as genuine trial evidence. Real acquisition,
+external immutable custody, signed controller telemetry, operator review,
+real per-device hardware identifiers, reproducible native build hashes, and
+owner acceptance remain separate; this tool does not gather or upload data.
+
 ## Release NO-GO checklist
 
 **PASS requires actual evidence, not self-assertion.** Any incomplete/failed case leaves `PRODUCTION_v0.6.0_RELEASED=0` and `CUSTOMER_INSTALL_AUTHORIZED=0`.
