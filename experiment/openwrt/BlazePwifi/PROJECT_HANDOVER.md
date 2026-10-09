@@ -1,3 +1,10 @@
+## V2TARGET-0670 / OPEN TARGET SDK COMPILATION — 2026-10-09 Asia/Manila
+
+- **Previous SHADOW/V2NATIVE verified checkpoint:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`, exact Full push #37902464250, Full PR #37902469005, Windows #37902468986, and native journal PR #37902469023: ALL **COMPLETED SUCCESS**. No hardware verification follows from this.
+- **IN PROGRESS V2TARGET-0670:** build a separate LAB-ONLY OpenWrt 25.12.5 SDK cross-target package/workflow for the existing `BLAZE_FIXTURE_ONLY` native HMAC journal on Ruijie ramips/mt7621, x86/64, and OrangePi Zero3 sunxi/cortexa53. Official SDKs must be identified in upstream sha256sums, SHA-256 verified, compiled against OpenWrt libopenssl and validated by ELF architecture. CI output is PRIVATE ACTIONS LAB ARTIFACT ONLY (not GitHub public Release or installed rootfs). No payment endpoint/UI/lease migration.
+- **Risk and rollback:** SDK/download/toolchain/license/dependency differences may block a target; fail honestly rather than produce a placeholder artifact. Do not change legacy paid files or frozen alpha.4 and v0.5.2. Roll back new lab-only packaging script/workflow, not financial state.
+- **NEXT EXACT ACTION:** commit minimal OpenWrt package, verified-SDK builder, isolated 3-target Actions workflow, run source/CI and sync 3 handovers with exact evidence. Stay NO-GO: `PRODUCTION_v0.6.0_RELEASED=0`, `CUSTOMER_INSTALL_AUTHORIZED=0`.
+
 ## V2NATIVE-0669 / FOCUSED NATIVE VERIFIED — BROAD MATRIX PENDING — 2026-10-09 Asia/Manila
 
 - **ACTUAL native CI SUCCESS:** extended signed replay window/lock stress `225a41b997a8b171ec3f2fefd435acdb77b4e2ba` [push #37902207844](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902207844) and [PR #37902213670](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902213670) both completed success. Exact prior final doc-head `aebf8cbce7b6031087394032ab093715f5f1d263` [focused PR #37902292666](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902292666) also **SUCCESS**; test source unchanged between these SHAs.
