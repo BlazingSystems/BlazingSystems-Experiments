@@ -101,6 +101,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
+      - name: Prevent partial member ledger replacement and false password/admin ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_write_fault.sh
       - name: Protect paid member deletion in BlazeFusion management UI
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh
       - name: BlazePwifi v0.6 OpenWrt sysupgrade preservation safety
