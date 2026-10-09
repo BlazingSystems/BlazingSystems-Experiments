@@ -117,7 +117,7 @@ def create(root: Path) -> dict:
         "schema": "blaze-v060-physical-evidence-structure/1",
         "fixture_only": True,
         "claim_origin": "operator-claimed-unverified",
-        "candidate_git_sha": "c" * 64,
+        "candidate_git_sha": "c" * 40,
         "trials": trials,
         "soaks": soaks
     }
@@ -160,6 +160,15 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
     blocked(lambda d: d["trials"][2].__setitem__("package_sha256", "not-a-hash"))
     blocked(lambda d: d["soaks"][0].__setitem__("concurrent_clients", 29))
     blocked(lambda d: d["soaks"][0].__setitem__("lost_ack_count", 1))
+    # PEVID-0690: commit identity must be the actual 40-character GitHub
+    # SHA-1, unlike SHA-256 digests for package/state/capture content.
+    # A 64-character synthetic "commit" used to pass and a real 40-char
+    # commit was wrongly rejected. Keep this contract fail closed.
+    blocked(lambda d: d.__setitem__("candidate_git_sha", "c" * 64))
+    blocked(lambda d: d.__setitem__("candidate_git_sha", "c" * 39))
+    blocked(lambda d: d.__setitem__("candidate_git_sha", "C" * 40))
+    blocked(lambda d: d.__setitem__("candidate_git_sha", "z" * 40))
+    blocked(lambda d: d.__setitem__("candidate_git_sha", ""))
     blocked(lambda d: d.__setitem__("claim_origin", "physical-certified"))
     blocked(lambda d: d.__setitem__("fixture_only", False))
     blocked(lambda d: d.__setitem__("production_release_authorized", True))
@@ -263,4 +272,5 @@ with tempfile.TemporaryDirectory(prefix="blaze-v2-evidence-", dir="/tmp") as fol
 print("PEVID-0679 PASS: 150 mock trials+3 mock 24h soaks structurally checked, missing/duplicate/tamper/path/permission/financial claims refused")
 print("PEVID-0680 PASS: repeated power-cut timestamps, invalid calendar dates and copied capture contents rejected without hardware approval")
 print("PEVID-0682 PASS: late capture content/replacement, manifest edit and added evidence during review rejected; hardware remains unverified")
+print("PEVID-0690 PASS: 40-character GitHub commit IDs accepted; 64-character, short, uppercase and invalid IDs refused; still not hardware attestation")
 print("PHYSICAL_POWER_CUT_VERIFIED=0; CUSTOMER_INSTALL_AUTHORIZED=0; mocked CI input is NOT hardware acceptance")
