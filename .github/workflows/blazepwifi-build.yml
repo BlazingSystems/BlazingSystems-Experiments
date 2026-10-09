@@ -107,6 +107,8 @@ jobs:
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_v1_inventory_fixture.py
       - name: Reject malformed and duplicate paid Wi-Fi account snapshots
         run: sh experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh
+      - name: Reject malformed and duplicate paid rental lease snapshots
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh
       - name: Refuse deleting existing paid member seconds and false admin ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Prevent partial member ledger replacement and false password/admin ACK
