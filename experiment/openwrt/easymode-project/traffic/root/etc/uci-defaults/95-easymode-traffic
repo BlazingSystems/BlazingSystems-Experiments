@@ -1,0 +1,6 @@
+#!/bin/sh
+umask 077
+mkdir -p /etc/easymode-traffic /tmp/easymode-traffic
+chmod 700 /etc/easymode-traffic /tmp/easymode-traffic
+/etc/init.d/easymode-traffic enable
+exit 0

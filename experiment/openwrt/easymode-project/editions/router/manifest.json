@@ -1,1 +1,18 @@
-{"edition":"router","version":"5.0.0-alpha.1","modules":["network","wifi","switch","vlan","diagnostics","hardware"],"capability_gated":true,"non_destructive_detection":true}
+{
+  "edition": "router",
+  "version": "7.0.0",
+  "modules": [
+    "network",
+    "wifi",
+    "switch",
+    "vlan",
+    "diagnostics",
+    "hardware",
+    "traffic-intelligence"
+  ],
+  "capability_gated": true,
+  "non_destructive_detection": true,
+  "traffic_intelligence": "shared",
+  "traffic_path": "traffic/root",
+  "release_status": "validation pending"
+}

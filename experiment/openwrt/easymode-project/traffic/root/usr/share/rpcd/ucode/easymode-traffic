@@ -1,0 +1,19 @@
+import {readfile,writefile} from 'fs';
+import {cursor} from 'uci';
+import {settings,loadState,readJSON,atomic} from '/usr/share/easymode-traffic/runtime.uc';
+function snapshot(){let s=loadState(),cfg=settings();delete s.previous;delete s.flows;delete s.dns?.bindings;return {version:'7.0.0',config:cfg,fresh:cfg.enabled && time()-int(s.time || 0)<max(90,cfg.interval*3),age_seconds:s.time?time()-s.time:null,data:s,aliases:readJSON('/etc/easymode-traffic/aliases.json',{})};}
+function configure(p){
+ if(type(p)!='object')die('Object required');let u=cursor();
+ for(let key,value in p){
+  if(key in ['enabled','domains','devices']){if(type(value)!='bool')die('Boolean required');u.set('easymode_traffic','main',key,value?'1':'0');}
+  else if(key in ['interval','retention','limit','cap_gb','warning','billing_day']){if(type(value)!='int')die('Integer required');let range={interval:[5,60],retention:[1,90],limit:[16,256],cap_gb:[0,100000],warning:[1,100],billing_day:[1,28]};if(value<range[key][0]||value>range[key][1]||(key=='interval'&&!(value in [5,15,30,60])))die('Value outside supported range');u.set('easymode_traffic','main',key,''+value);}
+  else if(key in ['wan','lan']){if(type(value)!='array'||length(value)>16)die('At most 16 logical interfaces');for(let name in value)if(type(name)!='string'||!match(name,/^[A-Za-z0-9_]{1,32}$/))die('Invalid logical interface');u.set('easymode_traffic','main',key,value);}
+  else die('Unsupported setting');
+ }
+ // Domain logging consent is explicit in the authenticated settings request.
+ if(!u.commit('easymode_traffic'))die('Configuration could not be saved');writefile('/tmp/easymode-traffic-reconfigure','1');return {ok:true};
+}
+function action(req){try{if(length(req.payload)>4096)die('Request too large');let p=json(req.payload || '{}');if(req.action=='configure')return configure(p);if(req.action=='delete_history'){writefile('/tmp/easymode-traffic-delete','1');return {ok:true,pending:true};}if(req.action=='alias'){if(!match(p.mac || '',/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)||type(p.name)!='string'||length(p.name)>64||match(p.name,/[\x00-\x1f\x7f]/))die('Invalid device name');let aliases=readJSON('/etc/easymode-traffic/aliases.json',{});if(length(keys(aliases))>=256&&!aliases[p.mac])die('Name limit reached');aliases[p.mac]=p.name;atomic('/etc/easymode-traffic/aliases.json',aliases);return {ok:true};}die('Unknown action');}catch(e){return {ok:false,error:''+e};}}
+// rpcd/ubus enforces ACL before calling either method. Browser requests carry the
+// session bearer in a JSON POST body; no ambient cookies or public history files.
+return { 'easymode.traffic': { snapshot:{call:()=>snapshot()}, action:{args:{action:'',payload:''},call:req=>action(req.args)} } };

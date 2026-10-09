@@ -1,1 +1,18 @@
-{"edition":"cellular","version":"5.0.0-alpha.1","modules":["network","cellular","messages","wifi","diagnostics","hardware"],"capability_gated":true,"non_destructive_detection":true}
+{
+  "edition": "cellular",
+  "version": "7.0.0",
+  "modules": [
+    "network",
+    "cellular",
+    "messages",
+    "wifi",
+    "diagnostics",
+    "hardware",
+    "traffic-intelligence"
+  ],
+  "capability_gated": true,
+  "non_destructive_detection": true,
+  "traffic_intelligence": "shared",
+  "traffic_path": "traffic/root",
+  "release_status": "validation pending"
+}

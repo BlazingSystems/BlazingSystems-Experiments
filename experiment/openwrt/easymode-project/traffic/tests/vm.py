@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Boot a disposable COPY. Never connect to physical routers or publish its credentials."""
+import gzip,hashlib,http.server,json,os,pathlib,secrets,shutil,socketserver,subprocess,sys,tempfile,threading,time,urllib.request
+import paramiko,pexpect
+BASE=pathlib.Path(__file__).resolve().parents[2];DIST=BASE/'dist-v7';password=secrets.token_urlsafe(24);results=[]
+def check(ok,label):
+ if not ok:raise AssertionError(label)
+ results.append(label);print('PASS:',label,flush=True)
+def rpc(method,args=None,token='0'*32,obj='easymode.traffic'):
+ body=json.dumps({'jsonrpc':'2.0','id':1,'method':'call','params':[token,obj,method,args or {}]}).encode()
+ return json.load(urllib.request.urlopen(urllib.request.Request('http://192.168.77.1/ubus',data=body,headers={'Content-Type':'application/json'}),timeout=12))
+class HTTP(http.server.BaseHTTPRequestHandler):
+ def do_GET(self):
+  data=b'T'*1048576;self.send_response(200);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+ def log_message(self,*args):pass
+with tempfile.TemporaryDirectory() as tmp:
+ disk=pathlib.Path(tmp)/'disk.img'
+ with gzip.open(DIST/'EasyMode-v7.0.0-PC-x86_64-BIOS.img.gz','rb') as src,disk.open('wb') as dst:shutil.copyfileobj(src,dst)
+ subprocess.run(['sudo','ip','tuntap','add','dev','emti0','mode','tap','user',str(os.getuid())],check=True)
+ subprocess.run(['sudo','ip','addr','add','192.168.77.2/24','dev','emti0'],check=True);subprocess.run(['sudo','ip','link','set','emti0','up'],check=True)
+ cmd=['qemu-system-x86_64','-m','256','-smp','2','-nographic','-no-reboot','-drive',f'file={disk},format=raw,if=virtio','-netdev','tap,id=lan,ifname=emti0,script=no,downscript=no','-device','virtio-net-pci,netdev=lan','-netdev','user,id=wan','-device','virtio-net-pci,netdev=wan']
+ vm=pexpect.spawn(cmd[0],cmd[1:],encoding='utf-8',timeout=180)
+ ssh=None
+ try:
+  vm.expect('Please press Enter to activate this console');vm.sendline('');vm.expect(r'root@.*:/#')
+  # This password exists only in the disposable test copy, never the release image.
+  vm.sendline("printf '%s\\n' 'root:"+password+"' | chpasswd; uci set network.lan.ipaddr=192.168.77.1; uci commit network; /etc/init.d/network restart")
+  vm.expect(r'root@.*:/#');time.sleep(8)
+  ssh=paramiko.SSHClient();ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+  for attempt in range(15):
+   try:ssh.connect('192.168.77.1',username='root',password=password,timeout=5,look_for_keys=False,allow_agent=False);break
+   except (OSError,paramiko.SSHException):time.sleep(2)
+  def run(command):
+   i,o,e=ssh.exec_command(command,timeout=90);out=o.read().decode();err=e.read().decode();rc=o.channel.recv_exit_status()
+   if rc:raise RuntimeError(f'VM command failed ({rc}): {command}\n{out}\n{err}')
+   return out
+  check('24.10.8' in run('cat /etc/openwrt_release'),'official OpenWrt 24.10.8 boots')
+  check(rpc('snapshot').get('result',[None])[0]==6,'unauthenticated API rejected')
+  token=rpc('login',{'username':'root','password':password},obj='session')['result'][1]['ubus_rpc_session']
+  def snapshot():return rpc('snapshot',token=token)['result'][1]
+  time.sleep(16);s=snapshot();check(s['version']=='7.0.0' and s['fresh'],'supervised collection and authenticated API')
+  check(rpc('action',{'action':'configure','payload':'{"enabled":false}'}).get('result',[None])[0]==6,'unauthenticated mutation rejected')
+  invalid=rpc('action',{'action':'configure','payload':'{"wan":["wan;touch /tmp/injected"]}'},token)['result'][1];check(not invalid['ok'] and run('test ! -e /tmp/injected && echo safe').strip()=='safe','input injection rejected')
+  check(run('stat -c %a /tmp/easymode-traffic/state.json').strip()=='600','history file is private')
+  # Install real opkg artifacts, then repeat the same install as an upgrade.
+  sftp=ssh.open_sftp()
+  for path in [DIST/'EasyMode-v7.0.0-Core-all.ipk',DIST/'EasyMode-v7.0.0-PC-all.ipk']:sftp.put(str(path),'/tmp/'+path.name)
+  run('opkg install /tmp/EasyMode-v7.0.0-Core-all.ipk /tmp/EasyMode-v7.0.0-PC-all.ipk');time.sleep(3)
+  run('opkg install --force-reinstall /tmp/EasyMode-v7.0.0-Core-all.ipk');time.sleep(3)
+  token=rpc('login',{'username':'root','password':password},obj='session')['result'][1]['ubus_rpc_session'];check(snapshot()['config']['edition']=='pc','clean package installation and same-version reinstall preserve edition')
+  run("uci set easymode_traffic.main.devices=1; uci set easymode_traffic.main.interval=5; uci commit easymode_traffic; /etc/init.d/easymode-traffic reload");time.sleep(7)
+  check(snapshot()['data']['capabilities']['flow'],'bounded nftables observation table created')
+  server=socketserver.TCPServer(('127.0.0.1',8889),HTTP);threading.Thread(target=server.serve_forever,daemon=True).start()
+  subprocess.run(['sudo','ip','route','add','10.0.2.2/32','via','192.168.77.1','dev','emti0'],check=True)
+  before=snapshot();data=urllib.request.urlopen('http://10.0.2.2:8889/traffic',timeout=30).read();check(len(data)==1048576,'real LAN to NAT WAN transfer completed');time.sleep(7)
+  after=snapshot();check(any(d.get('download',0)>1000000 for d in after['data']['devices'].values()),'per-device download accounts actual forwarded transfer')
+  check(sum(v['download'] for b in after['data']['days'].values() for v in b['wan'].values())>1000000,'WAN download accounts actual forwarded transfer')
+  run("uci set firewall.@defaults[0].flow_offloading=1; uci commit firewall; /etc/init.d/firewall reload");time.sleep(7);check(not snapshot()['data']['capabilities']['flow'],'offloading limitation disclosed without disabling acceleration')
+  run("uci set firewall.@defaults[0].flow_offloading=0; uci commit firewall; /etc/init.d/firewall reload")
+  run("uci set easymode_traffic.main.enabled=0; uci commit easymode_traffic; /etc/init.d/easymode-traffic reload");time.sleep(7);check(not snapshot()['config']['enabled'],'pause persists in UCI');check(run('nft list table inet easymode_traffic >/dev/null 2>&1; test $? != 0; echo removed').strip()=='removed','pause removes observer')
+  run("printf broken >/tmp/easymode-traffic/state.json; printf broken >/etc/easymode-traffic/history.json; uci set easymode_traffic.main.enabled=1; uci commit easymode_traffic; /etc/init.d/easymode-traffic restart");time.sleep(7);check(snapshot()['fresh'],'corrupt state recovered and collection resumed')
+  run('opkg remove easymode-pc easymode-traffic');check(run('test ! -f /usr/libexec/easymode-traffic-worker && echo removed').strip()=='removed','uninstall removes collector')
+  server.shutdown()
+  print('PASS: virtual integration checks complete',flush=True)
+ finally:
+  if ssh:ssh.close()
+  vm.close(force=True)
+  subprocess.run(['sudo','ip','link','delete','emti0'],check=False)
+ (DIST/'VM-TEST-RESULTS.json').write_text(json.dumps({'hardware':'QEMU x86_64 BIOS, 256 MiB; NOT PHYSICAL HARDWARE VERIFIED','checks':results},indent=2)+'\n')

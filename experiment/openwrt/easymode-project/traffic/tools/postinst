@@ -1,0 +1,14 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+umask 077
+mkdir -p /etc/easymode-traffic /tmp/easymode-traffic
+chmod 700 /etc/easymode-traffic /tmp/easymode-traffic
+/etc/init.d/easymode-traffic enable
+/etc/init.d/easymode-traffic restart
+/etc/init.d/rpcd restart
+# Preserve the current working EasyMode application; only add a navigation link.
+if grep -q '/easy/app.js' /www/index.html && ! grep -q 'id="easymode-traffic-link"' /www/index.html; then
+ cp -p /www/index.html /etc/easymode-traffic/management-index.backup
+ sed -i 's|</nav>|<a id="easymode-traffic-link" href="/traffic/">Traffic Intelligence</a></nav>|' /www/index.html
+fi
+exit 0

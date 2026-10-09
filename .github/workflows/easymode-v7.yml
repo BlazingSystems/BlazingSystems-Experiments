@@ -28,4 +28,21 @@ jobs:
           sudo ldconfig
       - name: Execute release checks
         run: |
-          if test -f traffic/tests/run.sh; then sh traffic/tests/run.sh; else ucode -e 'print("Build infrastructure ready\n");'; fi
+          sh traffic/tests/run.sh
+      - name: Build real edition packages
+        run: python3 traffic/tools/build.py
+      - name: Prepare image and virtual integration tools
+        run: |
+          sudo apt-get install -y build-essential zstd libncurses-dev rsync unzip wget qemu-system-x86 ovmf python3-paramiko python3-pexpect
+      - name: Build verified-profile x86 BIOS and UEFI images
+        run: sh traffic/tools/image.sh
+      - name: Boot and integration tests on disposable image copy
+        run: python3 traffic/tests/vm.py
+      - name: Final manifests and checksums
+        run: python3 traffic/tools/build.py
+      - name: Store successful build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EasyMode-v7-validated-build
+          path: experiment/openwrt/easymode-project/dist-v7/
+          retention-days: 14

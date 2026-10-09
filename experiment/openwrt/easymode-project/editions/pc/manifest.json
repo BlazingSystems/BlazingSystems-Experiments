@@ -1,1 +1,20 @@
-{"edition":"pc","version":"5.0.0-alpha.1","modules":["network","wifi","cellular","switch","vlan","messages","diagnostics","hardware"],"capability_gated":true,"non_destructive_detection":true}
+{
+  "edition": "pc",
+  "version": "7.0.0",
+  "modules": [
+    "network",
+    "wifi",
+    "cellular",
+    "switch",
+    "vlan",
+    "messages",
+    "diagnostics",
+    "hardware",
+    "traffic-intelligence"
+  ],
+  "capability_gated": true,
+  "non_destructive_detection": true,
+  "traffic_intelligence": "shared",
+  "traffic_path": "traffic/root",
+  "release_status": "validation pending"
+}

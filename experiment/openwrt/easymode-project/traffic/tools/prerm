@@ -1,0 +1,11 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+/etc/init.d/easymode-traffic stop
+/etc/init.d/easymode-traffic disable
+ucode /usr/share/easymode-traffic/dns.uc stop
+nft delete table inet easymode_traffic 2>/dev/null
+if [ -f /www/index.html ]; then
+ sed -i 's|<a id="easymode-traffic-link" href="/traffic/">Traffic Intelligence</a>||' /www/index.html
+fi
+# Retain private history for deliberate recovery; administrator can delete it.
+exit 0

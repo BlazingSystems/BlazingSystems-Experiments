@@ -1,0 +1,7 @@
+{
+  "easymode-traffic-admin": {
+    "description": "Administrator access to private EasyMode traffic metadata",
+    "read": {"ubus": {"easymode.traffic": ["snapshot"]}},
+    "write": {"ubus": {"easymode.traffic": ["action"]}}
+  }
+}

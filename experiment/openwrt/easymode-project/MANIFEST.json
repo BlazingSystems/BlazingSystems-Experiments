@@ -1,1 +1,20 @@
-{"project":"EasyMode for OpenWrt","version":"5.0.0-alpha.1","baseline":"4.1.4","status":"Static Tested / Hardware Verification Required","editions":["cellular","ap","router","switch","pc","generic"],"installers":["offline-html","windows-powershell","openwrt-bundle"],"preserve_old_releases":true}
+{
+  "project": "EasyMode for OpenWrt",
+  "version": "7.0.0",
+  "baseline": "4.2.6-r281-consolidated",
+  "status": "Implementation / executable validation in progress",
+  "editions": [
+    "cellular",
+    "ap",
+    "router",
+    "switch",
+    "pc",
+    "generic"
+  ],
+  "installers": [
+    "offline-html",
+    "windows-powershell",
+    "openwrt-bundle"
+  ],
+  "preserve_old_releases": true
+}
