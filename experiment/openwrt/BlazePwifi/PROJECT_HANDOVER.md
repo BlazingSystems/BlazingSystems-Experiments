@@ -1,3 +1,9 @@
+## V2TARGET-0670 / SDK PREREQUISITE FAILURE & TARGETED FIX — 2026-10-09 Asia/Manila
+
+- **Real failed 3-target SDK run:** [Actions #37904896780](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37904896780) **COMPLETED FAILURE**. Ruijie and x86 CI logs contain `Checking 'proper-umask'... failed` and `Please build with umask 022 - other values produce broken packages`; third Orange Pi job also failed in same verified SDK build step. The builder used `umask 077` for staged downloads before invoking SDK `make`.
+- **Narrow fix commit `32fca404bd19f7721cd18d3e406adf691ad27f74`:** switch to required `umask 022` only when invoking SDK package build, preserve private initial staging and DO NOT pass `FORCE=1` or bypass OpenWrt checks. Cross-build retest is required; no architecture has passed yet.
+- **Safety unchanged:** isolated `BLAZE_FIXTURE_ONLY` C binary under SDK-only package, no production rootfs integration/payment endpoint and no release retag. **NEXT EXACT ACTION:** inspect post-fix 3-target SDK CI for actual binary/ELF/package success or next concrete error; keep all three handovers accurate. `PRODUCTION_v0.6.0_RELEASED=0`.
+
 ## V2TARGET-0670 / SDK CROSS-BUILD SOURCE CHECKPOINT — 2026-10-09 Asia/Manila
 
 - **Previous release-safe source fully green:** `62dbe9fa5319ba386521dd0e41d71e6eda447bba`, Full push [#37902464250](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902464250), Full PR [#37902469005](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902469005), Windows [#37902468986](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902468986), native [#37902469023](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37902469023), ALL SUCCESS exact SHA.
