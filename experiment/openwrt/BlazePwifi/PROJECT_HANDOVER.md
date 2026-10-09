@@ -1,3 +1,10 @@
+## V2NATIVE-0668 / CODE & CI GATE COMMITTED — NOT YET VALIDATED — 2026-10-09 Asia/Manila
+
+- **Exact source:** C fixture-only authenticated native journal `tools/v060_journal_authority_native.c` commits `52b0cf2...` scaffold then `d311842603462e51e33776dbc74a23f9a499f161` functional controller/HMAC/fsync implementation; adversarial `tests/v060_native_v2_authority.sh` commit `bfe3dfd6fb17a69d6e01c00b3fb2a01ce3d9f460`; CI `.github/workflows/blazepwifi-build.yml` commit `0d7b74f7b1bab71afcf781b157744277bbb748a5`.
+- **UNTESTED:** Do not claim compiled, signed or enabled. Code is deliberately guarded with compile-time `BLAZE_FIXTURE_ONLY`, and runtime requires marker, private files, strict `/tmp/blaze-v2-native-*`, HMAC signed controller sequence. Uses OpenSSL libcrypto. No production rootfs binary, CGI route, payment write, migration or release asset.
+- **Tests now requested by Full CI:** source builds with `-Werror` and negative unguarded-build, signed member add/debit/transfer and rental lease, replay/collision, pre/post-rename/fsync faults and source tampering/private inode refusal. Until actual exact-SHA CI returns, V2NATIVE-0668 is **committed_untested**. `v0.6.0-alpha.4` LAB ONLY remains immutable older source; `PRODUCTION_v0.6.0_RELEASED=0`.
+- **NEXT EXACT ACTION:** fetch exact head CI; diagnose compile/test failures, patch only related source/test, synchronize this header and other two handovers and rerun. Follow with target SDK cross-compile/real flash fsync and v1 quiesced backup migration, not a premature production release.
+
 ## V2NATIVE-0668 / OPEN — 2026-10-09 Asia/Manila
 
 - **Verified SHADOW-0667 checkpoint:** `af34604c59cc700e6322dbb265d849576db12138`. Full push [#37900085850](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900085850), Full PR [#37900091486](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900091486), Windows [#37900091492](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/37900091492) all **COMPLETED SUCCESS** for exact SHA, superseding prior pending state.
