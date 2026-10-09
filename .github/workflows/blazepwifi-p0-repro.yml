@@ -9,6 +9,8 @@ on:
       - '.github/workflows/blazepwifi-p0-repro.yml'
       - 'experiment/openwrt/BlazePwifi/tests/v060_ledger_model.py'
       - 'experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh'
+      - 'experiment/openwrt/BlazePwifi/tools/v060_durable_replace.c'
       - 'experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_auth_fixture.sh'
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_fixture.sh'
@@ -72,6 +74,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v053_members.sh
       - name: Verify native POSIX transaction journal fixture (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
+      - name: Test native file and parent-directory fsync/rename durability boundaries
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh
       - name: Refuse unauthenticated v2 controller monetary envelopes (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
       - name: Verify offline synthetic transactional journal oracle (model only)
