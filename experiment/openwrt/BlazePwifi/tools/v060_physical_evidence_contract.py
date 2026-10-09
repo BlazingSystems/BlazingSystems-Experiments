@@ -154,11 +154,13 @@ def review(rootname: str) -> dict:
         ensure(hex64(t["pre_state_sha256"]) and hex64(t["post_state_sha256"]) and
                nonneg(t["total_before_seconds"]) and
                nonneg(t["total_after_seconds"]) and
-               nonneg(t["observed_delta_seconds"]) and
+               type(t["observed_delta_seconds"]) is int and
+               -(2**63 - 1) <= t["observed_delta_seconds"] <= 2**63 - 1 and
                t["total_before_seconds"] + t["observed_delta_seconds"] ==
                t["total_after_seconds"], "MONEY_CONSERVATION_INVALID")
         ensure(t["receipts_consistent"] is True and
                t["claimed_outcome"] == "pass" and
+               type(t["duplicate_ack_count"]) is int and
                t["duplicate_ack_count"] == 0, "PAYMENT_REPLAY_INVARIANT_FAILED")
         ref = t["event_ref_redacted"]
         ensure(type(ref) is str and OPAQUE.fullmatch(ref) is not None and
@@ -179,6 +181,8 @@ def review(rootname: str) -> dict:
                soak["duration_seconds"] >= 86400 and
                nonneg(soak["concurrent_clients"]) and
                soak["concurrent_clients"] >= 30 and
+               type(soak["duplicate_ack_count"]) is int and
+               type(soak["lost_ack_count"]) is int and
                soak["duplicate_ack_count"] == 0 and
                soak["lost_ack_count"] == 0 and
                soak["claimed_outcome"] == "pass", "SOAK_EVIDENCE_INSUFFICIENT")
