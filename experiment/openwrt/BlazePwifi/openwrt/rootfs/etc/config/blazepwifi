@@ -29,6 +29,8 @@ config core 'main'
 	option pause_max_seconds '0'
 	option walled_refresh_seconds '120'
 	option durable_sync '1'
+	# Read-only v2 shadow inventory: disabled by default; never authorizes payment.
+	option v2_shadow_diagnostics '0'
 	option firewall_zone 'lan'
 	option admin_user 'admin'
 	option auth_max_attempts '5'
