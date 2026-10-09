@@ -12,6 +12,23 @@ A legitimate hardware experiment needs a disposable, physically persistent scrat
 
 No test result is valid unless the backing mount/flash device, filesystem, and actual persistence after unclean reboot are evidenced. A successful GitHub-hosted simulation or clean software restart is not physical power-loss evidence.
 
+## Read-only operator scratch-mount preflight (STORCHK-0674)
+
+A LAB-only fail-closed mountinfo inspection has been added:
+
+```sh
+sh tools/v060_lab_storage_preflight.sh \
+  /tmp/blaze-v2-native-test01 \
+  /dev/DEDICATED_SCRATCH_PARTITION \
+  /mnt/blaze-v2-lab-media-test01
+```
+
+**This command does not create a mount, modify storage, run a financial transaction, or switch production on.** Before invocation, the operator must arrange a **real dedicated scratch filesystem** mounted beneath `/mnt/blaze-v2-lab-media-*`, with a private *subdirectory* bind-mounted exactly at the isolated `/tmp/blaze-v2-native-*` test fixture root. The root must contain the existing private `.blaze-v2-fixture-only` marker and permissions used by the synthetic native journal. The second argument must be the actual expected scratch *block* source and must agree with `/proc/self/mountinfo`; loop, ram, overlay, tmpfs and misidentified mounts are rejected. Nothing authorizes mounting on any real customer partition or using `/overlay`.
+
+The preflight verifies exact mountpoint/source/major-minor/filesystem relationships and a private fixture marker using the **actual process mount namespace**; it rejects generic `/tmp` and ambiguous stacked mounts. It is deliberately conservative (ext4, f2fs, xfs or btrfs scratch sources) and may refuse otherwise usable storage; operator manual review is required, never a bypass. These checks are based on the Linux kernel mountinfo format (see https://www.kernel.org/doc/html/latest/filesystems/proc.html). The separate `tests/v060_lab_storage_preflight.sh` uses **text-only fake mountinfo input** to verify fail-closed behavior in CI; passing that test does not establish real storage persistence.
+
+Even a successful operator preflight prints `physical_powercut_verified=0` and `customer_install_authorized=0`. It only allows **consideration** of a controlled physical experiment after independent confirmation of the isolated scratch device. It never authorizes an actual power interruption, changes the native fixture's accepted root or releases a customer build.
+
 ## Equipment & operator authorization (hard preflight)
 
 All items must be recorded for *each physical target* — Ruijie RG-EW1200G Pro MIPS, Orange Pi Zero 3 AArch64 and x86-64:
