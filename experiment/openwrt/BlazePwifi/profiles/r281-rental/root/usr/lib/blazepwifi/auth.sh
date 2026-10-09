@@ -33,16 +33,35 @@ bp_auth_unlock() {
 	exec 8>&-
 }
 
+# Signed rental enrollment, admin tokens and device secrets require full
+# CSPRNG output. Never substitute PID/time-derived SHA256 for random bytes.
 bp_auth_random_hex() {
-	bytes="$1"
-	out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null || true)"
-	if [ "${#out}" -lt $((bytes*2)) ]; then
-		out="$(od -An -N "$bytes" -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)"
-	fi
-	if [ "${#out}" -lt $((bytes*2)) ]; then
-		out="$(printf '%s|%s|%s' "$(date +%s 2>/dev/null)" "$$" "$bytes" | bp_sha256)"
-	fi
-	printf '%s' "$out" | tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' | cut -c1-$((bytes*2))
+  rng_bytes="$1"
+  case "$rng_bytes" in ''|*[!0-9]*) return 8;; esac
+  [ "$rng_bytes" -ge 1 ] 2>/dev/null &&
+    [ "$rng_bytes" -le 64 ] 2>/dev/null || return 8
+  rng_need=$((rng_bytes*2))
+
+  rng_out=""
+  if command -v hexdump >/dev/null 2>&1; then
+    rng_out="$(hexdump -n "$rng_bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null ||
+    rng_out=""
+  if [ -z "$rng_out" ] && command -v od >/dev/null 2>&1; then
+    rng_out="$(od -An -v -N "$rng_bytes" -tx1 /dev/urandom 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null ||
+    rng_out=""
+  if [ -z "$rng_out" ] && command -v openssl >/dev/null 2>&1; then
+    rng_out="$(openssl rand -hex "$rng_bytes" 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null &&
+    printf '%s' "$rng_out" | LC_ALL=C grep -Eq '^[a-f0-9]+$' || return 8
+  printf '%s' "$rng_out"
 }
 
 bp_auth_clean_field() {
