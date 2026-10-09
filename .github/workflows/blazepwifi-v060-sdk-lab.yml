@@ -25,7 +25,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify pinned official OpenWrt 25.12.5 OpenSSL build sources
+        run: |
+          git clone --quiet --filter=blob:none --depth=1 --sparse \
+            --branch v25.12.5 https://github.com/openwrt/openwrt.git release-source
+          test "$(git -C release-source rev-parse HEAD)" = f0a60eee2fe051741c643ea6118718aae1ef17fb
+          git -C release-source sparse-checkout set package/libs/openssl include
+          git -C release-source checkout --quiet --detach f0a60eee2fe051741c643ea6118718aae1ef17fb
+          test -s release-source/package/libs/openssl/Makefile
+          test -s release-source/include/openssl-module.mk
+          echo "V2TARGET source checkout PASS — pinned release OpenSSL source exists"
+
   native-sdk:
+    needs: source-check
     strategy:
       fail-fast: false
       matrix:
