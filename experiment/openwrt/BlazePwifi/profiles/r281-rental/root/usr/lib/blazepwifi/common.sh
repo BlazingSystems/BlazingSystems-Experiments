@@ -51,6 +51,46 @@ bp_durable_sync() {
 	sync
 }
 
+# Legacy standalone v1 fail-closed paid-state quarantine. This DOES NOT make
+# rental-devices.tsv + rental-events.tsv crash-atomic or replace a v2 WAL.
+# Never clear this marker on startup or retry: operator must reconcile.
+BP_PAID_UNCERTAIN="$BP_STATE/paid-state-uncertain"
+bp_paid_begin() {
+	mkdir -p "$BP_STATE" "$BP_RUN" || return 8
+	exec 6>"$BP_RUN/paid-financial.lock" || return 8
+	if ! flock -n 6; then exec 6>&-; return 8; fi
+	if [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+		flock -u 6 2>/dev/null || true; exec 6>&-; return 9
+	fi
+	bp_paid_temp="$BP_STATE/.paid-pending-$"
+	umask 077
+	if ! printf 'PENDING\t%s\n' "$(date +%s)" >"$bp_paid_temp" ||
+	   ! chmod 600 "$bp_paid_temp" ||
+	   ! mv "$bp_paid_temp" "$BP_PAID_UNCERTAIN" ||
+	   ! sync; then
+		rm -f "$bp_paid_temp" 2>/dev/null || true
+		flock -u 6 2>/dev/null || true; exec 6>&-; return 8
+	fi
+	return 0
+}
+bp_paid_abort() {
+	# Disputed money requires explicit authenticated operator reconciliation.
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+	return 0
+}
+bp_paid_commit() {
+	# Balance and receipt must both reach storage before any success ACK.
+	# Target-specific fsync/dirsync/powercut contract remains pending.
+	if ! sync || ! rm -f "$BP_PAID_UNCERTAIN" || ! sync; then
+		bp_paid_abort
+		return 8
+	fi
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+	return 0
+}
+
 bp_mac_norm() {
 	printf '%s' "$1" | tr 'A-F' 'a-f' | grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$' || return 1
 	printf '%s' "$1" | tr 'A-F' 'a-f'
