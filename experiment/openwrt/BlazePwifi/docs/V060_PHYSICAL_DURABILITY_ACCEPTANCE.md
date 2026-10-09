@@ -29,6 +29,23 @@ The preflight verifies exact mountpoint/source/major-minor/filesystem relationsh
 
 Even a successful operator preflight prints `physical_powercut_verified=0` and `customer_install_authorized=0`. It only allows **consideration** of a controlled physical experiment after independent confirmation of the isolated scratch device. It never authorizes an actual power interruption, changes the native fixture's accepted root or releases a customer build.
 
+## HWPRE-0683 — read-only, on-device scratch-media observation
+
+On a deliberately isolated, **operator-approved noncustomer appliance**, after an operator has separately prepared a dedicated disposable persistent block partition and its correctly private bind-mounted `/tmp/blaze-v2-native-*` fixture, this lightweight shell-only command can inspect the *current* kernel mount namespace without Python or network access:
+
+```sh
+sh tools/v060_physical_pretrial_readonly.sh \
+  /tmp/blaze-v2-native-OPERATOR_FIXTURE \
+  /dev/DEDICATED_DISPOSABLE_BLOCK_PARTITION \
+  /mnt/blaze-v2-lab-media-OPERATOR_FIXTURE
+```
+
+The command calls the existing `v060_lab_storage_preflight.sh` (fixture marker, private permissions, actual mountinfo relationship, writable allowed persistent filesystem) and adds the requirement that the expected `/dev/*` path be an **existing, non-symlink block-special device**. This closes the gap where a plausible device-name string alone could be treated as sufficient evidence. It reports local kernel and architecture metadata and **only** a pretrial observation. It does **not** perform any mount, write, power cut, payment, network request, artifact upload, off-device evidence verification or customer installation. Do not copy real hardware identifiers, secrets, customer data or whole operator output into public Git/CI.
+
+On an ordinary Linux machine, CI runner, volatile `/tmp` directory or an unsupported OpenWrt layout, the command should BLOCK. A successful observation would still report `physical_powercut_verified=0`, `actual_hardware_powercuts_completed=0`, `offdevice_power_controller_authenticated=0`, `financial_migration_authorized=0` and `customer_install_authorized=0`. It cannot prove the partition is disposable or assess the physical safety of cutting power, which requires independent operator review. In particular, NEVER choose a boot, overlay, customer data or removable drive containing important files simply to make the preflight pass.
+
+`tests/v060_physical_pretrial_readonly.sh` in Full CI performs **only negative tests** using a throwaway private marker and nonblock/unsafe device paths. It does not run the positive case, simulate an authorized owner, create a mount or obtain genuine power-loss telemetry. A CI pass is no substitute for the real controlled physical trial or human acceptance.
+
 ## Equipment & operator authorization (hard preflight)
 
 All items must be recorded for *each physical target* — Ruijie RG-EW1200G Pro MIPS, Orange Pi Zero 3 AArch64 and x86-64:
