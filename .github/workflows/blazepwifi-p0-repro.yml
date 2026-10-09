@@ -43,6 +43,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/auth.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_legacy_bind_zero_loss.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/stress.sh'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/rental'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/www/cgi-bin/vendo'
       - 'experiment/openwrt/BlazePwifi/profiles/r281-rental/root/usr/lib/blazepwifi/common.sh'
@@ -133,6 +134,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
       - name: Protect full and R281 legacy MAC paid credit through account bind and cleanup
         run: sh experiment/openwrt/BlazePwifi/tests/v060_legacy_bind_zero_loss.sh
+      - name: Refuse second paid MAC identity and preserve original funds in full replay stress
+        run: sh experiment/openwrt/BlazePwifi/tests/stress.sh
       - name: Preserve real signed rental portal and operator lease compatibility
         run: sh experiment/openwrt/BlazePwifi/tests/rental.sh
       - name: Exercise live portal-to-vendo window reuse, write failures and closure
