@@ -57,7 +57,6 @@ def seal_file(path: str, *, must_exist: bool) -> Path:
     if not ((p.name == "key.bin" and KEY_RE.fullmatch(parent.name)) or
             (p.name == "backup.blaze" and SEAL_RE.fullmatch(parent.name))):
         block()
-        block()
     if parent.is_dir():
         st = parent.stat()
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid() or (st.st_mode & 0o777) != 0o700:
@@ -110,8 +109,8 @@ def durable_new(path: Path, content: bytes) -> None:
         os.close(dirfd)
 
 
-def publish_private_dir_no_replace(stage: Path, destination: Path) -> None:
-    """Linux renameat2(RENAME_NOREPLACE); refuse legacy rename overwrite."""
+def publish_no_replace(stage: Path, destination: Path) -> None:
+    """Linux renameat2(RENAME_NOREPLACE) works for files and directories."""
     libc = ctypes.CDLL(None, use_errno=True)
     renameat2 = getattr(libc, "renameat2", None)
     if renameat2 is None:
@@ -123,6 +122,43 @@ def publish_private_dir_no_replace(stage: Path, destination: Path) -> None:
                     os.fsencode(destination), 1)
     if ret != 0:
         block()
+
+
+def publish_encrypted_archive(output: Path, contents: bytes) -> None:
+    """Never expose a partially written *final* encrypted archive.
+
+    A failed write/fsync/rename leaves backup.blaze uncreated. Once renamed,
+    an fsync failure is an UNKNOWN-DURABILITY result, not a success ACK; the
+    complete archive is left for authenticated investigation, not overwritten.
+    A real appliance power cut must be tested separately.
+    """
+    if output.exists() or output.is_symlink():
+        block()
+    fd, name = tempfile.mkstemp(prefix=".blaze-v1-cipher-stage-", dir=output.parent)
+    stage = Path(name)
+    try:
+        try:
+            os.fchmod(fd, 0o600)
+            pos = 0
+            while pos < len(contents):
+                n = os.write(fd, contents[pos:])
+                if n <= 0:
+                    block()
+                pos += n
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        publish_no_replace(stage, output)
+        parent_fd = os.open(output.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+    finally:
+        # Only unpublished temporary ciphertext is removed. A published
+        # complete file survives a later fsync error for manual investigation.
+        if stage.exists():
+            stage.unlink()
 
 
 def keygen(keypath: str) -> None:
@@ -183,7 +219,7 @@ def seal(source: str, backup: str, keyfile: str) -> None:
         block()
     nonce = os.urandom(NONCE_BYTES)
     cipher = AESGCM(key).encrypt(nonce, body, MAGIC_SEAL)
-    durable_new(output, MAGIC_SEAL + nonce + cipher)
+    publish_encrypted_archive(output, MAGIC_SEAL + nonce + cipher)
     print("EBACK-0677 sealed synthetic backup created; not customer migration")
 
 
@@ -246,7 +282,7 @@ def restore(backup: str, keyfile: str, dest: str) -> None:
             block()
         if dst.exists() or dst.is_symlink():
             block()
-        publish_private_dir_no_replace(stage, dst)  # atomic fail-if-exists
+        publish_no_replace(stage, dst)  # atomic fail-if-exists
         dirfd = os.open("/tmp", os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(dirfd)
