@@ -65,6 +65,9 @@ case "$action" in
     enabled="$(printf '%s' "$controller" | sed -n 's/.*"enabled":\([01]\).*/\1/p')"
     coin_enabled="$(printf '%s' "$controller" | sed -n 's/.*"coin_enabled":\([01]\).*/\1/p')"
     [ "$enabled" = 1 ] && [ "$coin_enabled" = 1 ] || insert=0
+    # Reconciliation is a hard stop on accepting physical cash; never
+    # advertise INSERT COIN after an ambiguous prior credit.
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || insert=0
     body="$(printf '{"ok":true,"insert":%s,"target_nonce":"%s","expires":%s,"controller":%s}' "$insert" "$(bp_json_escape "$target_nonce")" "${expires:-0}" "$controller")"
     bp_json "$body"
     ;;
@@ -81,13 +84,21 @@ case "$action" in
     [ "$target" = "$target_nonce" ] || bp_fail "coin target mismatch"
     [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_fail "coin window expired"; }
     [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] ||
+      bp_fail "paid state uncertain; operator reconciliation required"
 
     if [ "$kind" = rental ]; then
       bp_lock || bp_fail "rental accounting busy"
       result="$(bp_rental_apply_coin "$device" "$id" "$nonce" "$target" "$pulses")"
       rc=$?
       bp_unlock
-      [ "$rc" -eq 0 ] || bp_fail "rental target not found"
+      if [ "$rc" -ne 0 ]; then
+        case "$rc" in
+          2) bp_fail "rental target not found" ;;
+          9) bp_fail "paid state uncertain or receipt collision; operator reconciliation required" ;;
+          *) bp_fail "rental credit storage failed; operator reconciliation required" ;;
+        esac
+      fi
       state="$(printf '%s' "$result" | cut -f1)"
       lease="$(printf '%s' "$result" | cut -f2)"
       [ "$state" = duplicate ] && duplicate=true || duplicate=false
