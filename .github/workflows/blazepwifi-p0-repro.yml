@@ -21,6 +21,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_write_fault.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v054_member_migration.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v053_members.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/member_migration.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/www/blazepwifi/admin/members.js'
@@ -63,6 +64,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh
       - name: Refuse unsigned imported credits and preserve paid bank across metadata update
         run: sh experiment/openwrt/BlazePwifi/tests/v054_member_migration.sh
+      - name: Keep original member banking, transfer and password flows compatible
+        run: sh experiment/openwrt/BlazePwifi/tests/v053_members.sh
       - name: Verify native POSIX transaction journal fixture (synthetic only)
         run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
       - name: Refuse unauthenticated v2 controller monetary envelopes (synthetic only)
