@@ -127,6 +127,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
       - name: Refuse signed R281 Android enrollment false ACK and reusable setup QR
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
+      - name: Keep ordinary binding and Device Owner QR issuance storage-authoritative
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh
       - name: Preserve R281 signed hotspot coin receipts and refuse storage false ACK
         run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
       - name: Refuse legacy MAC credit loss before account persistence in both source profiles
