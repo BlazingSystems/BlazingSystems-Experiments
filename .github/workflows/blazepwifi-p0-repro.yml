@@ -19,6 +19,7 @@ on:
       - 'experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_member_write_fault.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v054_member_migration.sh'
       - 'experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/member_migration.sh'
       - 'experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh'
@@ -56,6 +57,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh
       - name: Reject deletion of remaining member credit and quarantine interrupted admin writes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
+      - name: Reject partial member database copies and false admin success
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_write_fault.sh
       - name: Guard stale paid balance in actual member management UI
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh
       - name: Refuse unsigned imported credits and preserve paid bank across metadata update
