@@ -136,8 +136,15 @@ set -e
 # a failed write. The admin path must acquire paid-state quarantine.
 ADMIN="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/admin"
 CLIENT="$ROOT/openwrt/rootfs/www/blazepwifi/cgi-bin/rental"
-grep -Fq 'bp_paid_begin || bp_fail "paid state uncertain; operator reconciliation required"' "$ADMIN"
-grep -Fq 'bp_paid_commit || bp_fail "rental lease sync uncertain; operator reconciliation required"' "$ADMIN"
+stage=admin-source-contract
+# The admin lease-set now locks account state before reading the previous
+# balance and uses an explicit paid-begin/checked audit/paid-commit block.
+# Do NOT require obsolete single-line syntax from the weaker implementation.
+grep -Fq 'bp_lock || bp_fail "accounting busy"' "$ADMIN"
+grep -Fq 'bp_paid_begin || {' "$ADMIN"
+grep -Fq 'if ! bp_paid_commit; then' "$ADMIN"
+grep -Fq 'rental lease sync uncertain; operator reconciliation required' "$ADMIN"
+grep -Fq 'bp_rental_event_log lease_set "$did"' "$ADMIN"
 grep -Fq 'bp_fail "rental device state write failed; retry after operator review"' "$CLIENT"
 
 echo 'RENT-0646 PASS: paid rental leases survive duplicate/corrupt/partial copy, failed rename, source symlink and secret pollution; quarantined operator lease never false-ACKs'
