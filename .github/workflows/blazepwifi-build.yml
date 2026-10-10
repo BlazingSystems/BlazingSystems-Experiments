@@ -4,12 +4,24 @@ on:
   push:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
+      # Docs-only commits must not rebuild OpenWrt, Windows or Android.
+      # Source + docs still matches the positive rule; only doc files excluded.
+      - '!experiment/openwrt/BlazePwifi/docs/**'
+      - '!experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md'
+      - '!experiment/openwrt/BlazePwifi/AUDIT.md'
+      - '!experiment/openwrt/BlazePwifi/README.md'
       - '.github/workflows/blazepwifi-build.yml'
       - '.github/workflows/blazepwifi-v053-release.yml'
       - '.github/workflows/blazerental-v053-lineage2-sign.yml'
   pull_request:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
+      # Docs-only commits must not rebuild OpenWrt, Windows or Android.
+      # Source + docs still matches the positive rule; only doc files excluded.
+      - '!experiment/openwrt/BlazePwifi/docs/**'
+      - '!experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md'
+      - '!experiment/openwrt/BlazePwifi/AUDIT.md'
+      - '!experiment/openwrt/BlazePwifi/README.md'
       - '.github/workflows/blazepwifi-build.yml'
       - '.github/workflows/blazepwifi-v053-release.yml'
       - '.github/workflows/blazerental-v053-lineage2-sign.yml'
@@ -29,6 +41,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/handover_gate.sh
       - name: Handover gate fail-closed regression
         run: sh experiment/openwrt/BlazePwifi/tests/handover_gate_regression.sh
+      - name: HND-0700 guard source-vs-docs GitHub Actions path selection
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_doc_only_filter.py
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
       - name: v0.3 foundation validation
