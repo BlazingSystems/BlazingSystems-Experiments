@@ -1,6 +1,6 @@
 # BlazePwifi — authoritative active checkpoint
 
-**Status:** IMPLEMENTED_UNTESTED · HND-0700 compact-handover + documentation-only CI filtering · 2026-10-10 Asia/Manila
+**Status:** TEST_FAILED_AND_RETRYING · HND-0700 compact-handover + documentation-only CI filtering · 2026-10-10 Asia/Manila
 **Repository:** `BlazingSystems/BlazingSystems-Experiments`
 **Development:** `blazepwifi-v0.6.0-audit-foundation` · draft [PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30)
 **Isolated work branch:** `lab/v060-compact-handover-ci` from exact development HEAD `5144f6bbe950d2f484088ff40b618818ce979e1b`. Read the current GitHub branch ref for the latest HEAD; a commit cannot self-embed its own SHA.
@@ -20,7 +20,7 @@
 
 ## Active engineering change — HND-0700
 
-**IMPLEMENTED_UNTESTED; no CI evidence yet.** Root cause: Full `.github/workflows/blazepwifi-build.yml` watches `experiment/openwrt/BlazePwifi/**` without excluding pure documentation and thus documentation-only checkpoints rebuild costly firmware/Android targets. Source files remain unchanged. Two exact historical files were losslessly copied *before replacing* active summaries:
+**TEST_FAILED (parser-only), fix IMPLEMENTED_UNTESTED.** Original PR Full [#38050659671](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38050659671) validate failed the HND-0700 test because the Python extractor skipped YAML comments and missed the rest of `paths`. Handover gate and handover regression had passed. Corrected test parser `d32ab244d70ca7907495e8aeeb911aa0ba16ec9a`; rerun CI pending. Root cause: Full `.github/workflows/blazepwifi-build.yml` watches `experiment/openwrt/BlazePwifi/**` without excluding pure documentation and thus documentation-only checkpoints rebuild costly firmware/Android targets. Source files remain unchanged. Two exact historical files were losslessly copied *before replacing* active summaries:
 - [Old PROJECT_HANDOVER](archive/2026-10-10-PROJECT_HANDOVER-before-compact.md) (559,909 characters, preserved)
 - [Old CURRENT_STATE](archive/2026-10-10-CURRENT_STATE-before-compact.md) (716,248 characters, preserved)
 - Complete [append-only CHANGE_LEDGER](CHANGE_LEDGER.md) and [HANDOVER_POLICY](HANDOVER_POLICY.md) retained.
@@ -31,7 +31,7 @@
 
 ## NEXT EXACT ACTION
 
-Run exact HND-0700 PR Full CI and inspect the `HND-0700` regression, mandatory handover freshness, x86 QEMU and Android results. Then guard against concurrent dev updates and integrate to development only on success. Finally append verified evidence to the change ledger and update this short active summary **once**, as a docs-only commit; verify that change does not launch Full CI. Never mislabel untested work green.
+Run *fixed* HND-0700 PR Full CI (PR #46; corrected test `d32ab244`) and inspect the `HND-0700` regression, mandatory handover freshness, x86 QEMU and Android results. Then guard against concurrent dev updates and integrate to development only on success. Finally append verified evidence to the change ledger and update this short active summary **once**, as a docs-only commit; verify that change does not launch Full CI. Never mislabel untested work green.
 
 **Independent next P0 engineering task:** reopen actual source and failure-injection cases for #31/#32; select one implementation site that can be safely changed without a fake hardware witness. Owner-controlled isolated physical trust/powercut and permanent Android signing are *required* for production, but unavailable through GitHub.
 
