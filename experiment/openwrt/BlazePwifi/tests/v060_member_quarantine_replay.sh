@@ -46,6 +46,62 @@ transfer="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 333
 printf '%s' "$transfer" | grep -q '"replayed":true'
 [ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
 
+# PAY-0712: old signed receipt alone does not prove the current member
+# read model is trustworthy. A missing/corrupt/duplicated row or revision
+# must never yield ok:true with fabricated zero balance. All data synthetic.
+cp "$BP_STATE/members.tsv" "$T/members.original"
+cp "$BP_STATE/member-events.tsv" "$T/events.original"
+cp "$BP_STATE/member-revision" "$T/revision.original"
+restore_fixture() {
+  cp "$T/members.original" "$BP_STATE/members.tsv"
+  cp "$T/events.original" "$BP_STATE/member-events.tsv"
+  cp "$T/revision.original" "$BP_STATE/member-revision"
+}
+assert_bad_replay() {
+  op="$1"; payload="$2"; count="$3"; nonce="$4"
+  guard_before="$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv" "$BP_STATE/member-revision")"
+  response="$(call "$op" "$payload" "$count" "$nonce")"
+  printf '%s' "$response" | grep -q '"ok":false' || {
+    echo "PAY-0712 false paid ACK with malformed read model: $op" >&2;exit 1;
+  }
+  printf '%s' "$response" | grep -q 'member paid receipt or snapshot inconsistent' || exit 1
+  ! printf '%s' "$response" | grep -q '"replayed":true'
+  [ "$guard_before" = "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv" "$BP_STATE/member-revision")" ]
+}
+# Absent source / invalid paid seconds / duplicated source member.
+awk -F '\t' '$1!="alice" {print}' "$T/members.original" > "$BP_STATE/members.tsv"
+assert_bad_replay member_bank 'alice:0123456789abcdef:placeholder' 60 11111111
+restore_fixture
+awk -F '\t' 'BEGIN {OFS="\t"} $1=="alice" {$8="corrupt"} {print}' "$T/members.original" > "$BP_STATE/members.tsv"
+assert_bad_replay member_restore 'alice:0123456789abcdea:placeholder' 0 22222222
+restore_fixture
+cat "$T/members.original" >> "$BP_STATE/members.tsv"
+assert_bad_replay member_bank 'alice:0123456789abcdef:placeholder' 60 11111111
+restore_fixture
+# Existing source with disappeared transfer recipient must NOT ACK.
+awk -F '\t' '$1!="bob" {print}' "$T/members.original" > "$BP_STATE/members.tsv"
+assert_bad_replay member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 33333333
+restore_fixture
+# Corrupt or stale revision must not silently turn into revision zero.
+printf 'corrupt-revision\n' > "$BP_STATE/member-revision"
+assert_bad_replay member_bank 'alice:0123456789abcdef:placeholder' 60 11111111
+restore_fixture
+printf '0\n' > "$BP_STATE/member-revision"
+assert_bad_replay member_bank 'alice:0123456789abcdef:placeholder' 60 11111111
+restore_fixture
+# Duplicate or tampered receipt is ambiguous even if first row looks valid.
+cat "$T/events.original" >> "$BP_STATE/member-events.tsv"
+assert_bad_replay member_restore 'alice:0123456789abcdea:placeholder' 0 22222222
+restore_fixture
+awk -F '\t' 'BEGIN {OFS="\t"} $1=="0123456789abcdef" {$5=999} {print}' "$T/events.original" > "$BP_STATE/member-events.tsv"
+assert_bad_replay member_bank 'alice:0123456789abcdef:placeholder' 60 11111111
+restore_fixture
+[ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
+# Confirm valid old receipt remains replayable after restoring untouched data.
+recovered="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 33333333)"
+printf '%s' "$recovered" | grep -q '"replayed":true'
+echo 'PAY-0712 PASS: signed old receipts never ACK absent, corrupt, duplicate or stale paid read models'
+
 # PAY-0711: deterministically hold the transaction lock BEFORE its pending
 # marker is written, reproducing the old replay fast-path's lock bypass.
 # Neither the fake writer nor this test changes any member balance.
