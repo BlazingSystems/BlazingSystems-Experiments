@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {range,aggregate,total,escape,csv,billingRange,bytes,speed} from '../root/www/traffic/model.mjs';
+import {range,aggregate,total,escape,csv,billingRange,bytes,speed} from '../root/www/traffic/model.js';
 test('sum only selected WAN period, never WiFi or device totals',()=>{const days={1:{wan:{a:{download:100,upload:20}},devices:{x:{download:100,upload:20}}},2:{wan:{a:{download:10,upload:2},b:{download:5,upload:1}}}};assert.deepEqual(total(aggregate(days,'wan',2,2)),{download:15,upload:3});});
 test('UTC date filtering and invalid custom range',()=>{const now=Date.UTC(2026,9,10,12);assert.deepEqual(range('today','','',now),[20736,20736]);assert.deepEqual(range('custom','invalid','',now),range('today','','',now));assert.deepEqual(range('7','','',now),[20730,20736]);});
 test('billing day transitions',()=>{const b=billingRange(15,Date.UTC(2026,9,10));assert.equal(new Date(b.start*86400000).toISOString().slice(0,10),'2026-09-15');assert.equal(new Date(b.end*86400000).toISOString().slice(0,10),'2026-10-14');});

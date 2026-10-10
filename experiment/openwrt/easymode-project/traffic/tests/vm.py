@@ -63,6 +63,8 @@ with tempfile.TemporaryDirectory() as tmp:
   run("uci set firewall.@defaults[0].flow_offloading=0; uci commit firewall; /etc/init.d/firewall reload")
   run("uci set easymode_traffic.main.enabled=0; uci commit easymode_traffic; /etc/init.d/easymode-traffic reload");time.sleep(7);check(not snapshot()['config']['enabled'],'pause persists in UCI');check(run('nft list table inet easymode_traffic >/dev/null 2>&1; test $? != 0; echo removed').strip()=='removed','pause removes observer')
   run("printf broken >/tmp/easymode-traffic/state.json; printf broken >/etc/easymode-traffic/history.json; uci set easymode_traffic.main.enabled=1; uci commit easymode_traffic; /etc/init.d/easymode-traffic restart");time.sleep(7);check(snapshot()['fresh'],'corrupt state recovered and collection resumed')
+  subprocess.run(['node','traffic/tests/browser.cjs'],cwd=BASE,env={**os.environ,'VM_PASSWORD':password},check=True)
+  check(True,'real browser login, eight views, theme, export, mobile width and logout')
   run('opkg remove easymode-pc easymode-traffic');check(run('test ! -f /usr/libexec/easymode-traffic-worker && echo removed').strip()=='removed','uninstall removes collector')
   server.shutdown()
   print('PASS: virtual integration checks complete',flush=True)
