@@ -29,7 +29,7 @@ fixture_now=123456
 chmod 600 "$BP_RENTAL_EVENTS"
 printf '1\n' > "$BP_MEMBER_REVISION"
 # Refuse entry to the financial mutation boundary for invalid numbers.
-# For valid numeric inputs the sentinel must be reached (rc=99), proving
+# For valid numeric inputs the sentinel must be reached (public rc=9), proving
 # we are exercising the production code rather than a dead test path.
 bp_paid_begin() { printf 'entered\n' > "$T/begin"; return 99; }
 
@@ -45,18 +45,18 @@ rental_fixture() {
   rm -f "$T/begin"
 }
 must_reject_member_add() {
-  label="$1"; balance="$2"; amount="$3"
+  numeric_case_label="$1"; balance="$2"; amount="$3"
   member_fixture "$balance" 200
   before="$(cat "$BP_MEMBERS")"
   rc=0
-  bp_member_balance_change alice add "$amount" fixture "evt-$label" >"$T/out" 2>"$T/err" || rc=$?
+  bp_member_balance_change alice add "$amount" fixture "evt-$numeric_case_label" >"$T/out" 2>"$T/err" || rc=$?
   if [ "$rc" -eq 0 ] || [ "$rc" -eq 99 ] || [ -e "$T/begin" ] ||
      [ -s "$T/out" ] || [ "$(cat "$BP_MEMBERS")" != "$before" ]; then
-    echo "P0-0710 RED: member add accepted unsafe $label (rc=$rc)" >&2; exit 1
+    echo "P0-0710 RED: member add accepted unsafe $numeric_case_label (rc=$rc)" >&2; exit 1
   fi
 }
 must_reject_transfer() {
-  label="$1"; src="$2"; dst="$3"; amount="$4"
+  numeric_case_label="$1"; src="$2"; dst="$3"; amount="$4"
   member_fixture "$src" "$dst"
   before="$(cat "$BP_MEMBERS")"
   rc=0
@@ -67,11 +67,11 @@ must_reject_transfer() {
   fi
 }
 must_reject_rental() {
-  label="$1"; lease="$2"; pulses="$3"; seconds="$4"
+  numeric_case_label="$1"; lease="$2"; pulses="$3"; seconds="$4"
   rental_fixture "$lease"; fixture_per="$seconds"
   before="$(cat "$BP_RENTAL_DEVICES")"
   rc=0
-  bp_rental_apply_coin dev01 controller01 "nonce-$label" target01 "$pulses" >"$T/out" 2>"$T/err" || rc=$?
+  bp_rental_apply_coin dev01 controller01 "nonce-$numeric_case_label" target01 "$pulses" >"$T/out" 2>"$T/err" || rc=$?
   if [ "$rc" -eq 0 ] || [ "$rc" -eq 99 ] || [ -e "$T/begin" ] ||
      [ -s "$T/out" ] || [ "$(cat "$BP_RENTAL_DEVICES")" != "$before" ]; then
     echo "P0-0710 RED: rental accepted unsafe $label (rc=$rc)" >&2; exit 1
@@ -82,7 +82,7 @@ assert_valid_reaches_boundary() {
   rm -f "$T/begin"
   rc=0
   "$@" >"$T/out" 2>"$T/err" || rc=$?
-  [ "$rc" -eq 99 ] && [ -f "$T/begin" ] || {
+  [ "$rc" -eq 9 ] && [ -f "$T/begin" ] || {
     echo "P0-0710 setup error: healthy $scope did not reach transaction boundary (rc=$rc)" >&2
     exit 2
   }
