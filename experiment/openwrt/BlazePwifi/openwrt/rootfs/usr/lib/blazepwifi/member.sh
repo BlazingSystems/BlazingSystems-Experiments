@@ -220,12 +220,25 @@ bp_member_financial_kind() {
   return 1
 }
 
+# P0-0710: money fields MUST be canonical base-10 integers within signed
+# 32-bit arithmetic bounds on all supported POSIX shell targets. Refuse an
+# invalid persisted balance; NEVER substitute zero or silently octal-parse.
+bp_member_safe_seconds() {
+  case "$1" in
+    0) ;;
+    [1-9]*) case "$1" in *[!0-9]*) return 1;; esac ;;
+    *) return 1 ;;
+  esac
+  [ "$1" -le "$2" ] 2>/dev/null
+}
+
 bp_member_balance_change() {
   user="$(bp_member_norm "$1")" || return 2
   mode="$2"; seconds="$3"; source="$(bp_member_clean "$4")"; event_id="$5"
-  case "$seconds" in ''|*[!0-9]*) return 2;; esac
-  [ "$seconds" -le 31536000 ] 2>/dev/null || return 2
+  bp_member_safe_seconds "$seconds" 31536000 || return 2
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
+  banked="$(printf '%s' "$line" | cut -f8)"
+  bp_member_safe_seconds "$banked" 2147483647 || return 8
   # Do not accept paid credits if the legacy receipt file cannot retain IDs.
   bp_member_financial_receipt_capacity_ok || return 7
 
@@ -233,6 +246,7 @@ bp_member_balance_change() {
     prior="$(awk -F '\t' -v e="$event_id" -v u="$user" -v k="$mode" -v s="$source" '$1==e && $3==u && $4==k && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
       prior_seconds="$(printf '%s' "$prior" | cut -f6)"
+      bp_member_safe_seconds "$prior_seconds" 2147483647 || return 5
       # Reusing an old ID with a different amount is NOT a successful
       # replay: it is a payload collision and must not ACK the new intent.
       case "$mode" in
@@ -251,11 +265,12 @@ bp_member_balance_change() {
   salt="$(printf '%s' "$line" | cut -f5)"
   hash="$(printf '%s' "$line" | cut -f6)"
   rounds="$(printf '%s' "$line" | cut -f7)"
-  banked="$(printf '%s' "$line" | cut -f8)"
-  case "$banked" in ''|*[!0-9]*) banked=0;; esac
-
   case "$mode" in
-    add) new=$((banked+seconds)); delta="$seconds"; result="$seconds" ;;
+    add)
+      # Check before addition; arithmetic may wrap on 32-bit OpenWrt.
+      [ "$banked" -le $((2147483647-seconds)) ] || return 8
+      new=$((banked+seconds)); delta="$seconds"; result="$seconds"
+      ;;
     subtract)
       [ "$banked" -ge "$seconds" ] 2>/dev/null || return 4
       new=$((banked-seconds)); delta="-$seconds"; result="$seconds"
@@ -287,14 +302,20 @@ bp_member_transfer() {
   to="$(bp_member_norm "$2")" || return 2
   seconds="$3"; source="$(bp_member_clean "$4")"; event_id="$5"
   [ "$from" != "$to" ] || return 2
-  case "$seconds" in ''|*[!0-9]*) return 2;; esac
-  [ "$seconds" -gt 0 ] 2>/dev/null && [ "$seconds" -le 31536000 ] 2>/dev/null || return 2
+  bp_member_safe_seconds "$seconds" 31536000 && [ "$seconds" -gt 0 ] || return 2
   bp_member_financial_receipt_capacity_ok || return 7
+  # Read and validate BOTH balances before even acknowledging a replay.
+  fl="$(bp_member_line "$from")"; tl="$(bp_member_line "$to")"
+  [ -n "$fl" ] && [ -n "$tl" ] || return 3
+  fbank="$(printf '%s' "$fl" | cut -f8)"; tbank="$(printf '%s' "$tl" | cut -f8)"
+  bp_member_safe_seconds "$fbank" 2147483647 || return 8
+  bp_member_safe_seconds "$tbank" 2147483647 || return 8
 
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$from" -v s="$source" '$1==e && $3==u && $4=="transfer" && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
     if [ -n "$prior" ]; then
       prior_seconds="$(printf '%s' "$prior" | cut -f6)"
+      bp_member_safe_seconds "$prior_seconds" 2147483647 || return 5
       prior_detail="$(printf '%s' "$prior" | cut -f8)"
       # Transfer receipt detail is from_balance:destination:to_balance.
       # Missing/mismatched destination metadata is ambiguous: fail closed.
@@ -307,13 +328,9 @@ bp_member_transfer() {
     [ -z "$(bp_member_event_line "$event_id")" ] || return 5
   fi
 
-  fl="$(bp_member_line "$from")"; tl="$(bp_member_line "$to")"
-  [ -n "$fl" ] && [ -n "$tl" ] || return 3
-
-  fbank="$(printf '%s' "$fl" | cut -f8)"; tbank="$(printf '%s' "$tl" | cut -f8)"
-  case "$fbank" in ''|*[!0-9]*) fbank=0;; esac
-  case "$tbank" in ''|*[!0-9]*) tbank=0;; esac
   [ "$fbank" -ge "$seconds" ] 2>/dev/null || return 4
+  # Prevent destination overflow on signed 32-bit shells before subtraction.
+  [ "$tbank" -le $((2147483647-seconds)) ] || return 8
 
   bp_paid_begin || return 9
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
