@@ -1,3 +1,36 @@
+## PAY-0713 fixture member path breakout P0 fix, retest pending — 2026-10-11 Asia/Manila
+
+- **Status FIX_COMMITTED_RETEST_PENDING.** Source security review identified a synthetic-only environment path escape: `BP_STATE` guard was private, but external overrides of `BP_MEMBERS`, `BP_MEMBER_EVENTS`, `BP_MEMBER_REVISION` could point projection writes outside synthetic root. Without fixing, a testing toggle could redirect balance projections to real files, violating no-live-data invariants. `member.sh` `dc5a64175661a6e11544859772652eee93360abe` binds exact internal paths **before loading helper**; helper `50e334617c56ae4e02f87431f942b85e190d5eed` repeats guard. Test `6ac7a99b86585119d201ee4115a65421dd2a9e6d` verifies all external sentinel overrides fail and files remain untouched.
+- **Evidence to date:** PR #51 former exact head `517059977b0531c855b1989901ebab271fe9bee3` [Full #38084236569](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084236569) PAY-0713 and centralized member named steps passed; **not evidence for this new changed source**. Full run may not yet have finished. Separate old static failure runs #38084046906/#38084134353 intentionally retained. No merge while exact-current source unverified; no v2 customer authority, rollback witness, target powercut or real v1 conversion. P0 issues #31/#32/#43/#34 open.
+- **NEXT:** check new PR exact-head Full named PAY-0713 path override negative step, log evidence and fix any errors; then guarded development integration if all matrix green.
+
+---
+
+## PAY-0713 second failed static run and exact-file restoration — 2026-10-11 Asia/Manila
+
+- **Status: FAILED → FIX_COMMITTED_RETEST_PENDING, P0 #31.** Isolated draft PR #51 `6941e29cb90de46e66172ce7351e702054730140`, [Full #38084134353](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084134353) `validate: Static validation` FAILED with `member-v2-atomic-lab.sh:274: Syntax error: Unterminated quoted string`, PAY-0713 test SKIPPED. Earlier `65cc244f...` was not adequate: JS string replacement interpreted the literal trailing `$'` portion as the string-replacement suffix token, corrupting the shell file. New `26965a500324d75387ec2f4adc85e503110c3590` restages clean committed original helper and inserts event-ID regex via callback replacement, restoring correct ending and exact source structure (207 vs corrupted 274 lines). No testing success yet.
+- **NEXT:** New exact-head Full CI static, then PAY-0713 script and target matrix; correct real defects without suppression. No live paid path, production release, hardware, signer or Standalone change.
+
+---
+
+## PAY-0713 CI first run failed, POSIX syntax corrected — 2026-10-11 Asia/Manila
+
+- **Status: FAILED → FIX_COMMITTED_RETEST_PENDING.** Source PR #51 first isolated head `6cc680dd04a2d3c13e4a19f92f391aaffca1ebfc`, [Full #38084046906](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084046906), `validate: Static validation` FAILED, named PAY-0713 stage SKIPPED; cannot merge. Exact message `member-v2-atomic-lab.sh: 140: Syntax error: redirection unexpected (expecting ")")`. This was a shell parser error: event-ID `case` pattern had unquoted greater-than token. Code commit `65cc244fcb386cf69c13113582dc61bf3f1d6ae4` changed to bounded whitelist `grep -Eq`, preserving identity constraints. Staging/Full retest needed against new PR HEAD. No hardware/data touched, no production authorization.
+- **NEXT:** Verify second exact-SHA Full static and PAY-0713 tests; if failures use job logs, fix source then update this ledger. Keep #31/#32/#34/#43 open.
+
+---
+
+## PAY-0713 — Real member entrypoint synthetic atomic authority bridge — 2026-10-11 Asia/Manila
+
+- **Status: IMPLEMENTED_UNTESTED, P0 #31, no deployment.** Isolated `feat/pay-0713-member-atomic-bridge` from previous verified development HEAD `18f2b52a13f739b0693448d897f6416bf4e9ce87`. Nonproduction synthetic /tmp marker gate and explicit `BP_MEMBER_V2_LAB=1`; normal v1 behavior is unchanged.
+- **Root cause:** `bp_member_balance_change` / `bp_member_transfer` currently persist member balances and event receipts separately. A receipt EIO can leave a quarantined changed balance with no committed receipt. Existing native authority fixture is disconnected from installed member entrypoints.
+- **Committed source:** `member.sh` `6b1def0029d992a96f5a822cd64e68234bf4f0e6` routes actual function calls only in synthetic mode, bars v1 admin mutations in that mode, and refuses normal live paths; `member-v2-atomic-lab.sh` `89b6d6aa72d3b222919f6d783bcc9c1d07909250` combines member balances, controller/event IDs and result receipts in one versioned checksum-framed authority file and performs a single rename. Derived v1 TSV projections regenerate before retry. Default mode remains v1, no runtime migration or customer paid ACK.
+- **Regression source:** `tests/v060_member_v2_atomic_bridge.sh` `84bf6d89d0fe0d301d53aa26c95770d046711d00`; Full workflow `ffcc10870baf21d3993508114992ae5ec7536da5` and staged P0 workflow `625862ee3356c99ce35a9c006072fa02cebd73f6`. Covers before/after authority rename, lost ACK replay, projection failure, transfer sum conservation, receipt ID/source/amount collision, tamper, disabled admin and arbitrary /etc refusal. **No CI conclusion yet; do not label verified.**
+- **Critical design limits:** synthetic private marker is required; file hash is NOT HMAC and cannot detect complete older-but-valid snapshot replays; `sync` is not proven durable across target powercut; projection files are not atomic and existing admin/CGI and controller protocol do not yet read v2 authority; explicit v1 seed only on toy test state, NOT an authorized migration. Therefore P0 #31 remains open, #32 rental, #43 antirollback, #34 hardware also open. Do not turn on feature in customer config or claim production 0.6.
+- **Rollback:** revert isolated branch; no source default changed and no customer data. **NEXT:** Open draft PR, run exact-head Full and staged P0 CI (with named PAY-0713), diagnose/commit corrections, synchronize all handovers, only then consider guarded dev merge.
+
+---
+
 ## PAY-0712 — SOURCE MERGED, POSTMERGE EXACT-SHA CI VERIFIED — 2026-10-11 Asia/Manila
 
 - **P0 scoped containment, IMPLEMENTED_AND_VERIFIED / #31 STILL OPEN.** Signed Vendo member receipt replay integrity [PR #50](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/50) merged (non-force, standard guarded PR) to `blazepwifi-v0.6.0-audit-foundation` at exact integrated tested SHA `58718f1347ea71fbadcfb5d4d44412d6273ca182`, parent `c230dc58269035e7a59229f2d506bd99f4668efb`. Only `member.sh`, signed `cgi-bin/vendo`, `tests/v060_member_quarantine_replay.sh` and canonical three handovers changed; no Standalone Rental, main, live member ledger, signer or frozen release touched.

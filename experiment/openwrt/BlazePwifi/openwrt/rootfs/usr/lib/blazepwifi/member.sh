@@ -133,6 +133,8 @@ bp_member_write() {
 }
 
 bp_member_create() {
+  # Mixing v1 admin mutations with a lab v2 authority would fork paid state.
+  [ "${BP_MEMBER_V2_LAB:-0}" != 1 ] || return 9
   user="$(bp_member_norm "$1")" || return 2
   label="$(bp_member_clean "$2")"; pass="$3"; source="$(bp_member_clean "$4")"
   [ -z "$(bp_member_line "$user")" ] || return 3
@@ -153,6 +155,8 @@ bp_member_create() {
 }
 
 bp_member_patch() {
+  # Mixing v1 admin mutations with a lab v2 authority would fork paid state.
+  [ "${BP_MEMBER_V2_LAB:-0}" != 1 ] || return 9
   user="$(bp_member_norm "$1")" || return 2
   label="$2"; enabled="$3"; source="$(bp_member_clean "$4")"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
@@ -179,6 +183,8 @@ bp_member_patch() {
 }
 
 bp_member_set_password() {
+  # Mixing v1 admin mutations with a lab v2 authority would fork paid state.
+  [ "${BP_MEMBER_V2_LAB:-0}" != 1 ] || return 9
   user="$(bp_member_norm "$1")" || return 2
   pass="$2"; source="$(bp_member_clean "$3")"
   line="$(bp_member_line "$user")"; [ -n "$line" ] || return 3
@@ -303,7 +309,32 @@ bp_member_safe_seconds() {
   [ "$1" -le "$2" ] 2>/dev/null
 }
 
+# PAY-0713: actual member money entrypoints can use the v2 atomic authority
+# ONLY in a private, marker-gated synthetic /tmp laboratory fixture. The
+# production/v1 path stays unchanged and migration remains disabled.
+bp_member_v2_lab_load() {
+  [ "${BP_MEMBER_V2_LAB:-0}" = 1 ] || return 9
+  case "$BP_STATE" in /tmp/blaze-v2-member-*/state) ;; *) return 9;; esac
+  root="${BP_STATE%/state}"
+  tail="${root#/tmp/blaze-v2-member-}"
+  case "$tail" in ''|*/*|*..*|*[!A-Za-z0-9]*) return 9;; esac
+  [ "$BP_RUN" = "$root/run" ] &&
+    [ "$BP_MEMBERS" = "$BP_STATE/members.tsv" ] &&
+    [ "$BP_MEMBER_EVENTS" = "$BP_STATE/member-events.tsv" ] &&
+    [ "$BP_MEMBER_REVISION" = "$BP_STATE/member-revision" ] || return 9
+  [ -d "$root" ] && [ ! -L "$root" ] &&
+    [ -f "$root/.blaze-v2-member-synthetic-only" ] &&
+    [ ! -L "$root/.blaze-v2-member-synthetic-only" ] || return 9
+  [ "$(cat "$root/.blaze-v2-member-synthetic-only" 2>/dev/null)" = 'BLAZE-V2-MEMBER-SYNTHETIC-ONLY' ] || return 9
+  # Override is test-only and is evaluated after the strict private marker.
+  . "${BP_MEMBER_V2_LAB_HELPER:-/usr/lib/blazepwifi/member-v2-atomic-lab.sh}" || return 9
+}
+
 bp_member_balance_change() {
+  if [ "${BP_MEMBER_V2_LAB:-0}" = 1 ]; then
+    bp_member_v2_lab_load || return 9
+    bp_member_v2_lab_dispatch balance "$@" ; return $?
+  fi
   user="$(bp_member_norm "$1")" || return 2
   mode="$2"; seconds="$3"; source="$(bp_member_clean "$4")"; event_id="$5"
   bp_member_safe_seconds "$seconds" 31536000 || return 2
@@ -369,6 +400,10 @@ bp_member_balance_change() {
 }
 
 bp_member_transfer() {
+  if [ "${BP_MEMBER_V2_LAB:-0}" = 1 ]; then
+    bp_member_v2_lab_load || return 9
+    bp_member_v2_lab_dispatch transfer "$@" ; return $?
+  fi
   from="$(bp_member_norm "$1")" || return 2
   to="$(bp_member_norm "$2")" || return 2
   seconds="$3"; source="$(bp_member_clean "$4")"; event_id="$5"
@@ -444,6 +479,8 @@ bp_member_transfer() {
 }
 
 bp_member_delete() {
+  # Mixing v1 admin mutations with a lab v2 authority would fork paid state.
+  [ "${BP_MEMBER_V2_LAB:-0}" != 1 ] || return 9
   user="$(bp_member_norm "$1")" || return 2
   source="$(bp_member_clean "$2")"
   # The member row may have been replaced before an event/EIO interruption.
