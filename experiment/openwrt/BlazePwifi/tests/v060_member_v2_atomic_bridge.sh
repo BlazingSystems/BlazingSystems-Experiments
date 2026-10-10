@@ -105,6 +105,19 @@ cp "$T/ledger.good" "$ledger"; chmod 600 "$ledger"
 printf 'PENDING\n' >"$BP_STATE/paid-state-uncertain"
 reject bp_member_balance_change alice add 1 softtimer:fixture evt5
 rm "$BP_STATE/paid-state-uncertain"
+# All derived paid paths must remain in the SAME isolated fixture state.
+# Use a disposable sentinel outside state; never aim the test at live /etc.
+printf 'OUTSIDE-SENTINEL\n' > "$T/escape-sentinel"
+for name in BP_MEMBERS BP_MEMBER_EVENTS BP_MEMBER_REVISION; do
+  original="$(eval "printf '%s' \"\$$name\"")"
+  eval "$name=\"$T/escape-sentinel\""
+  reject bp_member_balance_change alice add 1 softtimer:fixture evt5
+  eval "$name=\"$original\""
+  [ "$(cat "$T/escape-sentinel")" = OUTSIDE-SENTINEL ] || {
+    echo "PAY-0713 synthetic derived-state path escape" >&2;exit 1;
+  }
+done
+[ "$snapshot" = "$(sha256sum "$ledger")" ]
 # Even an environment override cannot route fixture code into real paid paths.
 old_state="$BP_STATE"
 BP_STATE=/etc/blazepwifi/state
