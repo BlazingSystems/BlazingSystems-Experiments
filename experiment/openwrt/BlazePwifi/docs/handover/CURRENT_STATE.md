@@ -1,3 +1,12 @@
+## P0-0710 — TEST_FAILED and compatibility correction committed (2026-10-11 Asia/Manila)
+
+- [Full #38075975085](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075975085) at `ad97ab534677cc1c4f1ff538fb59766249f56224` failed unchanged signed replay regression `v060_member_quarantine_replay.sh`: `P0 core member replay collision mismatch bank=5 transfer=3`. The P0-0710 step was SKIPPED. Cause: prechecking missing destination gave unknown-member (3), instead of signed-ID payload collision (5).
+- **Correction:** `member.sh` code commit `10d65a5ccc42bd30394ba8f2bd399a45bcaa9525` restores error precedence: validate source bank, reject signed transfer payload mismatch before checking destination presence, then validate target bank before real duplicate ACK or a new transfer. Unchanged prior test must pass.
+- **Status:** IMPLEMENTED_UNTESTED after correction. Original money-guard patches `member.sh` `063f5e73`, `rental.sh` `f749995c`, negative fixture `tests/v060_paid_numeric_guard.sh` `661c97cf`; no customer data. Strict P0 #31/#32/#34/#43 remain OPEN, `VERSION=0.5.3`, v0.6 release/migration DENIED.
+- **NEXT EXACT ACTION:** sync all three canonical handovers once, run final SHA PR #48 Full; verify signed replay regression, named P0-0710 guard, x86/Android and all required jobs. Guarded development-only integration if green; do not touch stable.
+
+---
+
 ## P0-0710 regression correction IN PROGRESS — 2026-10-11 Asia/Manila
 
 - Actual Full PR CI [#38075975085](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075975085) at `ad97ab534677cc1c4f1ff538fb59766249f56224` failed pre-existing named `v060_member_quarantine_replay.sh` before P0-0710 step. Exact log: `P0 core member replay collision mismatch bank=5 transfer=3`. Source refactor checked destination existence before returning a collision for a reused transfer event targeting a different recipient; historical error contract requires rc=5 rather than rc=3, and more importantly must reject the conflicting signed ID before any money state mutation.
