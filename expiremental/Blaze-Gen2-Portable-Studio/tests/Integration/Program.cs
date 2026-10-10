@@ -78,6 +78,51 @@ class Tests {
             c.Save(Path.Combine(versionPkg,"PortableConfig.json"));
             Check(Run(versionExe)==0,"Version-directory launcher finds executable");
             Check(File.ReadAllText(Path.Combine(versionPkg,"Data","test-result.txt"))=="2.0","Highest parseable complete version used");
+            // v1.1.0: every client must get private executable and data roots.
+            var isolatedPackage=Path.Combine(home,"Diskless Shared Source");
+            var isolatedLaunch=await PackageBuilder.BuildAsync(new ConversionOptions{
+                SourceExecutable=Path.Combine(source,"SyntheticApp.exe"), Destination=isolatedPackage,
+                Arguments="--synthetic-argument",DataMode=DataMode.PerClientWritable,IsolateExecutablePerClient=true
+            },args[1]);
+            var isoCfg=PortableConfig.Load(Path.Combine(isolatedPackage,"PortableConfig.json"));
+            Check(isoCfg.IsolateExecutablePerClient,"v1.1 builder opts into client-local execution");
+            Check(File.Exists(Path.Combine(isolatedPackage,"FileManifest.json")),"SHA256 manifest is packaged");
+            var isoRoot=DisklessSafety.ClientDataRoot(isoCfg);
+            Check(!DisklessSafety.IsNetworkPath(isoRoot),"Client writable root is local");
+            Check(Run(isolatedLaunch)==0,"Isolated package launcher starts test app");
+            Check(File.Exists(Path.Combine(isoRoot,"test-result.txt")),"Isolated app writes to per-client state");
+            var manifest=PackageManifest.Load(Path.Combine(isolatedPackage,"FileManifest.json"));
+            Check(manifest.Files.Any(x=>x.RelativePath=="Resources/test.txt"&&x.Sha256.Length==64),"Manifest records per-file SHA256");
+            var appRoot=Path.Combine(isolatedPackage,"App","Executables");
+            var privateA=ClientIsolation.Prepare(isolatedPackage,appRoot,isoCfg,Path.Combine(home,"Private A"));
+            var privateB=ClientIsolation.Prepare(isolatedPackage,appRoot,isoCfg,Path.Combine(home,"Private B"));
+            Check(privateA!=privateB && File.Exists(Path.Combine(privateA,"Resources","test.txt")) &&
+                File.Exists(Path.Combine(privateB,"Resources","test.txt")),"Two simulated clients use separate game executable caches");
+            File.WriteAllText(Path.Combine(privateA,"Resources","test.txt"),"private-client-a");
+            Check(File.ReadAllText(Path.Combine(privateB,"Resources","test.txt"))=="synthetic payload",
+                "Client A modifications cannot affect client B");
+            Check(File.ReadAllText(Path.Combine(appRoot,"Resources","test.txt"))=="synthetic payload",
+                "Client modifications do not affect shared package");
+            var corrupt=Path.Combine(home,"Private C");
+            File.WriteAllText(Path.Combine(appRoot,"Resources","test.txt"),"corrupt package resource");
+            var detected=false;
+            try { ClientIsolation.Prepare(isolatedPackage,appRoot,isoCfg,corrupt); }
+            catch(IOException){detected=true;}
+            Check(detected,"Manifest hash mismatch rejects modified source");
+            Check(Directory.GetDirectories(Path.Combine(corrupt,"AppCache"),"staging-*").Length==0,
+                "Failed local mirror cleanup removes staging");
+            var robloxRoot=Path.Combine(home,"Roblox");
+            Directory.CreateDirectory(robloxRoot);
+            var mockRoblox=Path.Combine(robloxRoot,"RobloxPlayerBeta.exe");
+            File.Copy(args[0],mockRoblox);
+            var rb=Analyzer.Analyze(mockRoblox);
+            Check(rb.Classification==CompatibilityLevel.Unsupported,"Roblox candidate explicitly classified unsupported");
+            var blocked=false;var shouldNotExist=Path.Combine(home,"Rejected Roblox Package");
+            try {
+                await PackageBuilder.BuildAsync(new ConversionOptions{SourceExecutable=mockRoblox,Destination=shouldNotExist},args[1]);
+            }catch(NotSupportedException){blocked=true;}
+            Check(blocked&&!Directory.Exists(shouldNotExist),"Roblox multi-PC portable packaging safely blocked");
+            Check(File.Exists(mockRoblox),"Blocked Roblox source is never modified");
             Console.WriteLine("ALL "+successes+" CHECKS PASSED");
         } finally {try{Directory.Delete(home,true);}catch(IOException){}}
     }

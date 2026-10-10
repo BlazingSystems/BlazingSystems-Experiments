@@ -5,6 +5,13 @@ public static class PackageBuilder {
         var src=Path.GetFullPath(options.SourceExecutable);
         if(!File.Exists(src))throw new FileNotFoundException("Application EXE missing",src);
         var root=Path.GetDirectoryName(src)!;var destination=Path.GetFullPath(options.Destination);
+        DisklessSafety.RejectUnverifiedRoblox(src);
+        if(Directory.EnumerateFiles(root,"RobloxPlayer*.exe",SearchOption.AllDirectories).Any())
+            throw new NotSupportedException("Roblox files detected. Portable Roblox multi-PC sessions are unverified and blocked.");
+        if(options.DataMode==DataMode.FullyLocal && DisklessSafety.IsNetworkPath(destination))
+            throw new InvalidOperationException("FullyLocal data mode cannot write directly into a shared network package.");
+        if(options.DataMode==DataMode.PerClientWritable && !options.IsolateExecutablePerClient && DisklessSafety.IsNetworkPath(destination))
+            throw new InvalidOperationException("Shared network execution requires the isolated per-client local application cache.");
         if(Paths.IsWithin(destination,root)||Paths.IsWithin(root,destination))
             throw new InvalidOperationException("Source and destination directories must not overlap.");
         if(File.Exists(destination)||Directory.Exists(destination))throw new IOException("Destination already exists. Choose an empty new package path.");
@@ -25,6 +32,7 @@ public static class PackageBuilder {
                     files.Add((file,Path.GetRelativePath(root,file),new FileInfo(file).Length));
                 }
             }
+            var manifest=new PackageManifest();
             long total=Math.Max(1,files.Sum(f=>f.bytes)),copied=0;
             foreach(var f in files) {
                 ct.ThrowIfCancellationRequested();
@@ -45,6 +53,10 @@ public static class PackageBuilder {
                     var actualHash=await SHA256.HashDataAsync(diskFile,ct);
                     if(!expectedHash.SequenceEqual(actualHash))throw new IOException("On-disk SHA256 copy verification failed: "+f.relative);
                 }
+                manifest.Files.Add(new FileManifestEntry{
+                    RelativePath=f.relative.Replace('\\','/'),Size=f.bytes,
+                    Sha256=Convert.ToHexString(expectedHash).ToLowerInvariant()
+                });
             }
             foreach(var dir in new[]{"Data/Roaming","Data/Local","Data/Config","Data/Saves","Runtime","Cache","Logs","Backups"})
                 Directory.CreateDirectory(Path.Combine(staging,dir.Replace('/',Path.DirectorySeparatorChar)));
@@ -56,8 +68,10 @@ public static class PackageBuilder {
                 Arguments=options.Arguments,DataMode=options.DataMode,RedirectEnvironmentFolders=options.RedirectEnvironmentFolders,
                 WorkingDirectory=".",RequiredFiles=new(){Path.GetRelativePath(root,src).Replace('\\','/')}
             };
+            config.IsolateExecutablePerClient=options.IsolateExecutablePerClient;
             config.Save(Path.Combine(staging,"PortableConfig.json"));
-            File.WriteAllText(Path.Combine(staging,"PACKAGE_INFO.txt"),"Created by Blaze Gen2 Portable Studio v1.0.0 (experimental). Portability not guaranteed.");
+            manifest.Save(Path.Combine(staging,"FileManifest.json"));
+            File.WriteAllText(Path.Combine(staging,"PACKAGE_INFO.txt"),"Created by Blaze Gen2 Portable Studio v1.1.0 (experimental). Portability not guaranteed.");
             ct.ThrowIfCancellationRequested();
             Directory.Move(staging,destination);
             progress?.Report(100);return Path.Combine(destination,name+".exe");

@@ -78,3 +78,20 @@ Blaze-Gen2-Portable-Studio/Docs/USER_GUIDE.md
 ## Exact resume procedure
 
 Open the repo and this file. Preserve `expiremental` spelling and unrelated repository files. Inspect release tag `v1.0.0-experimental` and workflow run `37995567659`. Build and test any proposed fix in a **new version/tag**, not by overwriting these verified public assets silently. Read `BUILD.md`, `COMPATIBILITY.md`, `src/Shared`, `src/Studio`, `src/PortableLauncher`, `src/Analyzer`, `src/PackageBuilder`, and `tests/Integration`. Use a root-level Actions workflow with `windows-2025` and real PE/ZIP/synthetic checks. After each meaningful change append test evidence and update feature claims accordingly; never claim diskless/game support from synthetic tests alone. For a documentation-only handover edit the current workflow excludes this handover file from push triggers.
+
+## v1.1.0 experimental debug fix — implementation milestone (2026-10-10)
+
+**Reported incident:** PC1 launching a shared Roblox package displaced Roblox on PC2 and appeared to transfer an authenticated account. The v1.0 launcher executed a common shared EXE directory; its configurable data location alone cannot isolate Roblox Known Folder / registry / remote account sessions.
+
+**Safety decision:** Roblox documents Error 264 for the same account joining an experience from multiple devices. Without a clean controlled real-client reproduction, do NOT falsely claim that modifying local game files fixes Roblox's service rules. Fail closed: Roblox portability is classified Unsupported and rejected both by the package builder and newly compiled launcher. Stop using v1.0 shared Roblox packages; prefer official per-PC installation and different Roblox accounts for simultaneous play. No account-token copying.
+
+**Implemented in source (verification pending CI):**
+- Client local copy option default ON for PerClientWritable builds, with a SHA256 file manifest, copy staging, per-user/per-PC paths, and application entry point resolved in the local cache.
+- Reject shared UNC/network writable data roots, shared nonisolated launch paths, and FullyLocal data on network paths.
+- Per-client session file lock and no process termination of any other client.
+- DONATE native sidebar route + dashboard promotion + QR regenerated from the exact URL encoded in provided PayPal screenshot: https://www.paypal.com/qrcodes/p2pqrc/AEBWES36GX9K2. Optional, never collects payment credentials.
+- Additional synthetic regression tests: independent client cache, source immutability, hash mismatch, staging cleanup, Roblox builder fail-closed.
+- Workflow new root file .github/workflows/blaze-gen2-v110-release.yml (windows-2025), tagged v1.1.0-experimental; old v100 workflow changed to manual-only to avoid attempting existing tag on each push.
+
+**At this milestone:** No v1.1.0 Windows build or release has yet been verified. Finalize only after Actions job success, synthetic integration checks and published ZIP/checksum assets.
+**Known limitations:** Even with a local mirror, third-party Windows Known Folder / registry changes and server-side account auth are not intercepted. Actual dual PC Roblox test not performed (Roblox is deliberately blocked). Real SMB deployment and GUI clickthrough remain unverified. Cache consumes additional local writable space. Logically isolated local cache is not a virtual machine, sandbox or official platform support.

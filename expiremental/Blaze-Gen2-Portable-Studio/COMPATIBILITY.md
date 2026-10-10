@@ -2,6 +2,10 @@
 
 The static assessment has five classification values. **FullyPortableCandidate** means only that current static heuristics found no blocking evidence; it is NOT a guarantee. **PartiallyPortable** signals limited evidence. **RequiresExternalDependencies** signals unresolved PE imports or runtime support. **HighRiskManualConfiguration** flags suspicious driver/anti-cheat indicators and blocks the automated GUI builder. **Unsupported** is reserved for explicit unsupported conditions and can be extended with profiles.
 
+## v1.1 network-session advisory
+
+On diskless clients, v1.1 can copy executable files into a per-client local cache before launch, and uses local per-machine/user writable data rather than a server-wide shared Data directory. This addresses file-level cross-client interference for ordinary applications that are portable with this mechanism. It **does not** isolate third-party online accounts, system registry state, machine services, browser login, Windows Known Folder APIs, or backend account sessions. Explicitly block untested Roblox portable launches. Roblox [official Error 264 documentation](https://en.help.roblox.com/hc/en-us/articles/36665660855700-Error-Code-264-Same-account-launched-experience-from-different-devices) explains simultaneous same-account use.
+
 ## In scope (experimental)
 Files copied from one selected application subtree; directly imported DLL names where PE import directory is parseable; opt-in environment variables; relative launch paths; per-user writable data paths; version-directory selection by parseable numeric version folders and presence of executable.
 

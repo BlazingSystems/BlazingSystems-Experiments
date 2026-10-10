@@ -16,9 +16,9 @@ public sealed class StudioWindow:Window {
     string _source="",_destination="",_arguments="";
     AnalysisReport? _report;
     DataMode _mode=DataMode.PerClientWritable;
-    bool _redirect=false;
+    bool _redirect=false;bool _isolate=true;
     public StudioWindow() {
-        Title="Blaze Gen2 Portable Studio • 1.0.0 Experimental";Width=1150;Height=760;MinWidth=950;MinHeight=600;
+        Title="Blaze Gen2 Portable Studio • 1.1.0 Experimental";Width=1150;Height=760;MinWidth=950;MinHeight=600;
         Background=Back;Foreground=Ink;WindowStartupLocation=WindowStartupLocation.CenterScreen;
         var root=new DockPanel();
         var status=new Border{Background=Panel,Child=_status};DockPanel.SetDock(status,Dock.Bottom);root.Children.Add(status);
@@ -26,7 +26,7 @@ public sealed class StudioWindow:Window {
         DockPanel.SetDock(sidebar,Dock.Left);root.Children.Add(sidebar);
         sidebar.Children.Add(T("BLAZE / GEN2",24,Accent,new Thickness(20,32,0,4)));
         sidebar.Children.Add(T("PORTABLE STUDIO",11,Muted,new Thickness(20,0,0,24)));
-        foreach(var s in new[]{"DASHBOARD","APPLICATION DISCOVERY","APPLICATION ANALYZER","PORTABLE BUILDER","COMPATIBILITY PROFILES","PACKAGE MANAGER","SETTINGS","DIAGNOSTICS","ABOUT"}) {
+        foreach(var s in new[]{"DASHBOARD","APPLICATION DISCOVERY","APPLICATION ANALYZER","PORTABLE BUILDER","COMPATIBILITY PROFILES","PACKAGE MANAGER","SETTINGS","DIAGNOSTICS","DONATE","ABOUT"}) {
             var nav=B(s,()=>Navigate(s),false);nav.HorizontalContentAlignment=HorizontalAlignment.Left;
             nav.Margin=new Thickness(10,3,10,3);sidebar.Children.Add(nav);
         }
@@ -60,7 +60,11 @@ public sealed class StudioWindow:Window {
                     B("Review compatibility",()=>Navigate("APPLICATION ANALYZER")))));
                 _body.Children.Add(Card(Box(T("03   BUILD",17,Accent),T("Stage verified copies and a standalone Windows launcher.",13,Muted),
                     B("Open builder",()=>Navigate("PORTABLE BUILDER")))));
+                _body.Children.Add(Card(Box(T("SUPPORT DEVELOPMENT",17,Accent),
+                    T("Help keep Blaze projects freely accessible. Donate via PayPal QR if you wish.",13,Muted),
+                    B("View PayPal donation QR",()=>Navigate("DONATE"),false))));
                 break;
+            case "DONATE":Donation();break;
             case "APPLICATION DISCOVERY":Discovery();break;
             case "APPLICATION ANALYZER":Analysis();break;
             case "PORTABLE BUILDER":Builder();break;
@@ -69,7 +73,7 @@ public sealed class StudioWindow:Window {
             case "SETTINGS":Settings();break;
             case "DIAGNOSTICS":Diagnostics();break;
             case "ABOUT":
-                Heading("About Blaze Gen2","Blaze Gen2 Portable Studio / version 1.0.0 / experimental.");
+                Heading("About Blaze Gen2","Blaze Gen2 Portable Studio / version 1.1.0 / experimental.");
                 _body.Children.Add(Card(Box(T("Purpose",18,Accent),T("Convert applications you have permission to copy into best-effort portable packages. Created for legitimate diskless deployments.",14),
                     T("Static checks do not prove portability. Services, licensed products, drivers, anti-cheat, and machine-tied configuration may prevent relocation.",13,Muted))));break;
         }
@@ -149,8 +153,11 @@ public sealed class StudioWindow:Window {
         _body.Children.Add(mode);
         var redirect=new CheckBox{Foreground=Muted,Content="Opt-in APPDATA / LOCALAPPDATA environment overrides (not universal)",IsChecked=_redirect,Margin=new Thickness(0,8,0,12)};
         _body.Children.Add(redirect);
+        var isolate=new CheckBox{Foreground=Muted,Content="Diskless safety: run copied application from this PC's local cache (recommended)",IsChecked=true,Margin=new Thickness(0,8,0,12)};
+        _body.Children.Add(isolate);
+        _body.Children.Add(T("Roblox is blocked in this experimental release. Official Roblox account sessions cannot be isolated by this generator.",12,Muted));
         Buttons(B("Generate portable package",async()=>{
-            _destination=dest.Text.Trim();_arguments=args.Text;_mode=(DataMode)mode.SelectedItem;_redirect=redirect.IsChecked==true;
+            _destination=dest.Text.Trim();_arguments=args.Text;_mode=(DataMode)mode.SelectedItem;_redirect=redirect.IsChecked==true;_isolate=isolate.IsChecked==true;
             await BuildPackage();
         }),B("Cancel current job",()=>_job?.Cancel(),false));
     }
@@ -167,7 +174,7 @@ public sealed class StudioWindow:Window {
         try {
             var launcher=Path.Combine(AppContext.BaseDirectory,"BlazePortableLauncher.exe");
             var output=await Task.Run(()=>PackageBuilder.BuildAsync(
-                new ConversionOptions{SourceExecutable=_source,Destination=_destination,Arguments=_arguments,DataMode=_mode,RedirectEnvironmentFolders=_redirect},
+                new ConversionOptions{SourceExecutable=_source,Destination=_destination,Arguments=_arguments,DataMode=_mode,RedirectEnvironmentFolders=_redirect,IsolateExecutablePerClient=_isolate && _mode==DataMode.PerClientWritable},
                 launcher,progress,_job.Token));
             Status("Complete: "+output);MessageBox.Show("Portable launcher created:\n"+output+"\n\nTest on a clean client before production use.","Build complete");
         }catch(OperationCanceledException){Status("Build cancelled; staging removed.");MessageBox.Show("Build cancelled safely.");}
@@ -199,6 +206,17 @@ public sealed class StudioWindow:Window {
                 catch(Exception e){Error(e);}
             }
         }));
+    }
+    void Donation(){
+        Heading("Support Blaze development","Optional PayPal donation — no purchase or donation is required to use this software.");
+        var qr=DonationQr.CreateImage();
+        _body.Children.Add(Card(Box(T("Scan to support development",20,Accent),
+            T("PayPal • Loumer Manreal",15,Muted),qr,
+            T("For your security, review the PayPal recipient and amount before completing payment.",13,Muted),
+            B("Open PayPal donation page",()=>{
+                try {System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(DonationQr.PayPalUrl){UseShellExecute=true});}
+                catch(Exception e){Error(e);}
+            }))));
     }
     void Settings(){
         Heading("Settings","Conversion preferences are selected per package. Generated launchers contain independent config.");

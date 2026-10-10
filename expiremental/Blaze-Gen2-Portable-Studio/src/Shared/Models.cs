@@ -30,6 +30,8 @@ public sealed class PortableConfig {
     public string Arguments { get; set; } = "";
     public DataMode DataMode { get; set; } = DataMode.PerClientWritable;
     public bool RedirectEnvironmentFolders { get; set; } = false;
+    // Legacy v1.0 packages remain unchanged; v1.1 builder opts new per-client packages into safe local execution.
+    public bool IsolateExecutablePerClient { get; set; } = false;
     public string? WritableDataRoot { get; set; }
     public VersionStrategy VersionStrategy { get; set; } = VersionStrategy.FixedExecutable;
     public string VersionDirectory { get; set; } = "Versions";
@@ -55,6 +57,7 @@ public sealed class ConversionOptions {
     public DataMode DataMode { get; init; } = DataMode.PerClientWritable;
     public string Arguments { get; init; } = "";
     public bool RedirectEnvironmentFolders { get; init; } = false;
+    public bool IsolateExecutablePerClient { get; init; } = false;
 }
 public sealed class CompatibilityProfile {
     public string Name { get; set; } = "Generic";

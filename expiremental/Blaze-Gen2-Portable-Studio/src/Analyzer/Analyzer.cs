@@ -13,6 +13,12 @@ public static class Analyzer {
         var root=Path.GetDirectoryName(executable)!;
         if(Paths.IsLink(root)||Paths.IsLink(executable))throw new InvalidOperationException("Links are not supported as source roots or executable.");
         var r=new AnalysisReport{MainExecutable=executable,SourceDirectory=root,DisplayName=Path.GetFileNameWithoutExtension(executable)};
+        if(DisklessSafety.IsRoblox(executable)) {
+            r.Classification=CompatibilityLevel.Unsupported;
+            r.Warnings.Add("Roblox is not verified for multi-PC portable use. Sharing authenticated game state can transfer account sessions.");
+            r.Evidence.Add("Roblox multi-device same-account Error 264 is enforced by Roblox servers; use official client and separate accounts.");
+            return r;
+        }
         var stack=new Stack<string>();stack.Push(root);
         while(stack.Count>0) {
             ct.ThrowIfCancellationRequested();var dir=stack.Pop();
@@ -34,7 +40,8 @@ public static class Analyzer {
         if(r.Files.Any(x=>x.EndsWith(".manifest",StringComparison.OrdinalIgnoreCase)))r.Evidence.Add("Application manifest detected; inspect requested execution level.");
         r.Evidence.Add("Static inventory: "+r.Files.Count+" files; "+r.TotalBytes+" bytes; "+r.ImportedDlls.Count+" direct DLL imports.");
         r.Evidence.Add("Static scanning cannot prove complete application portability.");
-        if(r.Warnings.Any(w=>w.Contains("anti-cheat",StringComparison.OrdinalIgnoreCase)||w.Contains("Driver file")))r.Classification=CompatibilityLevel.HighRiskManualConfiguration;
+        if(r.Files.Any(f=>DisklessSafety.IsRoblox(f))) {r.Warnings.Add("Roblox product content detected: sharing portable auth/cache is unsafe.");r.Classification=CompatibilityLevel.Unsupported;}
+        else if(r.Warnings.Any(w=>w.Contains("anti-cheat",StringComparison.OrdinalIgnoreCase)||w.Contains("Driver file")))r.Classification=CompatibilityLevel.HighRiskManualConfiguration;
         else if(r.Warnings.Any(w=>w.StartsWith("Unbundled")))r.Classification=CompatibilityLevel.RequiresExternalDependencies;
         else if(r.Files.Count==1)r.Classification=CompatibilityLevel.PartiallyPortable;
         else r.Classification=CompatibilityLevel.FullyPortableCandidate;

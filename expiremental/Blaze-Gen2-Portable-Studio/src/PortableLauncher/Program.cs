@@ -11,17 +11,39 @@ static class Program {
             var app=Paths.Inside(baseDir,config.AppDirectory);
             if(!Directory.Exists(app))throw new DirectoryNotFoundException("Packaged application directory missing.");
             var executable=ChooseExecutable(app,config);
+            DisklessSafety.RejectUnverifiedRoblox(executable);
+            if(Directory.EnumerateFiles(app,"RobloxPlayer*.exe",SearchOption.AllDirectories).Any())
+                throw new NotSupportedException("Roblox game client detected; use official per-client installation.");
             if(!File.Exists(executable))throw new FileNotFoundException("Target executable missing",executable);
             foreach(var file in config.RequiredFiles)if(!File.Exists(Paths.Inside(app,file)))throw new FileNotFoundException("Required file missing",file);
             string data;
             switch(config.DataMode) {
-                case DataMode.FullyLocal:data=Path.Combine(baseDir,"Data");break;
+                case DataMode.FullyLocal:
+                    if(DisklessSafety.IsNetworkPath(baseDir))
+                        throw new IOException("FullyLocal data cannot be shared between diskless clients.");
+                    data=Path.Combine(baseDir,"Data");break;
                 case DataMode.TemporarySession:data=Path.Combine(Path.GetTempPath(),"BlazeGen2",config.PackageId,Guid.NewGuid().ToString("N"));break;
-                default:data=string.IsNullOrWhiteSpace(config.WritableDataRoot)
-                    ?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"BlazeGen2","Packages",config.PackageId)
-                    :Environment.ExpandEnvironmentVariables(config.WritableDataRoot);break;
+                default:
+                    data=string.IsNullOrWhiteSpace(config.WritableDataRoot)
+                        ?DisklessSafety.ClientDataRoot(config)
+                        :Environment.ExpandEnvironmentVariables(config.WritableDataRoot);
+                    if(DisklessSafety.IsNetworkPath(data))
+                        throw new IOException("Writable data must be local to each client; network share paths are unsafe.");
+                    break;
             }
             Directory.CreateDirectory(data);var logs=Path.Combine(data,"Logs");Directory.CreateDirectory(logs);log=Path.Combine(logs,"launcher.log");
+            if(DisklessSafety.IsNetworkPath(app) && !config.IsolateExecutablePerClient)
+                throw new IOException("Unsafe shared executable directory: select client-local isolation.");
+            // Never launch a writable program directly from the network share in isolated mode.
+            if(config.IsolateExecutablePerClient) {
+                var relative=Path.GetRelativePath(app,executable);
+                var localApp=ClientIsolation.Prepare(baseDir,app,config,data);
+                executable=Paths.Inside(localApp,relative);
+                app=localApp;
+                if(!File.Exists(executable))throw new FileNotFoundException("Local isolated executable missing",executable);
+            }
+            // Per-PC user-specific lock; other clients on the server cannot interfere with this handle.
+            using var sessionLock=new FileStream(Path.Combine(data,"session.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
             var work=Path.GetDirectoryName(executable)!;
             if(config.VersionStrategy==VersionStrategy.FixedExecutable && config.WorkingDirectory!=".")
                 work=Paths.Inside(app,config.WorkingDirectory);
@@ -40,9 +62,8 @@ static class Program {
             using var process=Process.Start(start)??throw new InvalidOperationException("Process did not start.");
             process.WaitForExit();var exit=process.ExitCode;
             File.AppendAllText(log,DateTimeOffset.UtcNow.ToString("O")+" exit "+exit+Environment.NewLine);
-            if(config.DataMode==DataMode.TemporarySession) {
-                try{Directory.Delete(data,true);}catch(IOException){} // Child processes might still hold files.
-            }
+            // Temporary directories may be held by child processes: do not delete live state.
+            // Session lock is disposed at method exit; cleanup is best-effort only.
             return exit;
         } catch(Exception e) {
             try {
