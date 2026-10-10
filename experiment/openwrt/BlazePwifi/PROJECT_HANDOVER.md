@@ -1,3 +1,11 @@
+## P0-0710 — CORRECTED / CI PENDING (2026-10-11 Asia/Manila)
+
+- Actual [Full #38075975085](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075975085) FAILED legacy signed member replay test before new P0-0710 step: `bank=5 transfer=3`. New transfer existence precheck masked signed transfer ID recipient collision (expected rc=5). Source `member.sh` commit `10d65a5ccc42bd30394ba8f2bd399a45bcaa9525` restores collision precedence without allowing malformed paid bank ACK; **TESTS ON CORRECTED HEAD PENDING**.
+- Negative arithmetic fixture and bounded member/rental source guards are committed to isolated PR #48, not integrated into main development. Strict P0 #31/#32/#34/#43 remain OPEN, VERSION 0.5.3, production v0.6.0 NO-GO.
+- NEXT: check PR #48 latest Full job `v060_member_quarantine_replay.sh` and named `P0-0710` regression, plus Android/x86 simulations; only guarded development integration on verified success. Read concise [CURRENT_STATE](docs/handover/CURRENT_STATE.md).
+
+---
+
 ## P0-0710 — IMPLEMENTED_UNTESTED: strict prepaid numeric guards (2026-10-11 Asia/Manila)
 
 - **Isolated branch:** `lab/p0-0710-paid-numeric-guard` from verified dev `ffd069f9cf228ff6dccd564f2b2f59e547e868e3`. Production P0 #31/#32/#34/#43 remain OPEN. Full CI RED reproduction at parent-source **PR #48** [#38075722430](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075722430): `P0-0710 reject malformed ...` failed with `P0-0710 RED: member add accepted unsafe Fixture A (rc=9)`. The fixture printed the overwritten production `label` (cosmetic); a marker proves the malformed input reached `bp_paid_begin` despite a nonzero rc. This is a source-path synthetic reproduction, not hardware proof.
