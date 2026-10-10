@@ -1327,3 +1327,13 @@
 - **Rollback:** revert only HND-0700 commits, replacing compact docs from exact archived originals, re-enable prior workflow; never revert customer ledger.
 - **NEXT ACTION:** Verify source PR exact Full run, including HND-0700 test, mandatory handover freshness, Android emulator and x86 QEMU. Review failures rather than bypassing checks; if green guarded fast-forward development only. Update concise current state and this ledger once after validation; docs-only status must not trigger full workflow. Then continue P0 prepaid code path #31/#32.
 - **NEW CHAT PROMPT:** @GitHub Resume `BlazingSystems/BlazingSystems-Experiments` HND-0700 branch `lab/v060-compact-handover-ci` versus `blazepwifi-v0.6.0-audit-foundation`. Read short CURRENT_STATE and PROJECT_HANDOVER first; two old status files losslessly archived. Source CI `368879c`, new CI regression `b04485e`, results pending. Verify and integrate only after exact Green. P0 money/rollback/hardware open, production v0.6 no-go.
+
+---
+
+## 2026-10-10 — HND-0700 failure diagnosis and parser correction
+
+- **Status:** TEST_FAILED at original PR #46 Full [#38050659671](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38050659671), job validate step `HND-0700 guard source-vs-docs GitHub Actions path selection`. Mandatory handover freshness and its own regression PASSED before test failure. Python AssertionError `missing push protections` because our **test parser**, not GitHub's ordered filters, assumed contiguous YAML `- item` lines and stopped at an intervening `# comment`. No release authority.
+- **Actual correction:** commit `d32ab244d70ca7907495e8aeeb911aa0ba16ec9a` modifies `tests/v060_ci_doc_only_filter.py` to accept comment rows between pattern rows while requiring correctly formatted quoted `- path` items. Real `.github/workflows/blazepwifi-build.yml` excluded docs paths unchanged from `368879c`.
+- **Current classification:** IMPLEMENTED_UNTESTED on new SHA; re-run exact PR Full CI (including HND-0700, handover freshness, x86 QEMU, Android) and examine failed steps, if any. Keep draft PR #46 and dev untouched until green. No customer money or installed files changed; P0 #31/#32/#34/#43 open.
+- **NEXT ACTION:** Synchronize current state/root after this change; verify new exact PR run and integrate only if all gates pass. Preserve old test failure as immutable evidence.
+
