@@ -137,74 +137,7 @@ bp_member_v2_lab_dispatch() (
     if [ "$kind" = transfer ]; then event="admin:$((rev+1)):$user>$target"
     else event="admin:$((rev+1)):$user"; fi
   fi
-  printf '%s\n' "$event" | grep -Eq '^[A-Za-z0-9_.:>-]{1,96}
-  receipt="$(awk -F '\t' -v e="$event" '$1=="R"&&$2==e {print;exit}' "$BP_MEMBER_V2_LAB_FILE")" || exit 9
-  if [ -n "$receipt" ]; then
-    old_user="$(printf '%s' "$receipt" | cut -f4)"
-    old_kind="$(printf '%s' "$receipt" | cut -f5)"
-    old_result="$(printf '%s' "$receipt" | cut -f7)"
-    old_source="$(printf '%s' "$receipt" | cut -f8)"
-    old_detail="$(printf '%s' "$receipt" | cut -f9)"
-    [ "$old_user" = "$user" ] && [ "$old_kind" = "$kind" ] &&
-      [ "$old_source" = "$source" ] || exit 5
-    case "$kind" in add|subtract|set|transfer)
-      [ "$old_result" = "$units" ] || exit 5;; esac
-    if [ "$kind" = transfer ]; then
-      old_target="$(printf '%s' "$old_detail" | awk -F: 'NF==3 {print $2}')"
-      [ "$old_target" = "$target" ] || exit 5
-    fi
-    printf '%s\t%s\n' "$old_result" "$rev"
-    exit 0
-  fi
-  balance="$(awk -F '\t' -v u="$user" '$1=="M"&&$2==u {print $9}' "$BP_MEMBER_V2_LAB_FILE")"
-  [ -n "$balance" ] || exit 3
-  bp_member_safe_seconds "$balance" 2147483647 || exit 9
-  case "$kind" in
-    add)
-      [ "$balance" -le $((2147483647-units)) ] || exit 8
-      new_from=$((balance+units)); delta="$units"; result="$units"; detail="$new_from";;
-    subtract)
-      [ "$balance" -ge "$units" ] || exit 4
-      new_from=$((balance-units)); delta="-$units"; result="$units"; detail="$new_from";;
-    set)
-      new_from="$units"; delta=$((units-balance)); result="$units"; detail="$new_from";;
-    restore_all)
-      new_from=0; delta="-$balance"; result="$balance"; detail=0;;
-    transfer)
-      to_balance="$(awk -F '\t' -v u="$target" '$1=="M"&&$2==u {print $9}' "$BP_MEMBER_V2_LAB_FILE")"
-      [ -n "$to_balance" ] || exit 3
-      bp_member_safe_seconds "$to_balance" 2147483647 || exit 9
-      [ "$balance" -ge "$units" ] || exit 4
-      [ "$to_balance" -le $((2147483647-units)) ] || exit 8
-      new_from=$((balance-units)); new_to=$((to_balance+units))
-      delta="-$units"; result="$units"; detail="$new_from:$target:$new_to";;
-  esac
-  now="$(bp_now)"; nextrev=$((rev+1))
-  [ "$nextrev" -le 2147483647 ] || exit 8
-  body="$BP_STATE/.v2-intent-$$"; umask 077
-  if ! awk -F '\t' -v OFS='\t' -v u="$user" -v t="$target" \
-      -v b="$new_from" -v tb="${new_to:-0}" -v r="$nextrev" -v ts="$now" \
-      -v src="$source" -v id="$event" -v k="$kind" -v d="$delta" \
-      -v result="$result" -v detail="$detail" '
-    $1=="H" {next}
-    $1=="Q" {$2=r}
-    $1=="M"&&$2==u {$9=b;$10=r;$11=ts;$12=src}
-    $1=="M"&&t!=""&&$2==t {$9=tb;$10=r;$11=ts;$12=src}
-    {print}
-    END {print "R",id,ts,u,k,d,result,src,detail}
-  ' "$BP_MEMBER_V2_LAB_FILE" >"$body" || ! bp_member_v2_lab_seal "$body"; then
-    rm -f "$body"; exit 8
-  fi
-  if [ "${BP_MEMBER_V2_LAB_FAULT:-}" = before-authority-rename ]; then
-    rm -f "$body"; exit 86
-  fi
-  mv "$body" "$BP_MEMBER_V2_LAB_FILE" || { rm -f "$body";exit 8; }
-  sync || exit 8
-  [ "${BP_MEMBER_V2_LAB_FAULT:-}" != after-authority-rename ] || exit 86
-  bp_member_v2_lab_project after || exit 8
-  printf '%s\t%s\n' "$result" "$nextrev"
-)
- || exit 2
+  printf '%s\n' "$event" | grep -Eq '^[A-Za-z0-9_.:>-]{1,96}$' || exit 2
   receipt="$(awk -F '\t' -v e="$event" '$1=="R"&&$2==e {print;exit}' "$BP_MEMBER_V2_LAB_FILE")" || exit 9
   if [ -n "$receipt" ]; then
     old_user="$(printf '%s' "$receipt" | cut -f4)"
