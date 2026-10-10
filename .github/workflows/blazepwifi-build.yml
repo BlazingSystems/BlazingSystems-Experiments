@@ -123,6 +123,8 @@ jobs:
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_trusted_witness_model.py
       - name: WITNESS-0693 hypothetical two-stage independent witness recovery (LAB ONLY)
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_witness_two_stage_recovery.py
+      - name: TRUST-0694 candidate root-of-trust discovery remains fail-closed (synthetic only)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_trust_capability_inventory.sh
       - name: Verify sealed synthetic-only backup code compiles and remains uninstalled
         run: |
           python3 -m py_compile experiment/openwrt/BlazePwifi/tools/v060_v1_sealed_fixture.py
