@@ -201,6 +201,77 @@ bp_member_set_password() {
   printf '%s' "$rev"
 }
 
+# PAY-0712: validate a previously recorded paid receipt and its current
+# read-model before the Vendo signed-replay shortcut can acknowledge it.
+# Run only under PAY-0711's paid financial replay lock. This is read-only;
+# it does NOT reconstruct money from a receipt or certify v1 crash atomicity.
+bp_member_replay_snapshot_ok() (
+  event_id="$1"; expected_user="$2"; expected_kind="$3"
+  expected_source="$4"; expected_seconds="$5"; expected_to="${6:-}"
+  [ -f "$BP_MEMBER_EVENTS" ] && [ ! -L "$BP_MEMBER_EVENTS" ] || exit 1
+  [ -f "$BP_MEMBERS" ] && [ ! -L "$BP_MEMBERS" ] || exit 1
+  [ -f "$BP_MEMBER_REVISION" ] && [ ! -L "$BP_MEMBER_REVISION" ] || exit 1
+  revision="$(cat "$BP_MEMBER_REVISION" 2>/dev/null)" || exit 1
+  bp_member_safe_seconds "$revision" 2147483647 || exit 1
+  receipt="$(awk -F '\t' -v e="$event_id" '
+    $1==e {n++; if(NF!=8) bad=1; record=$0}
+    END {if(n!=1 || bad) exit 1; print record}
+  ' "$BP_MEMBER_EVENTS")" || exit 1
+  [ -n "$receipt" ] || exit 1
+  user="$(printf '%s' "$receipt" | cut -f3)"
+  kind="$(printf '%s' "$receipt" | cut -f4)"
+  delta="$(printf '%s' "$receipt" | cut -f5)"
+  result="$(printf '%s' "$receipt" | cut -f6)"
+  source="$(printf '%s' "$receipt" | cut -f7)"
+  detail="$(printf '%s' "$receipt" | cut -f8)"
+  [ "$user" = "$expected_user" ] && [ "$kind" = "$expected_kind" ] &&
+    [ "$source" = "$expected_source" ] || exit 1
+  bp_member_safe_seconds "$result" 2147483647 || exit 1
+  # Validate every member row, including uniqueness. One corrupt member
+  # elsewhere means the v1 read-model cannot substantiate a paid ACK.
+  if ! awk -F '\t' -v want="$expected_user" -v dest="$expected_to" '
+    NF!=11 || $1 !~ /^[A-Za-z0-9_.-]{2,32}$/ ||
+      $3 !~ /^(0|1)$/ || $7 !~ /^[0-9]+$/ ||
+      $8 !~ /^(0|[1-9][0-9]*)$/ ||
+      $9 !~ /^(0|[1-9][0-9]*)$/ ||
+      $10 !~ /^(0|[1-9][0-9]*)$/ {bad=1}
+    {if (++seen[$1] > 1) bad=1; if($1==want) from++; if($1==dest) to++;
+      if($9+0 > maxrev) maxrev=$9+0;
+      if(length($8)>10 || $8+0>2147483647 ||
+         length($9)>10 || $9+0>2147483647) bad=1}
+    END {if(bad || from!=1 || (dest!="" && to!=1)) exit 1}
+  ' "$BP_MEMBERS"; then
+    exit 1
+  fi
+  # Do not silently turn missing/garbled revision metadata into revision 0.
+  max_revision="$(awk -F '\t' 'BEGIN {v=0} $9+0>v {v=$9+0} END {printf "%.0f",v}' "$BP_MEMBERS")" || exit 1
+  [ "$max_revision" -le "$revision" ] 2>/dev/null || exit 1
+  case "$kind" in
+    add)
+      bp_member_safe_seconds "$expected_seconds" 31536000 || exit 1
+      [ "$result" = "$expected_seconds" ] &&
+        [ "$delta" = "$expected_seconds" ] || exit 1
+      ;;
+    restore_all)
+      [ "$expected_seconds" = 0 ] && [ "$delta" = "-$result" ] &&
+        [ "$detail" = 0 ] || exit 1
+      ;;
+    transfer)
+      bp_member_safe_seconds "$expected_seconds" 31536000 || exit 1
+      [ "$result" = "$expected_seconds" ] &&
+        [ "$delta" = "-$expected_seconds" ] || exit 1
+      prior_to="$(printf '%s' "$detail" | awk -F: 'NF==3 {print $2}')"
+      [ "$prior_to" = "$expected_to" ] || exit 1
+      from_after="$(printf '%s' "$detail" | cut -d: -f1)"
+      to_after="$(printf '%s' "$detail" | cut -d: -f3)"
+      bp_member_safe_seconds "$from_after" 2147483647 &&
+        bp_member_safe_seconds "$to_after" 2147483647 || exit 1
+      ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+)
+
 # Paid receipts cannot be retained in a rolling display-history window:
 # doing so re-accepts an old, previously successful controller event ID.
 # This cap is a fail-closed bridge for legacy random v1 event IDs, NOT a
