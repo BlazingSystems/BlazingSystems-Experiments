@@ -1363,3 +1363,12 @@
 - **Production unchanged:** v0.5.2 frozen, VERSION=0.5.3, 0.6 migration refused, P0 #31/#32/#34/#43 OPEN. No installed customer devices/accounts touched.
 - **NEXT ACTION:** sync the three handovers, open isolated PR against development, require classifier unit/negative checks and FULL PR CI PASS. Verify after guarded integration and on a docs-only sync that `ci_decision` proves previous Full SHA success and skips expensive six root jobs, without hiding code. If any gate fails, leave branch isolated. Then address other dedicated workflows independently or proceed to source P0. **Never bypass production acceptance.**
 
+
+---
+
+## 2026-10-10 — CI-0701 exact Full + docs-only synchronize proof (verified)
+
+- **IMPLEMENTED_AND_VERIFIED for Full workflow docs-only PR suppression, not product release.** New workflow/code at `fd0a4e3689faf4a1f2ac16a0a50793c1d7772210`, [Full PR #38051770616](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38051770616) completed SUCCESS, 26 success, 4 intentional skips, 0 failure; classifier output RUN_FULL for source. Negative fixture, x86 QEMU, Android emulator passed.
+- **Actual GitHub three-dot correction proof:** docs-only sync `d8e698624abbac8786185c34a35a6cff48995380`, [Full PR #38052136719](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38052136719) SUCCESS, 1 classifier success, 19 other jobs skipped. Logs explicitly SKIP_REDUNDANT_HEAVY after GitHub API confirmed prior exact Full-success source SHA `fd0a4e3`. PR #47 guarded merged into development only at `d8e6986`; no main merge, no production build promotion. Historical doc contents remain exactly archived.
+- **Limitations/next action:** four separate Windows, SDK, native and sealed PR workflows still have cumulative PR triggers, not yet guarded. Never skip real source changes or explicit manual release-candidate CI. P0 #31/#32/#34/#43 OPEN, VERSION=0.5.3, signed/physical production acceptance absent. Next meaningful work on dedicated workflow guard or actual member/rental corrupt paid-state validation; no further docs-only ritual rebuilds.
+
