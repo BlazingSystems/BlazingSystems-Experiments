@@ -1,11 +1,11 @@
 #!/bin/sh
-# TRUST-0694. Diagnostic ONLY. No payment authority, TPM ownership operation or network I/O.
-# Presence of a device node is NEVER evidence of an independent trusted witness.
+# TRUST-0695. Read-only discovery, NEVER a witness or an installation gate.
+# Never opens TPM/MMC hardware, queries the network, or mutates financial state.
 set -eu
 
 usage() {
-    printf '%s\n' 'Usage: v060_trust_capability_inventory.sh {x86_64|orangepi|ruijie|r281|generic}' >&2
-    printf '%s\n' '       BLAZE_TRUST_TEST_FIXTURE=1 ... --fixture-root /tmp/fixture TARGET (synthetic tests only)' >&2
+    printf '%s\n' 'Usage: sh v060_trust_capability_inventory.sh {x86_64|orangepi|ruijie|r281|generic}' >&2
+    printf '%s\n' 'Synthetic test only: BLAZE_TRUST_TEST_FIXTURE=1 sh ... --fixture-root /tmp/blaze-trust-*/root TARGET' >&2
     exit 64
 }
 
@@ -18,10 +18,16 @@ elif [ "$#" -eq 3 ] && [ "$1" = "--fixture-root" ]; then
     mode=synthetic
     root=$2
     target=$3
-    case "$root" in
-        /*) [ -d "$root" ] || usage ;;
-        *) usage ;;
-    esac
+    # Only explicit, private synthetic roots; no /, /sys, /dev or live overlay.
+    # Physical canonical path comparison prevents symlink or ../ redirection.
+    case "$root" in /tmp/blaze-trust-*/root) ;; *) usage ;; esac
+    [ -d "$root" ] && [ ! -L "$root" ] || usage
+    canonical="$(CDPATH= cd -P -- "$root" 2>/dev/null && pwd -P)" || usage
+    [ "$canonical" = "$root" ] || usage
+    marker="$root/.blaze-trust-synthetic-only"
+    [ -f "$marker" ] && [ ! -L "$marker" ] || usage
+    IFS= read -r proof < "$marker" || proof=
+    [ "$proof" = 'BLAZE-TRUST-SYNTHETIC-ONLY' ] || usage
 else
     usage
 fi
@@ -31,35 +37,43 @@ case "$target" in
     *) usage ;;
 esac
 
-# Fixed booleans and fixed-choice target only. Never expose serial numbers,
-# TPM EK credentials, any key material, filesystem UUIDs, or live account data.
+# Fixed boolean output, no hardware model/serial, TPM EK, credential, UUID,
+# private witness identity or real account information is returned.
 tpm_node=false
 tpm2_candidate=false
 rpmb_candidate=false
 
-if [ "$mode" = synthetic ]; then
-    # Inert files emulate candidate nodes; they NEVER establish hardware evidence.
-    [ -e "$root/dev/tpm0" ] || [ -e "$root/dev/tpmrm0" ] || : 
-    if [ -e "$root/dev/tpm0" ] || [ -e "$root/dev/tpmrm0" ]; then
-        tpm_node=true
+# The version_major belongs to the same tpmN index as the corresponding
+# character device, not arbitrarily to tpm0. tpmrmN uses the matching tpmN.
+# A bounded list avoids enumerating arbitrary host paths on tiny OpenWrt boxes.
+for idx in 0 1 2 3 4 5 6 7; do
+    if [ "$mode" = synthetic ]; then
+        # Fixture regular files are never evidence of actual hardware.
+        node_ok=false
+        for devpath in "$root/dev/tpm$idx" "$root/dev/tpmrm$idx"; do
+            if [ -f "$devpath" ] && [ ! -L "$devpath" ]; then node_ok=true; fi
+        done
+    else
+        node_ok=false
+        if [ -c "/dev/tpm$idx" ] || [ -c "/dev/tpmrm$idx" ]; then node_ok=true; fi
     fi
-else
-    if [ -c /dev/tpm0 ] || [ -c /dev/tpmrm0 ]; then
-        tpm_node=true
+    [ "$node_ok" = true ] || continue
+    tpm_node=true
+    major_file="$root/sys/class/tpm/tpm$idx/tpm_version_major"
+    if [ "$mode" = synthetic ]; then
+        # Synthetic sysfs is intentionally plain files, never symlink traversal.
+        [ -f "$major_file" ] && [ ! -L "$major_file" ] || continue
+        [ ! -L "$root/sys" ] && [ ! -L "$root/sys/class" ] &&
+        [ ! -L "$root/sys/class/tpm" ] && [ ! -L "$root/sys/class/tpm/tpm$idx" ] || continue
+    else
+        [ -r "$major_file" ] || continue
     fi
-fi
-
-major_file="$root/sys/class/tpm/tpm0/tpm_version_major"
-if [ "$tpm_node" = true ] && [ -r "$major_file" ]; then
     IFS= read -r major < "$major_file" || major=
-    if [ "$major" = 2 ]; then
-        tpm2_candidate=true
-    fi
-fi
+    if [ "$major" = 2 ]; then tpm2_candidate=true; fi
+done
 
-# RPMB may be indicated by a Linux block-class device, but no capability,
-# monotonic counter access, antirollback independence or driver validity
-# is established by a sysfs entry.
+# A sysfs RPMB class path is only a candidate: no proof that a key, usable
+# monotonic write counter, separate rollback domain or kernel API is available.
 for entry in "$root"/sys/class/block/mmcblk*rpmb "$root"/sys/block/mmcblk*rpmb; do
     if [ -e "$entry" ]; then
         rpmb_candidate=true
@@ -70,6 +84,5 @@ done
 printf '{"schema":"BLAZE_TRUST_CAPABILITY_V1","target":"%s","evidence_mode":"%s","tpm_node_observed":%s,"tpm2_candidate":%s,"rpmb_candidate":%s,"independent_witness_verified":false,"paid_ack_authorized":false,"financial_migration_authorized":false,"customer_install_authorized":false,"physical_powercut_verified":false,"decision":"BLOCKED_UNVERIFIED_TRUST_ROOT"}\n' \
     "$target" "$mode" "$tpm_node" "$tpm2_candidate" "$rpmb_candidate"
 
-# A diagnostic tool must not return success as an installation gate.
-# 2 means NO validated trust root, including when a candidate is present.
+# 2 is intentionally NOT a green installation gate, regardless of candidates.
 exit 2
