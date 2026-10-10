@@ -147,6 +147,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh
       - name: Refuse member replay ACK under financial quarantine
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh
+      - name: PAY-0713 synthetic member atomic authority bridge (not production)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_v2_atomic_bridge.sh
       - name: Reject deletion of remaining member credit and quarantine interrupted admin writes
         run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
       - name: Reject partial member database copies and false admin success
