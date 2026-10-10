@@ -1,3 +1,18 @@
+## TRUST-0695 — Synthetic provenance hardening and indexed TPM observations (lab-only)
+
+The read-only `BLAZE_TRUST_CAPABILITY_V1` scanner now refuses mock invocation outside a canonical, private `/tmp/blaze-trust-*/root` fixture carrying the exact `BLAZE-TRUST-SYNTHETIC-ONLY` marker. A live `/`, `/dev`, missing or symlinked marker, symlinked fixture root, incorrect target and omitted explicit fixture flag all refuse with exit 64 and no JSON approval. Synthetic TPM nodes require regular fixture files and reject symlinked major-version paths. This does **not** make synthetic observations equivalent to physical hardware evidence; it reduces accidental false demonstrations.
+
+TPM version information is read **only for a matching `tpmN` or `tpmrmN` device** (indices 0–7) using that exact `/sys/class/tpm/tpmN/tpm_version_major` public Linux ABI. A TPM 1.x device does not inherit TPM2 status merely because another index advertises version 2. This remains a read-only **candidate observation**, not proof of enabled/owned TPM, NV counters, boot-chain binding, witness separation or antirollback durability.
+
+No hardware probe is remotely executed by CI. On a dedicated owner-authorized noncustomer Linux/OpenWrt device, the standalone command `sh tools/v060_trust_capability_inventory.sh TARGET` may produce a redacted JSON capability report and intentionally exits 2. No identity/serial, key, TPM command, `mmc-utils` mutation, production install, paid ACK, firmware flash or account migration occurs. *Never* interpret a successful synthetic regression test as a trustworthy, physical monotonic witness. Production blockers P0 #31/#32/#34/#43 remain open.
+
+References (behavior/documentation only):
+- [Linux stable TPM sysfs ABI](https://kernel.googlesource.com/pub/scm/linux/kernel/git/netdev/net-next.git/+/refs/tags/v7.1-rc4/Documentation/ABI/stable/sysfs-class-tpm): `tpm_version_major` denotes the implemented major specification version, not functional witness readiness.
+- [Linux MMC device attributes](https://cdn.kernel.org/doc/html/latest/driver-api/mmc/mmc-dev-attrs.html): `raw_rpmb_size_mult` describes RPMB capacity; available capacity alone is not an authenticated update service.
+- [Dell Wyse 5070 technical datasheet](https://www.delltechnologies.com/asset/en-us/products/thin-clients/technical-support/Wyse_5070_executive_summary_and_data_sheet.pdf): TPM 2.0 is listed as an optional security configuration. Verify each unit rather than relying on model designation.
+
+---
+
 ## TRUST-0694 — Read-only capability discovery, not antirollback custody (lab-only)
 
 The optional POSIX-shell diagnostic `sh tools/v060_trust_capability_inventory.sh TARGET` accepts an explicit target class (`x86_64`, `orangepi`, `ruijie`, `r281`, `generic`). It reads only whether TPM character-device nodes and the public TPM major-version sysfs entry are present, and whether an eMMC RPMB sysfs class candidate exists. It does not read serials, secrets, keys or personal data, mutate hardware, connect to networks, write paid state or alter system configuration.
