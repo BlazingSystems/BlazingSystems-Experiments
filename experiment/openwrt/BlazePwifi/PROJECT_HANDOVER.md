@@ -1,3 +1,11 @@
+## P0-0710 — RED regression candidate, code fix NOT YET APPLIED (2026-10-11 Asia/Manila)
+
+- **State:** IMPLEMENTED_UNTESTED regression, isolated branch `lab/p0-0710-paid-numeric-guard`; parent `ffd069f9cf228ff6dccd564f2b2f59e547e868e3`, five workflows SUCCESS at parent. Pre-change checkpoint `f522c3f4be084b57f8c9ec806c328788ab0e11d2`.
+- **Negative source-path fixture:** `tests/v060_paid_numeric_guard.sh` commit `c936fe59aca89d9d2db91421c5f205ca6b417c13`; Full validate insertion `.github/workflows/blazepwifi-build.yml` commit `229f9535e00e3b3b2e3d4a7e2177f1a9c51054cb`. Targets malformed/padded/overlimit member banked seconds, transfer overflow, malformed/padded/overlimit rental lease, padded pulses or configuration; asserts no paid transaction boundary, no state change, no ACK and confirms valid values still reach boundary.
+- **Expected RED on old source:** member invalid balances currently reset to 0; rental invalid lease is interpreted as expired, leading-zero/padded quantity can be misparsed. **Actual CI result not yet known.** This is synthetic-only, does not access customer state or authorize v0.6.
+- **Next exact action:** Open draft PR, inspect named P0-0710 red step and source-path failure, implement bounded canonical decimal validation before replay and financial mutations, sync handover and rerun exact Full. Keep #31/#32/#34/#43 open and no production release.
+
+---
 ## CI-0701 — IMPLEMENTED_AND_VERIFIED (Full CI loop guard only)
 
 - Development branch `blazepwifi-v0.6.0-audit-foundation`, draft PR #30; [PR #47](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/47) safely fast-forward integrated at `d8e698624abbac8786185c34a35a6cff48995380`. Last exact verified **code-bearing Full SHA** `fd0a4e3689faf4a1f2ac16a0a50793c1d7772210` and [Actions Full #38051770616](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38051770616): COMPLETED SUCCESS, 26 pass/4 intentional production skips. New guard ran in `RUN_FULL` mode for real code changes and its negative cases passed.
