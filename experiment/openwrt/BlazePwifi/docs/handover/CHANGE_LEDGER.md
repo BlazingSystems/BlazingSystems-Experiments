@@ -1,3 +1,10 @@
+## PAY-0713 CI first run failed, POSIX syntax corrected — 2026-10-11 Asia/Manila
+
+- **Status: FAILED → FIX_COMMITTED_RETEST_PENDING.** Source PR #51 first isolated head `6cc680dd04a2d3c13e4a19f92f391aaffca1ebfc`, [Full #38084046906](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084046906), `validate: Static validation` FAILED, named PAY-0713 stage SKIPPED; cannot merge. Exact message `member-v2-atomic-lab.sh: 140: Syntax error: redirection unexpected (expecting ")")`. This was a shell parser error: event-ID `case` pattern had unquoted greater-than token. Code commit `65cc244fcb386cf69c13113582dc61bf3f1d6ae4` changed to bounded whitelist `grep -Eq`, preserving identity constraints. Staging/Full retest needed against new PR HEAD. No hardware/data touched, no production authorization.
+- **NEXT:** Verify second exact-SHA Full static and PAY-0713 tests; if failures use job logs, fix source then update this ledger. Keep #31/#32/#34/#43 open.
+
+---
+
 ## PAY-0713 — Real member entrypoint synthetic atomic authority bridge — 2026-10-11 Asia/Manila
 
 - **Status: IMPLEMENTED_UNTESTED, P0 #31, no deployment.** Isolated `feat/pay-0713-member-atomic-bridge` from previous verified development HEAD `18f2b52a13f739b0693448d897f6416bf4e9ce87`. Nonproduction synthetic /tmp marker gate and explicit `BP_MEMBER_V2_LAB=1`; normal v1 behavior is unchanged.
