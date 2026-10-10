@@ -1,3 +1,11 @@
+## P0-0710 regression correction IN PROGRESS — 2026-10-11 Asia/Manila
+
+- Actual Full PR CI [#38075975085](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075975085) at `ad97ab534677cc1c4f1ff538fb59766249f56224` failed pre-existing named `v060_member_quarantine_replay.sh` before P0-0710 step. Exact log: `P0 core member replay collision mismatch bank=5 transfer=3`. Source refactor checked destination existence before returning a collision for a reused transfer event targeting a different recipient; historical error contract requires rc=5 rather than rc=3, and more importantly must reject the conflicting signed ID before any money state mutation.
+- **Correction plan:** keep source-member and amount checks, but recognize receipt/event ID collision before rejecting a missing new destination. Validate destination and numeric bank **before** any valid duplicate ACK or new transfer mutation. Preserve old signed-ID behavior and fail-closed corruption checks. Do not edit or weaken the existing regression.
+- **State:** TEST_FAILED; code correction and new Full CI pending. No production release, paid ACK, customer account or physical test touched.
+
+---
+
 ## P0-0710 — IMPLEMENTED_UNTESTED: strict prepaid numeric guards (2026-10-11 Asia/Manila)
 
 - **Isolated branch:** `lab/p0-0710-paid-numeric-guard` from verified dev `ffd069f9cf228ff6dccd564f2b2f59e547e868e3`. Production P0 #31/#32/#34/#43 remain OPEN. Full CI RED reproduction at parent-source **PR #48** [#38075722430](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075722430): `P0-0710 reject malformed ...` failed with `P0-0710 RED: member add accepted unsafe Fixture A (rc=9)`. The fixture printed the overwritten production `label` (cosmetic); a marker proves the malformed input reached `bp_paid_begin` despite a nonzero rc. This is a source-path synthetic reproduction, not hardware proof.
