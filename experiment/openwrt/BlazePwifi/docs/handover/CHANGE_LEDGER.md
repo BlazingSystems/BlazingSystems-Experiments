@@ -1392,3 +1392,13 @@
 - **CI outcome for fix:** UNKNOWN until exact-sha PR Full tests complete; no production claim. Dependencies #31/#32 remain open as financial state and receipt are still distinct crash writes; #43 independent witness absent; #34 hardware 30-client physical acceptance absent. No user payments or private data touched.
 - **NEXT ACTION:** inspect named P0-0710 Green/RED and collateral tests in next PR Full; do not suppress tests to obtain green. Guarded dev-only merge after verifying unchanged base and exact final SHA; archive any failures. Rollback isolated branch only; preserve v0.5.2 frozen and VERSION=0.5.3.
 
+
+---
+
+## 2026-10-11 — P0-0710 exact test failure and transfer error precedence correction
+
+- **TEST_FAILED:** PR #48 [Full #38075975085](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075975085) at SHA `ad97ab534677cc1c4f1ff538fb59766249f56224` failed unchanged `tests/v060_member_quarantine_replay.sh`: exact log `P0 core member replay collision mismatch bank=5 transfer=3`. Named P0-0710 numeric step **SKIPPED**, never mark green for this SHA.
+- **Root cause:** the initial safe-balance validation moved destination existence check before an existing signed-ID event collision. For same event reused with a different destination not in the member table, return 3 (unknown member) broke required collision return 5. Test invariant remains correct; do not suppress it.
+- **Source correction:** `openwrt/rootfs/usr/lib/blazepwifi/member.sh` commit `10d65a5ccc42bd30394ba8f2bd399a45bcaa9525` validates source stored bank immediately but checks any mismatched signed transfer ID before rejecting missing target. For matching duplicate replay or new paid transfer it still checks target existence + strict decimal bank before ACK or `bp_paid_begin`. No weakening of amount bounds / source validation; rental guard unchanged.
+- **Status:** corrected source IMPLEMENTED_UNTESTED, exact next CI result pending; P0 #31/#32/#34/#43 OPEN, VERSION=0.5.3, no released v0.6.0. Synthetic-only, no real finance/hardware. NEXT: Full PR #48 check all named source steps, x86 and Android; integrate guarded only if green, log actual evidence.
+
