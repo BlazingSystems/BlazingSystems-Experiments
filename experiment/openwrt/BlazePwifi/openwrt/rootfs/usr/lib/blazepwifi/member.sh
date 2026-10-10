@@ -230,7 +230,7 @@ bp_member_replay_snapshot_ok() (
   # Validate every member row, including uniqueness. One corrupt member
   # elsewhere means the v1 read-model cannot substantiate a paid ACK.
   if ! awk -F '\t' -v want="$expected_user" -v dest="$expected_to" '
-    NF!=11 || $1 !~ /^[A-Za-z0-9_.-]{2,32}$/ ||
+    NF!=11 || ($1 !~ /^[A-Za-z0-9_.-]+$/ || length($1)<2 || length($1)>32) ||
       $3 !~ /^(0|1)$/ || $7 !~ /^[0-9]+$/ ||
       $8 !~ /^(0|[1-9][0-9]*)$/ ||
       $9 !~ /^(0|[1-9][0-9]*)$/ ||
