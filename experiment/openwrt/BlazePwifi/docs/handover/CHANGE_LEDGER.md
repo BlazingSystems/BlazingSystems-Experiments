@@ -1372,3 +1372,12 @@
 - **Actual GitHub three-dot correction proof:** docs-only sync `d8e698624abbac8786185c34a35a6cff48995380`, [Full PR #38052136719](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38052136719) SUCCESS, 1 classifier success, 19 other jobs skipped. Logs explicitly SKIP_REDUNDANT_HEAVY after GitHub API confirmed prior exact Full-success source SHA `fd0a4e3`. PR #47 guarded merged into development only at `d8e6986`; no main merge, no production build promotion. Historical doc contents remain exactly archived.
 - **Limitations/next action:** four separate Windows, SDK, native and sealed PR workflows still have cumulative PR triggers, not yet guarded. Never skip real source changes or explicit manual release-candidate CI. P0 #31/#32/#34/#43 OPEN, VERSION=0.5.3, signed/physical production acceptance absent. Next meaningful work on dedicated workflow guard or actual member/rental corrupt paid-state validation; no further docs-only ritual rebuilds.
 
+
+## P0-0710 — RED regression candidate, code fix NOT YET APPLIED (2026-10-11 Asia/Manila)
+
+- **State:** IMPLEMENTED_UNTESTED regression, isolated branch `lab/p0-0710-paid-numeric-guard`; parent `ffd069f9cf228ff6dccd564f2b2f59e547e868e3`, five workflows SUCCESS at parent. Pre-change checkpoint `f522c3f4be084b57f8c9ec806c328788ab0e11d2`.
+- **Negative source-path fixture:** `tests/v060_paid_numeric_guard.sh` commit `c936fe59aca89d9d2db91421c5f205ca6b417c13`; Full validate insertion `.github/workflows/blazepwifi-build.yml` commit `229f9535e00e3b3b2e3d4a7e2177f1a9c51054cb`. Targets malformed/padded/overlimit member banked seconds, transfer overflow, malformed/padded/overlimit rental lease, padded pulses or configuration; asserts no paid transaction boundary, no state change, no ACK and confirms valid values still reach boundary.
+- **Expected RED on old source:** member invalid balances currently reset to 0; rental invalid lease is interpreted as expired, leading-zero/padded quantity can be misparsed. **Actual CI result not yet known.** This is synthetic-only, does not access customer state or authorize v0.6.
+- **Next exact action:** Open draft PR, inspect named P0-0710 red step and source-path failure, implement bounded canonical decimal validation before replay and financial mutations, sync handover and rerun exact Full. Keep #31/#32/#34/#43 open and no production release.
+
+---
