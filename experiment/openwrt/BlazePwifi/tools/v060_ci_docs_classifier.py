@@ -127,7 +127,7 @@ def classify() -> tuple[bool, str]:
         return False, "latest update includes source/config/test/workflow or unknown paths"
 
     status = LIVE.read_text(encoding="utf-8")
-    marker = re.search(r"(?m)^\\*\\*Integrated source revision:\\*\\* \\x60([0-9a-f]{40})\\x60", status)
+    marker = re.search(r"(?m)^\*\*Integrated source revision:\*\* `([0-9a-f]{40})`", status)
     if not marker:
         return False, "missing verified source SHA in active handover"
     baseline = marker.group(1)
