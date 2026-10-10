@@ -304,12 +304,14 @@ bp_member_transfer() {
   [ "$from" != "$to" ] || return 2
   bp_member_safe_seconds "$seconds" 31536000 && [ "$seconds" -gt 0 ] || return 2
   bp_member_financial_receipt_capacity_ok || return 7
-  # Read and validate BOTH balances before even acknowledging a replay.
+  # Validate the source immediately. Defer destination existence until
+  # AFTER receipt-collision detection: a reused signed event for a different
+  # recipient is a collision (rc=5), even if that recipient does not exist.
+  # No correct duplicate can ACK until BOTH stored balances are valid.
   fl="$(bp_member_line "$from")"; tl="$(bp_member_line "$to")"
-  [ -n "$fl" ] && [ -n "$tl" ] || return 3
-  fbank="$(printf '%s' "$fl" | cut -f8)"; tbank="$(printf '%s' "$tl" | cut -f8)"
+  [ -n "$fl" ] || return 3
+  fbank="$(printf '%s' "$fl" | cut -f8)"
   bp_member_safe_seconds "$fbank" 2147483647 || return 8
-  bp_member_safe_seconds "$tbank" 2147483647 || return 8
 
   if [ -n "$event_id" ]; then
     prior="$(awk -F '\t' -v e="$event_id" -v u="$from" -v s="$source" '$1==e && $3==u && $4=="transfer" && $7==s {print; exit}' "$BP_MEMBER_EVENTS")"
@@ -322,12 +324,19 @@ bp_member_transfer() {
       prior_destination="$(printf '%s' "$prior_detail" | awk -F: 'NF==3 {print $2}')"
       [ "$prior_seconds" -eq "$seconds" ] 2>/dev/null &&
         [ "$prior_destination" = "$to" ] || return 5
+      # A matching receipt must not ACK an absent or corrupt destination.
+      [ -n "$tl" ] || return 3
+      tbank="$(printf '%s' "$tl" | cut -f8)"
+      bp_member_safe_seconds "$tbank" 2147483647 || return 8
       printf '%s\t%s\n' "$prior_seconds" "$(bp_member_global_revision)"
       return 0
     fi
     [ -z "$(bp_member_event_line "$event_id")" ] || return 5
   fi
 
+  [ -n "$tl" ] || return 3
+  tbank="$(printf '%s' "$tl" | cut -f8)"
+  bp_member_safe_seconds "$tbank" 2147483647 || return 8
   [ "$fbank" -ge "$seconds" ] 2>/dev/null || return 4
   # Prevent destination overflow on signed 32-bit shells before subtraction.
   [ "$tbank" -le $((2147483647-seconds)) ] || return 8
