@@ -1,3 +1,10 @@
+## PAY-0713 second failed static run and exact-file restoration — 2026-10-11 Asia/Manila
+
+- **Status: FAILED → FIX_COMMITTED_RETEST_PENDING, P0 #31.** Isolated draft PR #51 `6941e29cb90de46e66172ce7351e702054730140`, [Full #38084134353](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084134353) `validate: Static validation` FAILED with `member-v2-atomic-lab.sh:274: Syntax error: Unterminated quoted string`, PAY-0713 test SKIPPED. Earlier `65cc244f...` was not adequate: JS string replacement interpreted the literal trailing `$'` portion as the string-replacement suffix token, corrupting the shell file. New `26965a500324d75387ec2f4adc85e503110c3590` restages clean committed original helper and inserts event-ID regex via callback replacement, restoring correct ending and exact source structure (207 vs corrupted 274 lines). No testing success yet.
+- **NEXT:** New exact-head Full CI static, then PAY-0713 script and target matrix; correct real defects without suppression. No live paid path, production release, hardware, signer or Standalone change.
+
+---
+
 ## PAY-0713 CI first run failed, POSIX syntax corrected — 2026-10-11 Asia/Manila
 
 - **Status: FAILED → FIX_COMMITTED_RETEST_PENDING.** Source PR #51 first isolated head `6cc680dd04a2d3c13e4a19f92f391aaffca1ebfc`, [Full #38084046906](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38084046906), `validate: Static validation` FAILED, named PAY-0713 stage SKIPPED; cannot merge. Exact message `member-v2-atomic-lab.sh: 140: Syntax error: redirection unexpected (expecting ")")`. This was a shell parser error: event-ID `case` pattern had unquoted greater-than token. Code commit `65cc244fcb386cf69c13113582dc61bf3f1d6ae4` changed to bounded whitelist `grep -Eq`, preserving identity constraints. Staging/Full retest needed against new PR HEAD. No hardware/data touched, no production authorization.
