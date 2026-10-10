@@ -59,6 +59,18 @@ member_mutation_sig() {
   printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' "$secret" "$action_name" "$id" "$nonce" "$event_id" "$member_token" "$result_seconds" "$balance_seconds" "$revision" "$secret" | bp_sha256
 }
 
+# PAY-0711: a replay response must keep the paid writer lock until
+# response emission or process exit; do not acquire this around a new write.
+member_replay_lock_or_fail() {
+  bp_paid_replay_read_lock
+  replay_lock_rc=$?
+  case "$replay_lock_rc" in
+    0) return 0 ;;
+    9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+    *) bp_fail "paid financial operation busy; retry safely" ;;
+  esac
+}
+
 # No money-related replay ACK may bypass the paid-state-uncertain
 # quarantine, even if an old receipt exists. Read-only member lookup is
 # permitted, but disputed financial results require operator reconciliation.
@@ -130,6 +142,7 @@ case "$action" in
     user="$(bp_member_norm "$user")" || bp_fail "invalid member"
     printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
 
+    member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$user" add)"
     if [ -n "$prior" ]; then
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
@@ -143,6 +156,7 @@ case "$action" in
       bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
       exit 0
     fi
+    bp_paid_replay_read_unlock
 
     printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
     bp_member_auth_proof_ok "$user" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
@@ -168,6 +182,7 @@ case "$action" in
     user="$(bp_member_norm "$user")" || bp_fail "invalid member"
     printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
 
+    member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$user" restore_all)"
     if [ -n "$prior" ]; then
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
@@ -179,6 +194,7 @@ case "$action" in
       bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","username":"%s","result_seconds":%s,"banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$user")" "$result_seconds" "$balance" "$revision" "$response_sig")"
       exit 0
     fi
+    bp_paid_replay_read_unlock
 
     printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
     bp_member_auth_proof_ok "$user" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
@@ -210,6 +226,7 @@ case "$action" in
     to="$(bp_member_norm "$to")" || bp_fail "invalid destination member"
     printf '%s' "$event_id" | grep -Eq '^[A-Fa-f0-9]{16,64}$' || bp_fail "invalid member event id"
 
+    member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$from" transfer)"
     if [ -n "$prior" ]; then
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
@@ -227,6 +244,7 @@ case "$action" in
       bp_json "$(printf '{"ok":true,"replayed":true,"event_id":"%s","from_username":"%s","to_username":"%s","result_seconds":%s,"source_banked_seconds":%s,"member_revision":%s,"response_sig":"%s"}' "$event_id" "$(bp_json_escape "$from")" "$(bp_json_escape "$to")" "$result_seconds" "$from_balance" "$revision" "$response_sig")"
       exit 0
     fi
+    bp_paid_replay_read_unlock
 
     printf '%s' "$proof" | grep -Eq '^[A-Fa-f0-9]{64}$' || bp_fail "invalid member proof"
     bp_member_auth_proof_ok "$from" "$nonce" "$id" "$proof" || bp_fail "member authentication failed"
