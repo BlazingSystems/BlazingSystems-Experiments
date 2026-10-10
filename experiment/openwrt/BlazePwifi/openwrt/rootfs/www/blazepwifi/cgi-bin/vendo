@@ -145,6 +145,8 @@ case "$action" in
     member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$user" add)"
     if [ -n "$prior" ]; then
+      bp_member_replay_snapshot_ok "$event_id" "$user" add "softtimer:$id" "$pulses" "" ||
+        bp_fail "member paid receipt or snapshot inconsistent; operator reconciliation required"
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
       [ "$result_seconds" -eq "$pulses" ] 2>/dev/null ||
         bp_fail "member event payload collision"
@@ -185,6 +187,8 @@ case "$action" in
     member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$user" restore_all)"
     if [ -n "$prior" ]; then
+      bp_member_replay_snapshot_ok "$event_id" "$user" restore_all "softtimer:$id" 0 "" ||
+        bp_fail "member paid receipt or snapshot inconsistent; operator reconciliation required"
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
       revision="$(bp_member_global_revision)"
       balance="$(printf '%s' "$(bp_member_line "$user")" | cut -f8)"
@@ -229,6 +233,8 @@ case "$action" in
     member_replay_lock_or_fail
     prior="$(bp_member_replay_line "$event_id" "$id" "$from" transfer)"
     if [ -n "$prior" ]; then
+      bp_member_replay_snapshot_ok "$event_id" "$from" transfer "softtimer:$id" "$pulses" "$to" ||
+        bp_fail "member paid receipt or snapshot inconsistent; operator reconciliation required"
       result_seconds="$(printf '%s' "$prior" | cut -f6)"
       receipt_detail="$(printf '%s' "$prior" | cut -f8)"
       receipt_to="$(printf '%s' "$receipt_detail" | awk -F: 'NF==3 {print $2}')"
