@@ -326,8 +326,14 @@ bp_member_v2_lab_load() {
     [ -f "$root/.blaze-v2-member-synthetic-only" ] &&
     [ ! -L "$root/.blaze-v2-member-synthetic-only" ] || return 9
   [ "$(cat "$root/.blaze-v2-member-synthetic-only" 2>/dev/null)" = 'BLAZE-V2-MEMBER-SYNTHETIC-ONLY' ] || return 9
-  # Override is test-only and is evaluated after the strict private marker.
-  . "${BP_MEMBER_V2_LAB_HELPER:-/usr/lib/blazepwifi/member-v2-atomic-lab.sh}" || return 9
+  # PAY-0714: Synthetic authority code is NOT shipped inside rootfs. An
+  # explicit absolute, regular test helper is mandatory; missing or relative
+  # paths reject before any source evaluation or paid read-model writes.
+  lab_helper="${BP_MEMBER_V2_LAB_HELPER:-}"
+  [ -n "$lab_helper" ] || return 9
+  case "$lab_helper" in /*) ;; *) return 9;; esac
+  [ -f "$lab_helper" ] && [ ! -L "$lab_helper" ] || return 9
+  . "$lab_helper" || return 9
 }
 
 bp_member_balance_change() {
