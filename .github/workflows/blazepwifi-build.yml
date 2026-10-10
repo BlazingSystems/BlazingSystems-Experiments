@@ -31,7 +31,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  ci_decision:
+    name: CI-0701 docs-only PR sync proof
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_heavy: ${{ steps.filter.outputs.run_heavy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: CI-0701 negative classifier contract (no API, no hardware)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_docs_classifier.py
+      - name: Verify previous exact Full success before suppressing expensive jobs
+        id: filter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 experiment/openwrt/BlazePwifi/tools/v060_ci_docs_classifier.py
+
   validate:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +67,8 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/handover_gate_regression.sh
       - name: HND-0700 guard source-vs-docs GitHub Actions path selection
         run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_doc_only_filter.py
+      - name: CI-0701 guard never bypasses Full for unverified source
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_docs_classifier.py
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
       - name: v0.3 foundation validation
@@ -308,6 +334,8 @@ jobs:
           if-no-files-found: warn
 
   esp8266:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -330,6 +358,8 @@ jobs:
           path: experiment/openwrt/BlazePwifi/dist/esp8266/
 
   firmware:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -351,6 +381,8 @@ jobs:
 
 
   esp32:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -374,6 +406,8 @@ jobs:
 
 
   firmware_optional:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
@@ -396,6 +430,8 @@ jobs:
 
 
   android:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 55
     steps:
