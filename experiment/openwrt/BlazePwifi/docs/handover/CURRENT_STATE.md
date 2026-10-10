@@ -1,3 +1,14 @@
+## CI-0701 — IN PROGRESS: stop repeat Full builds on verified docs-only PR synchronization
+
+- **Scope/branch:** isolated `lab/v060-ci-synchronize-guard` from development `9e7c2bc819769ad1be1480f283557da0685c6329`; original HND-0700 source validated at `9c02522d91475b42c1fad17975cc52bc48fc6612`, Full #38050783968 COMPLETED SUCCESS. P0 #31/#32/#34/#43 still open; no production authorization.
+- **Newly observed actual defect:** GitHub Full PR run #38051302219 was launched on documentation-only dev head `9e7c2bc...` despite `paths` negations, because PR uses a **three-dot cumulative branch/base diff**, not the change from previous head. Other dedicated workflows also relaunched. Push path filtering helps but cannot prevent this.
+- **Intent:** source-controlled, fail-closed lightweight classifier for `pull_request:synchronize` that compares actual before/after commit changes and permits skipping costly Full jobs ONLY IF latest update is documentation-only, source tree since an immutable known successful Full SHA differs only in excluded documentation, and GitHub API confirms that SHA's exact Full run SUCCESS. If any event field, commit, ancestry, API verification or source path check is unknown → run Full. Always run on workflow_dispatch and actual code/source changes; the `HND-0700` regression is not removed.
+- **Affected paths:** `tools/v060_ci_docs_classifier.py`, `tests/v060_ci_docs_classifier.py`, `.github/workflows/blazepwifi-build.yml`, three current handover files. No other workflows initially changed; their PR three-dot behavior remains tracked. Risk: mistaken job suppression. Negative tests must prove changed money code, mixed commits, stale baseline, absent API or unknown event fail **toward full CI**, never silence.
+- **NEXT EXACT ACTION:** Implement classifier and test using synthetic Git file lists and mocked GitHub responses, run classifier as mandatory small job before expensive Full jobs, verify new PR exact source Full build and negative fixtures. Do not claim all five workflows are fixed by main Full guard. Future dedicated Windows/SDK/native/sealed PR triggers require independent equivalent protection.
+- **Rollback:** revert this isolated CI guard; previous mandatory Full tests and customer data remain intact.
+
+---
+
 # BlazePwifi — authoritative active checkpoint
 
 **Status:** IMPLEMENTED_AND_VERIFIED (HND-0700 narrow scope) · 2026-10-10; P0 production blockers still OPEN · 2026-10-10 Asia/Manila
