@@ -1,3 +1,12 @@
+## CI-0701 — CURRENT IN-FLIGHT WORK (IMPLEMENTED_UNTESTED)
+
+- Isolated `lab/v060-ci-synchronize-guard` from development `9e7c2bc819769ad1be1480f283557da0685c6329`. HND-0700 path filters alone were insufficient for draft PR #30 because GitHub computes a three-dot diff against the PR base and relaunched Full [#38051302219](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38051302219) for docs-only edits.
+- Exact CI-0701 source workflow `3f472115f1706d06f8e7886bf9dfd7fcfc65cec3`, read-only docs-sync verifier `8bea894c`+fix `b6d841e`, synthetic negative tests `ed2e375`. Only a docs-only PR synchronize with independently verified earlier successful Full source SHA may skip expensive Full jobs; unknown/error/source/mixed/manual requests ALWAYS run Full.
+- **No verified CI yet for CI-0701.** Keep PR draft until Full and classifier run pass; P0 #31/#32/#34/#43 remain blocked, VERSION=0.5.3, customer v0.6 installation DENIED. The other four dedicated workflows still require their own safe guards.
+- **NEXT:** read short [CURRENT_STATE](docs/handover/CURRENT_STATE.md), create/check CI-0701 isolated PR Full, inspect real gate output and fix actual failures, guarded integrate only on success. Never interpret this as production accounting fix.
+
+---
+
 # BlazePwifi integrated ecosystem — active handover
 
 ## AUTHORITATIVE LIVE LINKS
