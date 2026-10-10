@@ -46,6 +46,42 @@ transfer="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 333
 printf '%s' "$transfer" | grep -q '"replayed":true'
 [ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
 
+# PAY-0711: deterministically hold the transaction lock BEFORE its pending
+# marker is written, reproducing the old replay fast-path's lock bypass.
+# Neither the fake writer nor this test changes any member balance.
+(
+  exec 8>"$BP_RUN/paid-financial.lock" || exit 1
+  flock -x 8 || exit 1
+  : > "$T/writer-lock-held"
+  while [ ! -f "$T/writer-lock-release" ]; do sleep 0.05; done
+) &
+writer_pid=$!
+# Ensure an unexpected assertion failure cannot orphan the synthetic lock holder.
+trap 'touch "$T/writer-lock-release"; wait "$writer_pid" 2>/dev/null || true; rm -rf "$T"' EXIT HUP INT TERM
+tries=0
+while [ ! -f "$T/writer-lock-held" ] && [ "$tries" -lt 100 ]; do
+  sleep 0.05
+  tries=$((tries+1))
+done
+[ -f "$T/writer-lock-held" ] || { echo 'synthetic writer lock failed' >&2; exit 1; }
+for op in bank restore transfer; do
+  case "$op" in
+    bank) guarded="$(call member_bank 'alice:0123456789abcdef:placeholder' 60 11111111)" ;;
+    restore) guarded="$(call member_restore 'alice:0123456789abcdea:placeholder' 0 22222222)" ;;
+    transfer) guarded="$(call member_transfer 'alice>bob:0123456789abcdeb:placeholder' 30 33333333)" ;;
+  esac
+  printf '%s' "$guarded" | grep -q '"ok":false' || {
+    echo "P0 false signed replay ACK during paid writer critical section: $op" >&2; exit 1;
+  }
+  printf '%s' "$guarded" | grep -q 'paid financial operation busy' || exit 1
+  ! printf '%s' "$guarded" | grep -q '"replayed":true'
+done
+: > "$T/writer-lock-release"
+wait "$writer_pid"
+normal_after_lock="$(call member_bank 'alice:0123456789abcdef:placeholder' 60 11111111)"
+printf '%s' "$normal_after_lock" | grep -q '"replayed":true'
+[ "$(sha256sum "$BP_STATE/members.tsv" "$BP_STATE/member-events.tsv")" = "$before" ]
+
 # PAY-0635: the very same signed receipt ID with a DIFFERENT amount, or a
 # DIFFERENT recipient, cannot return a successful acknowledgement. A success
 # here would tell the Windows PC that time went to the wrong recipient.

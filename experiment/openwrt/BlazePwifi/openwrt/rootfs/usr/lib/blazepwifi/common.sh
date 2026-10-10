@@ -93,6 +93,29 @@ bp_paid_commit() {
 	return 0
 }
 
+# PAY-0711: serialize the Vendo signed-receipt replay fast path with all
+# financial writers. A previously committed receipt is not permission to
+# acknowledge while another payment is in flight or requires reconciliation.
+# Hold fd 6 through the replay response; release BEFORE any fresh mutation,
+# since bp_paid_begin owns the same non-reentrant descriptor.
+bp_paid_replay_read_lock() {
+	mkdir -p "$BP_RUN" || return 8
+	exec 6>"$BP_RUN/paid-financial.lock" || return 8
+	if ! flock -n 6; then
+		exec 6>&-
+		return 8
+	fi
+	if [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+		bp_paid_replay_read_unlock
+		return 9
+	fi
+	return 0
+}
+bp_paid_replay_read_unlock() {
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+}
+
 bp_mac_norm() {
 	printf '%s' "$1" | tr 'A-F' 'a-f' | grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$' || return 1
 	printf '%s' "$1" | tr 'A-F' 'a-f'

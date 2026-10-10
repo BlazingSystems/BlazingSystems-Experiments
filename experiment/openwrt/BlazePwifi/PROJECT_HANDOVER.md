@@ -1,3 +1,5 @@
+> **PAY-0711 isolated P0 #31 member replay concurrency containment (2026-10-11): IMPLEMENTED_UNTESTED.** [Current work branch](https://github.com/BlazingSystems/BlazingSystems-Experiments/tree/fix/pay-0711-member-replay-lock) adds paid writer-lock serialization to signed CGI replay of existing bank/restore/transfer receipts and extends the existing deterministic lock-contention regression. Source `19950c3b`, `24e9fdcf`, tests `d0dbb763`, `a555694e`. **No exact-source CI has been inspected yet.** This is not a crash-atomic receipt/balance commit or a release. Canonical current status: [CURRENT_STATE](docs/handover/CURRENT_STATE.md); append-only [CHANGE_LEDGER](docs/handover/CHANGE_LEDGER.md). Parent v0.6 dev source `VERSION=0.5.3`, production blocked by #31/#32/#34/#43. Do not merge or release based solely on commits.
+
 # BlazePwifi — project continuation entrypoint
 
 ## AUTHORITATIVE LIVE LINKS
