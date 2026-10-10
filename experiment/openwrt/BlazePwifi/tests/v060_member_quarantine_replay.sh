@@ -56,6 +56,8 @@ printf '%s' "$transfer" | grep -q '"replayed":true'
   while [ ! -f "$T/writer-lock-release" ]; do sleep 0.05; done
 ) &
 writer_pid=$!
+# Ensure an unexpected assertion failure cannot orphan the synthetic lock holder.
+trap 'touch "$T/writer-lock-release"; wait "$writer_pid" 2>/dev/null || true; rm -rf "$T"' EXIT HUP INT TERM
 tries=0
 while [ ! -f "$T/writer-lock-held" ] && [ "$tries" -lt 100 ]; do
   sleep 0.05
