@@ -15,7 +15,7 @@ BP_MEMBERS="$BP_STATE/members.tsv"
 BP_MEMBER_EVENTS="$BP_STATE/member-events.tsv"
 BP_MEMBER_REVISION="$BP_STATE/member-revision"
 BP_MEMBER_V2_LAB=1
-BP_MEMBER_V2_LAB_HELPER="$ROOT/openwrt/rootfs/usr/lib/blazepwifi/member-v2-atomic-lab.sh"
+BP_MEMBER_V2_LAB_HELPER="$ROOT/tests/fixtures/member-v2-atomic-lab.sh"
 export BP_STATE BP_RUN BP_MEMBERS BP_MEMBER_EVENTS BP_MEMBER_REVISION
 export BP_MEMBER_V2_LAB BP_MEMBER_V2_LAB_HELPER
 . "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/common.sh"
@@ -105,6 +105,20 @@ cp "$T/ledger.good" "$ledger"; chmod 600 "$ledger"
 printf 'PENDING\n' >"$BP_STATE/paid-state-uncertain"
 reject bp_member_balance_change alice add 1 softtimer:fixture evt5
 rm "$BP_STATE/paid-state-uncertain"
+# PAY-0714: Fixture-only financial code may not ship in OpenWrt rootfs.
+[ ! -e "$ROOT/openwrt/rootfs/usr/lib/blazepwifi/member-v2-atomic-lab.sh" ] || {
+  echo "PAY-0714 rejected bundled lab authority in customer rootfs" >&2; exit 1;
+}
+# Missing, relative, and nonexistent explicit test helper all fail closed.
+expected_lab_helper="$BP_MEMBER_V2_LAB_HELPER"
+unset BP_MEMBER_V2_LAB_HELPER
+reject bp_member_balance_change alice add 1 softtimer:fixture evt5
+BP_MEMBER_V2_LAB_HELPER=tests/fixtures/member-v2-atomic-lab.sh
+reject bp_member_balance_change alice add 1 softtimer:fixture evt5
+BP_MEMBER_V2_LAB_HELPER="$T/missing-helper.sh"
+reject bp_member_balance_change alice add 1 softtimer:fixture evt5
+BP_MEMBER_V2_LAB_HELPER="$expected_lab_helper"
+[ "$snapshot" = "$(sha256sum "$ledger")" ]
 # All derived paid paths must remain in the SAME isolated fixture state.
 # Use a disposable sentinel outside state; never aim the test at live /etc.
 printf 'OUTSIDE-SENTINEL\n' > "$T/escape-sentinel"
