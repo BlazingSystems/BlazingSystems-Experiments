@@ -10,7 +10,10 @@ bp_member_v2_lab_guard() {
   case "$BP_STATE" in /tmp/blaze-v2-member-*/state) ;; *) return 9;; esac
   root="${BP_STATE%/state}"; suffix="${root#/tmp/blaze-v2-member-}"
   case "$suffix" in ''|*/*|*..*|*[!A-Za-z0-9]*) return 9;; esac
-  [ "$BP_RUN" = "$root/run" ] || return 9
+  [ "$BP_RUN" = "$root/run" ] &&
+    [ "$BP_MEMBERS" = "$BP_STATE/members.tsv" ] &&
+    [ "$BP_MEMBER_EVENTS" = "$BP_STATE/member-events.tsv" ] &&
+    [ "$BP_MEMBER_REVISION" = "$BP_STATE/member-revision" ] || return 9
   [ -d "$root" ] && [ ! -L "$root" ] &&
     [ -d "$BP_STATE" ] && [ ! -L "$BP_STATE" ] &&
     [ -d "$BP_RUN" ] && [ ! -L "$BP_RUN" ] || return 9
