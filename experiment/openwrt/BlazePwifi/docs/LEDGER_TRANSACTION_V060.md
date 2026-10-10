@@ -1,3 +1,15 @@
+## TRUST-0694 — Read-only capability discovery, not antirollback custody (lab-only)
+
+The optional POSIX-shell diagnostic `tools/v060_trust_capability_inventory.sh TARGET` accepts an explicit target class (`x86_64`, `orangepi`, `ruijie`, `r281`, `generic`). It reads only whether TPM character-device nodes and the public TPM major-version sysfs entry are present, and whether an eMMC RPMB sysfs class candidate exists. It does not read serials, secrets, keys or personal data, mutate hardware, connect to networks, write paid state or alter system configuration.
+
+Its JSON `BLAZE_TRUST_CAPABILITY_V1` reports **possible capabilities**, not a verified trust root. Even `tpm2_candidate=true` or `rpmb_candidate=true` always produces `decision=BLOCKED_UNVERIFIED_TRUST_ROOT`, `independent_witness_verified=false`, `paid_ack_authorized=false`, `financial_migration_authorized=false`, `customer_install_authorized=false` and `physical_powercut_verified=false`, exiting with status **2**. TPM 2.0 *presence* cannot prove enabled, provisioned, persistent monotonic custody or independent rollback domain. RPMB device presence similarly cannot prove authenticated counter availability or safe service operation. Device category strings are operator labels, not verified hardware identity.
+
+Unit tests use `--fixture-root PATH` only when `BLAZE_TRUST_TEST_FIXTURE=1`, with mock files and distinct `evidence_mode=synthetic`. These tests must NEVER be used as physical acceptance evidence. The script is **not installed into an OpenWrt firmware profile** or enabled in any payment/installer flow by this change. Deploying it manually as a read-only tool requires an operator to select the actual target label; the output cannot authorize commercial use.
+
+**Required before any finance mutation:** per-unit confirmed trust-root capabilities, independently durable witness device identity/epoch/revision, authentication, atomic staged-update and recovery semantics, disconnected-operation policy, verified rollback-domain separation, owner-approved power-cut fixtures, and multi-client soak/rollback/migration acceptance. See issue #43 and P0 issues #31, #32 and #34. The existing v2 native stale-ledger replay remains **UNFIXED**.
+
+---
+
 # BlazePwifi v0.6.0 — prepaid ledger transaction safety contract
 Status: **DESIGN / NOT IMPLEMENTED** · 2026-10-09 (Asia/Manila) · P0 issue #31
 
