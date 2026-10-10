@@ -1381,3 +1381,14 @@
 - **Next exact action:** Open draft PR, inspect named P0-0710 red step and source-path failure, implement bounded canonical decimal validation before replay and financial mutations, sync handover and rerun exact Full. Keep #31/#32/#34/#43 open and no production release.
 
 ---
+
+---
+
+## 2026-10-11 — P0-0710 reproduced bad paid-state arithmetic and applied narrow source guard
+
+- **Priority P0; status IMPLEMENTED_UNTESTED, isolated branch `lab/p0-0710-paid-numeric-guard`.** Parent verified dev `ffd069f9cf228ff6dccd564f2b2f59e547e868e3`. Pre-source handover `f522c3f4be084b57f8c9ec806c328788ab0e11d2`.
+- **Actual RED evidence:** PR #48 [Full #38075722430](https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38075722430) failed named `P0-0710` step on unmodified member/rental source, output `P0-0710 RED: member add accepted unsafe Fixture A (rc=9)`. Assertion marker establishes `bp_paid_begin` reached for malformed stored paid balance. First fixture also had cosmetic global `label` clobber and incorrect expected public rc; corrected at `661c97cf85284c4d94af15c7c3c29ce1fb5b0da4`. Do not claim the first RED proves a real powercut.
+- **Fixes:** `member.sh` `063f5e73f0c5ea0f29901771ad379576a3dd6bf7`, `rental.sh` `f749995ce9bd2743c85fe25492dfa43d0bc8dd5f`. Canonical base-10 and 32-bit signed arithmetic caps, no malformed stored money interpreted as zero, no arithmetic overflow / false duplicate ACK on bad state. `tests/v060_paid_numeric_guard.sh` `c936fe59aca89d9d2db91421c5f205ca6b417c13` and Full named gate `229f9535e00e3b3b2e3d4a7e2177f1a9c51054cb`.
+- **CI outcome for fix:** UNKNOWN until exact-sha PR Full tests complete; no production claim. Dependencies #31/#32 remain open as financial state and receipt are still distinct crash writes; #43 independent witness absent; #34 hardware 30-client physical acceptance absent. No user payments or private data touched.
+- **NEXT ACTION:** inspect named P0-0710 Green/RED and collateral tests in next PR Full; do not suppress tests to obtain green. Guarded dev-only merge after verifying unchanged base and exact final SHA; archive any failures. Rollback isolated branch only; preserve v0.5.2 frozen and VERSION=0.5.3.
+
