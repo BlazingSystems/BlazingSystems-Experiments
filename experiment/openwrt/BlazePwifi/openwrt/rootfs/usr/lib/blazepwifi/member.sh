@@ -318,6 +318,10 @@ bp_member_v2_lab_load() {
   root="${BP_STATE%/state}"
   tail="${root#/tmp/blaze-v2-member-}"
   case "$tail" in ''|*/*|*..*|*[!A-Za-z0-9]*) return 9;; esac
+  [ "$BP_RUN" = "$root/run" ] &&
+    [ "$BP_MEMBERS" = "$BP_STATE/members.tsv" ] &&
+    [ "$BP_MEMBER_EVENTS" = "$BP_STATE/member-events.tsv" ] &&
+    [ "$BP_MEMBER_REVISION" = "$BP_STATE/member-revision" ] || return 9
   [ -d "$root" ] && [ ! -L "$root" ] &&
     [ -f "$root/.blaze-v2-member-synthetic-only" ] &&
     [ ! -L "$root/.blaze-v2-member-synthetic-only" ] || return 9
