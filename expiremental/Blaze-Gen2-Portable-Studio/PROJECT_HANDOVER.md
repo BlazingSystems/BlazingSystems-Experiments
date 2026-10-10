@@ -95,3 +95,20 @@ Open the repo and this file. Preserve `expiremental` spelling and unrelated repo
 
 **At this milestone:** No v1.1.0 Windows build or release has yet been verified. Finalize only after Actions job success, synthetic integration checks and published ZIP/checksum assets.
 **Known limitations:** Even with a local mirror, third-party Windows Known Folder / registry changes and server-side account auth are not intercepted. Actual dual PC Roblox test not performed (Roblox is deliberately blocked). Real SMB deployment and GUI clickthrough remain unverified. Cache consumes additional local writable space. Logically isolated local cache is not a virtual machine, sandbox or official platform support.
+
+## v1.1.0 build/test/publish verification — 2026-10-10
+
+**STATUS: ACTUAL EXPERIMENTAL PRERELEASE PUBLISHED AND BINARY-VERIFIED.**
+- Source release commit: `d3a414869b64067d78625663713b176a38d8b804`.
+- Windows GitHub Actions run: https://github.com/BlazingSystems/BlazingSystems-Experiments/actions/runs/38045063516 ; job `114192821470`; **completed / success**.
+- Runner `windows-2025`; .NET 10 LTS; native WPF `Create.exe` and independent self-contained WinExe `BlazePortableLauncher.exe`.
+- Synthetic integration suite: **ALL 41 CHECKS PASSED**, including new local executable cache isolation for two simulated clients, per-client data, file-manifest SHA256, detection of corrupted shared package, staging cleanup, Roblox exclusion, unmodified original.
+- Pre-release URL: https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v1.1.0-experimental ; GitHub tag `v1.1.0-experimental`.
+- ZIP: `Blaze-Gen2-Portable-Studio-v1.1.0-win-x64.zip`; **93,817,727 bytes**.
+- Published ZIP SHA256: `f8b2d9400fb02a47eaefae24d631f0a9b59a3067d77bef06d9a3f86b2cbe58fd`; second release asset `SHA256SUMS.txt`.
+- Artifact `11667087989` named `Blaze-Gen2-v1.1.0-windows-verified`, independently downloaded and inspected after workflow: inner distribution ZIP contains 17 entries; archive integrity check `testzip() == None`; two EXEs have MZ, PE signature and AMD64 machine 0x8664; SHA256 independently computed matches GitHub published digest.
+- Release contains `Create.exe`, `BlazePortableLauncher.exe`, `VERSION`, `Configs/default.json`, `Configs/launcher-template.json`, `Configs/Profiles/{generic,synthetic-app}.json`, `Docs/{ARCHITECTURE,CHANGELOG,COMPATIBILITY,DISKLESS_GUIDE,LICENSE,README,TROUBLESHOOTING,USER_GUIDE}`, plus Templates/ and Runtime/ folders.
+- GUI runtime clickthrough and dual real-PC SMB / Roblox user sessions not verified. Roblox explicitly UNSUPPORTED and blocked. This release does **not** enable two devices to play the same Roblox account simultaneously. Use separate accounts for simultaneous play and official per-PC installation.
+- Donation QR is generated in the compiled native interface from the decoded user-provided PayPal QR URL, no payment information is transmitted by Blaze.
+
+**Resume instructions:** For further code changes, make a new release tag instead of overwriting verified v1.1.0. Read current repo source + this handover; inspect workflow run/asset verification. Enhance Roblox support only if lawful official-client integration can be independently tested on two separate physical Windows accounts and devices; never claim bypass of server-side Error 264. Add real Windows 10/11 UI smoke tests, SMB read-only and diskless reboot persistence tests before stable.
