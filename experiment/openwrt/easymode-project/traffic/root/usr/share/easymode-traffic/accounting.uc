@@ -49,12 +49,13 @@ function add(map,key,down,up) { if(!map[key])map[key]={download:0,upload:0}; map
 function advance(old, sample, cfg) {
  let dt=sample.monotonic-int(old.monotonic || 0), same=old.boot==sample.boot && dt>0 && dt<=max(120,cfg.interval*4), day=''+int(sample.time/86400);
  let state={schema:1,boot:sample.boot,time:sample.time,monotonic:sample.monotonic,started:old.started || sample.time,checkpoint:old.checkpoint || 0,previous:{},flows:{},days:old.days || {},devices:old.devices || {},domains:old.domains || {},events:old.events || [],live:old.live || [],wan:[],wifi:sample.wifi || [],system:sample.system || {},capabilities:sample.capabilities || {},dns:sample.dns || {observations:{},bindings:{}},coverage:'Observed counters; collection gaps are not backfilled',interval:cfg.interval};
+ state.totals=old.totals || {wan:{}};state.recent=old.recent || {};let slot=''+int(sample.time/300);if(!state.recent[slot])state.recent[slot]={wan:{}};
  if(!state.days[day])state.days[day]={wan:{},devices:{},domains:{},apps:{}};
  let bucket=state.days[day], download=0,upload=0;
  for(let w in sample.wan || []) {
   let p=old.previous?.[w.device], continuous=same && p?.identity==w.identity;
   let down=delta(p?.rx,w.rx,continuous,w.bits),up=delta(p?.tx,w.tx,continuous,w.bits);
-  state.previous[w.device]={rx:w.rx,tx:w.tx,identity:w.identity}; add(bucket.wan,w.device,down,up); download+=down;upload+=up;
+  state.previous[w.device]={rx:w.rx,tx:w.tx,identity:w.identity}; add(bucket.wan,w.device,down,up);add(state.recent[slot].wan,w.device,down,up);add(state.totals.wan,w.device,down,up); download+=down;upload+=up;
   push(state.wan,{...w,download_bps:same?down*8/dt:0,upload_bps:same?up*8/dt:0,observed_download:bucket.wan[w.device].download,observed_upload:bucket.wan[w.device].upload});
  }
  let before=join(',',sort(keys(old.previous || {}))), after=join(',',sort(keys(state.previous)));
@@ -79,6 +80,7 @@ function advance(old, sample, cfg) {
   if(cfg.domains && a.domain!='Other/Unknown') {let info=state.domains[a.domain] || {first:sample.time,clients:{},download:0,upload:0};info.last=sample.time;info.download+=down;info.upload+=up;info.confidence=a.confidence;if(d)info.clients[d.id]=true;state.domains[a.domain]=info;}
  }
  let order=sort(keys(state.days),(a,b)=>int(b)-int(a));for(let i=cfg.retention;i<length(order);i++)delete state.days[order[i]];
+ for(let key in keys(state.recent))if(int(key)<int(slot)-288)delete state.recent[key];
  for(let kind in ['devices','domains']) {let ids=sort(keys(state[kind]),(a,b)=>int(state[kind][b].last_seen || state[kind][b].last)-int(state[kind][a].last_seen || state[kind][a].last));for(let i=0;i<length(ids);i++)if(i>=cfg.limit||int(state[kind][ids[i]].last_seen || state[kind][ids[i]].last)<sample.time-cfg.retention*86400)delete state[kind][ids[i]];}
  for(let key,o in state.dns.observations || {})if(o.last<sample.time-cfg.retention*86400)delete state.dns.observations[key];
  for(let b in values(state.days))for(let kind in ['devices','domains','apps']){let ids=sort(keys(b[kind]),(a,z)=>b[kind][z].download+b[kind][z].upload-b[kind][a].download-b[kind][a].upload);for(let i=cfg.limit;i<length(ids);i++){let id=ids[i];if(id=='Other/Unknown')continue;add(b[kind],'Other/Unknown',b[kind][id].download,b[kind][id].upload);delete b[kind][id];}}

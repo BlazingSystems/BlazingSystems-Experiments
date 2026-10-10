@@ -28,3 +28,11 @@ Implement pure accounting and attribution tests, collector, supervised service a
 - Built 13 IPK/archive artifacts locally in dist-v7. These are validation candidates, not production releases.
 - Actual executed results are in traffic/TEST-REPORT.md. No v7 software was installed on the physical router; isolated tests only.
 - Linux CI bootstrap passed. Next: push implementation, run full ImageBuilder/QEMU pipeline, resolve failures, then publish only after acceptance review.
+
+## Checkpoint 3 - CI builds and integration hardening
+- Implementation pushed at dea8a1f2e491bc46919ae8630310b2f2096d69b5; subsequent CI fixes at b02c5be3bed601446b7ab21bb7d07b910f313173 and 885d8b28ad3e1d8b20798c85417e85e97014720d.
+- Official pinned ImageBuilder successfully generated BIOS and UEFI x86/64 images. Full integration gate is still pending, so no tag/release exists.
+- Test harness corrected for OpenWrt's trailing fwtool certificate record; x86 generic does not contain a board metadata record because SUPPORTED_DEVICES is empty in the official recipe. This is not manufacturer-signed firmware.
+- Added real VM browser tests and controlled DNS/forwarding attribution tests. Changed browser module extension to .js for uhttpd MIME compatibility.
+- Added bounded five-minute WAN rollups, all-time aggregate counters, explicit unavailable device values, DHCP identity-reuse protection, structural state validation and unknown WAN attribution.
+- Next: complete BIOS/UEFI and package integration checks; document exact results before publication. Physical R281 remains unchanged.

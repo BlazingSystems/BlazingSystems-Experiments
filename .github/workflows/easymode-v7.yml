@@ -39,7 +39,9 @@ jobs:
       - name: Build verified-profile x86 BIOS and UEFI images
         run: sh traffic/tools/image.sh
       - name: Boot and integration tests on disposable image copy
-        run: python3 traffic/tests/vm.py
+        run: |
+          python3 traffic/tests/vm.py
+          python3 traffic/tests/vm.py --uefi
       - name: Final manifests and checksums
         run: python3 traffic/tools/build.py
       - name: Store successful build artifacts

@@ -8,4 +8,14 @@ dns=observeDNS(dns,['dnsmasq[123]: 8 192.168.1.2/53000 query[A] other.test from 
 let cfg={interval:15,retention:7,limit:64,domains:false},s={boot:'a',time:86400,monotonic:10,wan:[{device:'wan',identity:'2',rx:1000,tx:100}],clients:[],capabilities:{flow_generation:'a'}};
 let a=advance({},s,cfg);s.time+=15;s.monotonic+=15;s.wan[0].rx+=1500;s.wan[0].tx+=300;let b=advance(a,s,cfg);equal(b.days['1'].wan.wan,{download:1500,upload:300},'WAN direction');equal(b.live[-1].download_bps,800,'bits per second');s.boot='b';s.monotonic=1;s.wan[0].rx=2000;let c=advance(b,s,cfg);equal(c.days['1'].wan.wan.download,1500,'reboot no duplicate');
 let mac='02:00:00:00:00:01';s.clients=[{mac,ip:'192.168.1.2',online:true}];s.flows=[{key:'up',bytes:100,client_id:mac,client:'192.168.1.2',remote:'1.2.3.4',direction:'upload'}];c=advance(c,s,cfg);s.monotonic+=15;s.time+=15;s.flows[0].bytes=170;let d=advance(c,s,cfg);equal(d.devices[mac].upload,70,'per device upload');equal(length(keys(d.domains)),0,'domain disabled');s.flows[0].bytes=3;s.monotonic+=15;s.time+=15;let e=advance(d,s,cfg);equal(e.devices[mac].upload,70,'flow reset');
+equal(length(uniqueWAN([{interface:'a',l3_device:'eth1',up:true,route:[{target:'0.0.0.0',mask:0}]},{interface:'b',l3_device:'wwan0',up:true,route:[{target:'0.0.0.0',mask:0}]}],[],'cellular')),2,'independent multi-WAN');
+equal(uniqueWAN([{interface:'wan',l3_device:'eth1',up:true,route:[]}],['wan'],'router')[0].device,'eth1','explicit WAN override');
+equal(uniqueWAN([{interface:'wan',l3_device:'eth1',up:true,route:[{target:'0.0.0.0',mask:0}]}],[],'switch'),[],'switch does not claim invisible internet');
+let six=observeDNS({},['dnsmasq[1]: 9 fd00::2/42000 query[AAAA] example.test from fd00::2','dnsmasq[1]: 9 fd00::2/42000 reply example.test is 2001:db8::1'],400,64);equal(attribution(six,'fd00::2','2001:db8::1',410).domain,'example.test','IPv6 association');
+s.monotonic+=15;s.time+=15;s.flows[0].bytes=500;s.flows[0].client_id='02:00:00:00:00:02';s.clients=[{mac:'02:00:00:00:00:02',online:true}];let reassigned=advance(e,s,cfg);equal(reassigned.devices['02:00:00:00:00:02'].upload,0,'DHCP address reuse does not inherit old bytes');
+s.monotonic+=15;s.time+=15;s.flows[0].bytes=550;let next=advance(reassigned,s,cfg);equal(next.devices['02:00:00:00:00:02'].upload,50,'new identity gets only subsequent delta');
+equal(next.days['1'].domains,{},'disabled domain history remains empty');
+equal(length(keys(next.recent)),1,'short-window aggregate exists');
+s.monotonic+=500;s.time+=500;s.wan[0].rx+=999;let gap=advance(next,s,cfg);equal(gap.live[-1].download_bps,0,'large collection gap is not a live rate');
+let many={};for(let k=1;k<40;k++)many[''+k]={wan:{},devices:{},domains:{},apps:{}};gap.days=many;s.monotonic+=15;s.time=40*86400;let retained=advance(gap,s,cfg);equal(length(keys(retained.days)),7,'history retention bound');
 print('PASS: '+n+' accounting/attribution assertions\n');
