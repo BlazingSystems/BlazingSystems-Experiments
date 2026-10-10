@@ -5,7 +5,9 @@ if ($Router -notmatch '^[a-zA-Z0-9.:-]+$') { throw 'Invalid router address' }
 Write-Host 'This installs the monitoring package only. It does not flash firmware. SSH will request your administrator password.'
 $archive = Join-Path $env:TEMP ('easymode-' + [guid]::NewGuid().ToString('N') + '.tar.gz')
 try {
- & tar -czf $archive -- *.ipk install.sh
+ $packages = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ipk' -File | Select-Object -ExpandProperty Name)
+ if ($packages.Count -ne 2) { throw 'Extract exactly one edition archive into its own directory.' }
+ & tar -czf $archive -- @packages install.sh
  if ($LASTEXITCODE) { throw 'Could not prepare package archive' }
  & scp -O $archive "root@${Router}:/tmp/easymode-v7.tar.gz"
  if ($LASTEXITCODE) { throw 'SSH transfer failed; no installation attempted' }

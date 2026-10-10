@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Boot a disposable COPY. Never connect to physical routers or publish its credentials."""
-import gzip,hashlib,http.server,json,os,pathlib,secrets,shutil,socketserver,subprocess,sys,tempfile,threading,time,urllib.request
+import gzip,hashlib,http.server,json,os,pathlib,secrets,shutil,socketserver,subprocess,sys,tempfile,threading,time,urllib.request,zlib
 import paramiko,pexpect
 BASE=pathlib.Path(__file__).resolve().parents[2];DIST=BASE/'dist-v7';password=secrets.token_urlsafe(24);results=[]
 def check(ok,label):
@@ -15,7 +15,11 @@ class HTTP(http.server.BaseHTTPRequestHandler):
  def log_message(self,*args):pass
 with tempfile.TemporaryDirectory() as tmp:
  disk=pathlib.Path(tmp)/'disk.img'
- with gzip.open(DIST/'EasyMode-v7.0.0-PC-x86_64-BIOS.img.gz','rb') as src,disk.open('wb') as dst:shutil.copyfileobj(src,dst)
+ # OpenWrt appends fwtool metadata after the gzip member. Preserve the original
+ # release artifact and decompress only its disk member for this disposable VM.
+ raw=zlib.decompress((DIST/'EasyMode-v7.0.0-PC-x86_64-BIOS.img.gz').read_bytes(),31)
+ check(raw[510:512]==b'\x55\xaa' and len(raw)>100*1024*1024,'compressed image has a valid disk member and partition signature')
+ disk.write_bytes(raw);del raw
  subprocess.run(['sudo','ip','tuntap','add','dev','emti0','mode','tap','user',str(os.getuid())],check=True)
  subprocess.run(['sudo','ip','addr','add','192.168.77.2/24','dev','emti0'],check=True);subprocess.run(['sudo','ip','link','set','emti0','up'],check=True)
  cmd=['qemu-system-x86_64','-m','256','-smp','2','-nographic','-no-reboot','-drive',f'file={disk},format=raw,if=virtio','-netdev','tap,id=lan,ifname=emti0,script=no,downscript=no','-device','virtio-net-pci,netdev=lan','-netdev','user,id=wan','-device','virtio-net-pci,netdev=wan']
@@ -43,8 +47,8 @@ with tempfile.TemporaryDirectory() as tmp:
   invalid=rpc('action',{'action':'configure','payload':'{"wan":["wan;touch /tmp/injected"]}'},token)['result'][1];check(not invalid['ok'] and run('test ! -e /tmp/injected && echo safe').strip()=='safe','input injection rejected')
   check(run('stat -c %a /tmp/easymode-traffic/state.json').strip()=='600','history file is private')
   # Install real opkg artifacts, then repeat the same install as an upgrade.
-  sftp=ssh.open_sftp()
-  for path in [DIST/'EasyMode-v7.0.0-Core-all.ipk',DIST/'EasyMode-v7.0.0-PC-all.ipk']:sftp.put(str(path),'/tmp/'+path.name)
+  for path in [DIST/'EasyMode-v7.0.0-Core-all.ipk',DIST/'EasyMode-v7.0.0-PC-all.ipk']:
+   i,o,e=ssh.exec_command('umask 077; cat > /tmp/'+path.name);i.write(path.read_bytes());i.channel.shutdown_write();check(o.channel.recv_exit_status()==0,'package transfer '+path.name)
   run('opkg install /tmp/EasyMode-v7.0.0-Core-all.ipk /tmp/EasyMode-v7.0.0-PC-all.ipk');time.sleep(3)
   run('opkg install --force-reinstall /tmp/EasyMode-v7.0.0-Core-all.ipk');time.sleep(3)
   token=rpc('login',{'username':'root','password':password},obj='session')['result'][1]['ubus_rpc_session'];check(snapshot()['config']['edition']=='pc','clean package installation and same-version reinstall preserve edition')

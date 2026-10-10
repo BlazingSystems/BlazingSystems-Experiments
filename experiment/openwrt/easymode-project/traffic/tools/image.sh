@@ -18,6 +18,8 @@ out="$base/dist-v7"
 cp bin/targets/x86/64/openwrt-24.10.8-x86-64-generic-squashfs-combined.img.gz "$out/EasyMode-v7.0.0-PC-x86_64-BIOS.img.gz"
 cp bin/targets/x86/64/openwrt-24.10.8-x86-64-generic-squashfs-combined-efi.img.gz "$out/EasyMode-v7.0.0-PC-x86_64-UEFI.img.gz"
 cp bin/targets/x86/64/profiles.json "$out/OpenWrt-24.10.8-x86_64-profiles.json"
+staging_dir/host/bin/fwtool -i "$out/BIOS-IMAGE-METADATA.json" "$out/EasyMode-v7.0.0-PC-x86_64-BIOS.img.gz"
+staging_dir/host/bin/fwtool -i "$out/UEFI-IMAGE-METADATA.json" "$out/EasyMode-v7.0.0-PC-x86_64-UEFI.img.gz"
 cp bin/targets/x86/64/*.manifest "$out/" 2>/dev/null || true
 cd "$base"
 python3 traffic/tools/build.py
