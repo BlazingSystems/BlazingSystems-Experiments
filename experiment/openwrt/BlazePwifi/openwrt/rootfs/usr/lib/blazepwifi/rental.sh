@@ -452,16 +452,34 @@ bp_rental_append_paid_receipt() {
   bp_durable_sync || return 8
 }
 
+# P0-0710: use canonical decimal and signed-32-bit safe financial
+# arithmetic. A broken lease/receipt must not become an expired/zero lease.
+bp_rental_safe_seconds() {
+  case "$1" in
+    0) ;;
+    [1-9]*) case "$1" in *[!0-9]*) return 1;; esac ;;
+    *) return 1 ;;
+  esac
+  [ "$1" -le "$2" ] 2>/dev/null
+}
+
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
   # Internal callers must not be able to mint negative/zero/overflowing paid
   # leases even when bypassing the external Vendo CGI parameter checks.
-  case "$pulses" in ''|*[!0-9]*) return 2;; esac
-  [ "$pulses" -ge 1 ] 2>/dev/null && [ "$pulses" -le 20 ] 2>/dev/null || return 2
+  bp_rental_safe_seconds "$pulses" 20 && [ "$pulses" -ge 1 ] || return 2
+  bp_rental_safe_seconds "$now" 2147483647 || return 8
   # Refuse invalid receipt storage before touching a prepaid lease, and never
   # clear an operator-reconcilable uncertainty marker on an ordinary retry.
   [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
   [ ! -e "$BP_STATE/paid-state-uncertain" ] || return 9
+  # Read stored paid time BEFORE a duplicate receipt could issue an ACK.
+  line="$(bp_rental_device_line "$did")"
+  [ -n "$line" ] || return 2
+  secret="$(printf '%s' "$line" | cut -f2)"
+  lease="$(printf '%s' "$line" | cut -f3)"
+  label="$(printf '%s' "$line" | cut -f4)"
+  bp_rental_safe_seconds "$lease" 2147483647 || return 8
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
   # Reject duplicate/corrupt event IDs rather than trusting the first row.
   # Legacy 4-column coin receipts cannot prove the original pulse quantity:
@@ -472,22 +490,19 @@ bp_rental_apply_coin() {
     old_lease="$(printf '%s' "$old" | cut -f3)"
     old_pulses="$(printf '%s' "$old" | cut -f5)"
     [ "$old_did" = "$did" ] && [ "$old_pulses" = "p:$pulses" ] || return 5
-    case "$old_lease" in ''|*[!0-9]*) return 5;; esac
+    bp_rental_safe_seconds "$old_lease" 2147483647 || return 5
     printf 'duplicate\t%s\n' "$old_lease"
     return 0
   fi
-  line="$(bp_rental_device_line "$did")"
-  [ -n "$line" ] || return 2
-  secret="$(printf '%s' "$line" | cut -f2)"
-  lease="$(printf '%s' "$line" | cut -f3)"
-  label="$(printf '%s' "$line" | cut -f4)"
   per="$(bp_cfg rental_seconds_per_pulse)"
   [ -n "$per" ] || per=600
-  case "$per" in ''|*[!0-9]*) per=600;; esac
-  [ "$per" -ge 1 ] 2>/dev/null && [ "$per" -le 86400 ] 2>/dev/null || per=600
+  bp_rental_safe_seconds "$per" 86400 && [ "$per" -ge 1 ] || return 8
   base="$lease"
   [ "$base" -gt "$now" ] 2>/dev/null || base="$now"
-  newlease=$((base + per * pulses))
+  delta=$((per * pulses))
+  # Reject before signed integer overflow on 32-bit BusyBox/ash targets.
+  [ "$base" -le $((2147483647-delta)) ] || return 8
+  newlease=$((base + delta))
   # A write-ahead halt marker is persisted before the first money-state write.
   # If a receipt append fails, no success ACK is sent and all subsequent
   # financial mutation must halt for operator reconciliation (not auto-reset).
