@@ -25,11 +25,15 @@ def get_event_patterns(name: str) -> list[str]:
     # four-space paths; fail closed if its shape changes.
     match = re.search(rf"^  {re.escape(name)}:\s*\n(.*?)(?=^  [a-z_]+:|^jobs:|\Z)", raw, re.M | re.S)
     assert match, f"missing {name} event"
-    paths = re.search(r"^    paths:\s*\n((?:^      - .+\n)+)", match.group(1), re.M)
+    paths = re.search(r"^    paths:\s*\n((?:^      (?:- |#).+\n)+)", match.group(1), re.M)
     assert paths, f"missing {name}.paths"
     patterns = []
     for line in paths.group(1).splitlines():
-        value = line.partition("- ")[2].strip()
+        value = line.strip()
+        if value.startswith("#"):
+            continue
+        assert value.startswith("- "), "unrecognized paths list line"
+        value = value[2:]
         assert len(value) >= 3 and value[0] == value[-1] == "'", "unrecognized path expression"
         patterns.append(value[1:-1])
     return patterns
