@@ -2,8 +2,12 @@
 
 BlazePwifi is an open-source prepaid Wi-Fi, captive-portal, coin-controller and managed rental-device platform for OpenWrt, Orange Pi, x86 PCs, ESP8266/ESP32 and Android.
 
-Current production release: **0.3.0**  
+Current published full production release: **[v0.5.2](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2)** (preserve frozen release artifacts).  
+Separate Standalone Rental line: **[v0.5.2-rental.2-rc.9](https://github.com/BlazingSystems/BlazingSystems-Experiments/releases/tag/v0.5.2-rental.2-rc.9)** (not the full system).  
+Active development: **v0.6.0 audit/UX/security foundation, [draft PR #30](https://github.com/BlazingSystems/BlazingSystems-Experiments/pull/30)**. The current source `VERSION` on that branch remains `0.5.3`; **no signed, installable v0.6.0 release has been published**.  
 OpenWrt build baseline: **25.12.5**
+
+**Maintenance / handover:** Every code, verification, blocker and release-state change must be recorded. Start with [PROJECT_HANDOVER.md](PROJECT_HANDOVER.md), then [live status](docs/handover/CURRENT_STATE.md), [policy](docs/handover/HANDOVER_POLICY.md), and [change ledger](docs/handover/CHANGE_LEDGER.md). GitHub Actions now rejects implementation changes that postdate the last handover checkpoint.
 
 ## Capability tiers
 
@@ -45,7 +49,7 @@ BlazePwifi includes:
 
 ## Portal and admin
 
-Lite targets keep a compact native shell. Standard/Full targets use a capability-gated Tabler core admin shell; optional heavy chart/plugin bundles are excluded.
+The actively maintained web management console uses the local `openwrt/rootfs/www/blazepwifi/vendor/tailadmin/blaze-tailadmin.css` TailAdmin-inspired CSS, with server-authorized controls and responsive rental/device pages. Small devices keep capability-aware functionality without remote CDN dependencies. The v0.6.0 visual redesign and live session chart are development changes, **not** a published product feature until validated and released.
 
 The customer portal keeps the first view simple: remaining time, Insert Coin, voucher and rates. Non-sensitive device/network details are below the primary actions.
 
@@ -90,6 +94,10 @@ Versioned source indexes live under [releases](releases/). Large generated insta
 
 The release pipeline keeps direct installable assets such as APK, BIN, IMG.GZ, INO and TAR.GZ files, plus per-target ZIP archives, manifest.json and SHA256SUMS. Failed optional targets are never replaced by placeholders.
 
+## Windows BlazePisonet integration
+
+The native Windows x64 EXE/NSIS installer and SoftTimer source live in the separate repository subtree [`experiment/windows/BlazePisonet-SoftTimer`](../../windows/BlazePisonet-SoftTimer/). It supports local one-coin/one-PC operation, centralized coin windows and USB serial COM selection. A v0.6.0 development patch corrects 250ms-tick timer overbilling and has passed Windows CI, but real-money electrical and outage tests remain a deployment prerequisite.
+
 ## Validation boundary
 
 CI success is build validation. Production deployment still requires physical boot/recovery, electrical, captive-client, brownout and sustained-load testing on the exact hardware revision.
@@ -100,7 +108,7 @@ CI success is build validation. Production deployment still requires physical bo
 - installer — OpenWrt installer/uninstaller
 - esp8266 and esp32 — controller firmware
 - linux-agent — Orange Pi/SBC GPIO agent and profiles
-- android/BlazeRental — Android DPC/companion
+- android/BlazeRentalLauncher — native Launcher3-based Android rental launcher, Device Owner receiver and managed policy
 - portal-templates — static interface previews
 - build — reproducible image/UI preparation
 - tools — provisioning helpers

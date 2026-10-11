@@ -1,0 +1,51 @@
+name: BlazePwifi V2 Native Synthetic Journal Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - blazepwifi-v0.6.0-audit-foundation
+    paths:
+      - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh'
+      - 'experiment/windows/BlazePisonet-SoftTimer/tests/V2NativeEnvelopeContract/**'
+      - '.github/workflows/blazepwifi-v060-native-journal.yml'
+  pull_request:
+    paths:
+      - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh'
+      - 'experiment/windows/BlazePisonet-SoftTimer/tests/V2NativeEnvelopeContract/**'
+      - '.github/workflows/blazepwifi-v060-native-journal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-journal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check compiler and libcrypto
+        run: |
+          cc --version
+          openssl version
+          pkg-config --exists libcrypto
+      - name: Compile and fault-test signed synthetic prepaid journal
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.425'
+      - name: PAY-0715 actual SoftTimer .NET → native HMAC/fsync journal cross-language contract
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh
+      - name: Safety boundary
+        run: |
+          test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/bin/v2-native-fixture
+          test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/v060_journal_authority_native.c
+          echo 'LAB ONLY — no installed payment authority, no real hardware durability claim'

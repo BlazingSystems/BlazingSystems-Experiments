@@ -41,10 +41,16 @@ grep -Fq 'PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM' "$ADMIN"
 grep -Fq 'PROVISIONING_ADMIN_EXTRAS_BUNDLE' "$ADMIN"
 grep -Fq 'Device Owner provisioning server URL must use HTTPS' "$ADMIN"
 ! grep -Fq 'PROVISIONING_SKIP_EDUCATION_SCREENS' "$ADMIN"
-grep -Fq 'Bind existing BlazeRental' "$ADMIN_HTML"
-grep -Fq 'Provision factory-reset phone' "$ADMIN_HTML"
-grep -Fq "api('rental_binding_qr'" "$RENTAL_UI"
-grep -Fq "api('rental_provisioning_qr'" "$RENTAL_UI"
+grep -Fq 'Generate binding QR' "$ADMIN_HTML"
+grep -Fq 'Generate Device Owner QR' "$ADMIN_HTML"
+# The guarded UI shares its CSRF-protected API transport, but the actions
+# MUST remain separate and a late modal-close response must be rejected.
+grep -Fq "generateBindingQr(){return generateQr('rental_binding_qr')}" "$RENTAL_UI"
+grep -Fq "generateProvisioningQr(){return generateQr('rental_provisioning_qr')}" "$RENTAL_UI"
+grep -Fq "const x=await C().api(action,{label,server_url:server})" "$RENTAL_UI"
+grep -Fq "request!==qrGeneration" "$RENTAL_UI"
+grep -Fq "x.qr_type!==(managed?'device_owner':'binding')" "$RENTAL_UI"
+grep -Fq "Managed QR is missing certificate pin" "$RENTAL_UI"
 
 echo "hardening: Android provisioning checksum encoder"
 # Verify the shell checksum encoder against the frozen v0.5.2 production APK digest.

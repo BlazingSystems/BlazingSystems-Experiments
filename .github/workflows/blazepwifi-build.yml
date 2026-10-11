@@ -4,12 +4,24 @@ on:
   push:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
+      # Docs-only commits must not rebuild OpenWrt, Windows or Android.
+      # Source + docs still matches the positive rule; only doc files excluded.
+      - '!experiment/openwrt/BlazePwifi/docs/**'
+      - '!experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md'
+      - '!experiment/openwrt/BlazePwifi/AUDIT.md'
+      - '!experiment/openwrt/BlazePwifi/README.md'
       - '.github/workflows/blazepwifi-build.yml'
       - '.github/workflows/blazepwifi-v053-release.yml'
       - '.github/workflows/blazerental-v053-lineage2-sign.yml'
   pull_request:
     paths:
       - 'experiment/openwrt/BlazePwifi/**'
+      # Docs-only commits must not rebuild OpenWrt, Windows or Android.
+      # Source + docs still matches the positive rule; only doc files excluded.
+      - '!experiment/openwrt/BlazePwifi/docs/**'
+      - '!experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md'
+      - '!experiment/openwrt/BlazePwifi/AUDIT.md'
+      - '!experiment/openwrt/BlazePwifi/README.md'
       - '.github/workflows/blazepwifi-build.yml'
       - '.github/workflows/blazepwifi-v053-release.yml'
       - '.github/workflows/blazerental-v053-lineage2-sign.yml'
@@ -19,10 +31,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  ci_decision:
+    name: CI-0701 docs-only PR sync proof
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_heavy: ${{ steps.filter.outputs.run_heavy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: CI-0701 negative classifier contract (no API, no hardware)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_docs_classifier.py
+      - name: Verify previous exact Full success before suppressing expensive jobs
+        id: filter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 experiment/openwrt/BlazePwifi/tools/v060_ci_docs_classifier.py
+
   validate:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mandatory handover freshness gate
+        run: sh experiment/openwrt/BlazePwifi/tests/handover_gate.sh
+      - name: Handover gate fail-closed regression
+        run: sh experiment/openwrt/BlazePwifi/tests/handover_gate_regression.sh
+      - name: HND-0700 guard source-vs-docs GitHub Actions path selection
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_doc_only_filter.py
+      - name: CI-0701 guard never bypasses Full for unverified source
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ci_docs_classifier.py
       - name: Static validation
         run: sh experiment/openwrt/BlazePwifi/tests/static.sh
       - name: v0.3 foundation validation
@@ -63,6 +109,134 @@ jobs:
         run: sh experiment/openwrt/BlazePwifi/tests/v051_update.sh
       - name: BlazePwifi v0.5.2 transactional update validation
         run: sh experiment/openwrt/BlazePwifi/tests/v052_update.sh
+      - name: BlazePwifi v0.6 migration preflight and 0.5 rollback safety
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_migration_guard.sh
+      - name: Verify safe tar extraction and manifest target policy
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_update_archive_security.sh
+      - name: BlazePwifi v0.6 synthetic state backup/restore integrity prototype
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_state_fixture.sh
+      - name: Verify ordinary coin ACK refusal and persistent paid quarantine
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_false_ack.sh
+      - name: Retain paid coin replay IDs throughout the full live target window
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_coin_replay_window.sh
+      - name: Reject member paid replay ACK during global uncertainty quarantine
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_quarantine_replay.sh
+      - name: BlazePwifi v0.6 legacy prepaid receipt replay retention
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_replay_repro.sh
+      - name: BlazePwifi v0.6 receipt store full rejects payment
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_receipt_quota.sh
+      - name: PAY-0713 synthetic member atomic authority bridge (not production)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_v2_atomic_bridge.sh
+      - name: BlazePwifi v0.6 member receipt EIO quarantine
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_receipt_failure_repro.sh
+      - name: BlazePwifi v0.6 rental receipt EIO before mutation
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_failure_repro.sh
+      - name: BlazePwifi v0.6 rental receipt EIO after lease rename
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_midwrite.sh
+      - name: Refuse altered-pulse and cross-device rental coin receipt duplicate ACKs
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_receipt_identity.sh
+      - name: BlazePwifi v0.6 synthetic crash-atomic member transfer
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_transfer_crash_repro.sh
+      - name: P0-0710 reject malformed or overflowing paid balances and rental leases
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_paid_numeric_guard.sh
+      - name: BlazePwifi v0.6 synthetic transactional ledger oracle (model only)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_ledger_model.py
+      - name: BlazePwifi v0.6 synthetic POSIX receipt and balance journal
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_fixture.sh
+      - name: Verify disabled-by-default installed v2 shadow financial read-only probe
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_v2_shadow_readonly.sh
+      - name: BlazePwifi v0.6 synthetic HMAC authenticated controller journal
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_auth_fixture.sh
+      - name: Ensure LAB-only OpenWrt SDK fixture is excluded from production rootfs
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_sdk_lab_guard.sh
+      - name: BlazePwifi v0.6 native fsync and renameat transaction boundary
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_durable_replace_native.sh
+      - name: BlazePwifi v0.6 signed native durable journal end-to-end fault tests
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_journal_native_auth_endtoend.sh
+      - name: BlazePwifi v0.6 physical scratch mount fail-closed preflight (synthetic only)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_lab_storage_preflight.sh
+      - name: HWPRE-0683 refuse unsafe physical pretrial sources (negative-only, no hardware)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_physical_pretrial_readonly.sh
+      - name: PEVID-0679 verify mocked power-cut evidence never authorizes hardware acceptance
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_physical_evidence_contract.py
+      - name: BlazePwifi v0.6 native private HMAC and fsync synthetic journal authority
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
+      - name: ROLLBACK-0691 EXPECTED UNSAFE old-ledger replay repro (NOT production approval)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_v2_snapshot_rollback_repro.sh
+      - name: WITNESS-0692 hypothetical off-device trusted freshness protocol model (LAB ONLY)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_trusted_witness_model.py
+      - name: WITNESS-0693 hypothetical two-stage independent witness recovery (LAB ONLY)
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_witness_two_stage_recovery.py
+      - name: TRUST-0694 candidate root-of-trust discovery remains fail-closed (synthetic only)
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_trust_capability_inventory.sh
+      - name: Verify sealed synthetic-only backup code compiles and remains uninstalled
+        run: |
+          python3 -m py_compile experiment/openwrt/BlazePwifi/tools/v060_v1_sealed_fixture.py
+          python3 -m py_compile experiment/openwrt/BlazePwifi/tests/v060_v1_sealed_fixture.py
+          test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/lib/blazepwifi/v060_v1_sealed_fixture.py
+      - name: EBACK-0677 authenticated AES-GCM synthetic recovery negative tests
+        run: |
+          python3 -m venv "$RUNNER_TEMP/blaze-v1-sealed-venv"
+          "$RUNNER_TEMP/blaze-v1-sealed-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: 'cryptography==50.0.2'
+          "$RUNNER_TEMP/blaze-v1-sealed-venv/bin/python" experiment/openwrt/BlazePwifi/tests/v060_v1_sealed_fixture.py
+      - name: Read-only redacted v1 financial migration preflight fixture
+        run: python3 experiment/openwrt/BlazePwifi/tests/v060_v1_inventory_fixture.py
+      - name: Reject malformed and duplicate paid Wi-Fi account snapshots
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_account_write_integrity.sh
+      - name: Reject malformed and duplicate paid rental lease snapshots
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_db_integrity.sh
+      - name: Reject destructive paid rental revocation and audit failure
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_revoke_safety.sh
+      - name: Refuse paid rental lease storage and audit false ACK and implicit forfeiture
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_lease_mutation_safety.sh
+      - name: Require explicit confirmation for shortening an existing paid rental lease
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_rental_lease_set.sh
+      - name: Prevent signed Android status from rewriting authoritative paid rental lease
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_rental_status_heartbeat.sh
+      - name: Protect paid rental time in standalone R281 signed heartbeats
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_heartbeat.sh
+      - name: Reject false-ACK signed R281 rental coin after paid lease/audit faults
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_ack.sh
+      - name: Keep standalone R281 Android coin-start target idempotent and storage checked
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_coin_start.sh
+      - name: Reject partial and weak R281 cryptographic rental enrollment secrets
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_r281_random_hex.sh
+      - name: Refuse full/R281 admin login, password or CSRF when RNG unavailable
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_rng_failclosed.sh
+      - name: Preserve full/R281 privileged password verifier database on copy/storage failure
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_admin_password_write_integrity.sh
+      - name: Require durable old-session logout and password-change revoke on both admin portals
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_session_revocation.sh
+      - name: Revoke old admin tokens before any new credential commit or false reset ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_auth_password_rotation_order.sh
+      - name: Refuse signed R281 Android enrollment false ACK and reusable setup QR
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_rental_enroll_safety.sh
+      - name: Keep ordinary binding and Device Owner QR issuance storage-authoritative
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_enrollment_qr_issuance.sh
+      - name: Preserve R281 signed hotspot coin receipts and refuse storage false ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_hotspot_coin_safety.sh
+      - name: Refuse legacy MAC credit loss before account persistence in both source profiles
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_legacy_bind_zero_loss.sh
+      - name: Refuse deleting existing paid member seconds and false admin ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_delete_safety.sh
+      - name: Prevent partial member ledger replacement and false password/admin ACK
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_write_fault.sh
+      - name: Protect paid member deletion in BlazeFusion management UI
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_member_ui_delete.sh
+      - name: BlazePwifi v0.6 OpenWrt sysupgrade preservation safety
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_sysupgrade_preservation.sh
+      - name: BlazeFusion offline and authenticated UI integration smoke
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_ui_fusion.sh
+      - name: Verify managed Android Device Owner TLS pin contract
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_managed_tls_pin.sh
+      - name: Verify native BlazeRental binding security dashboard
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_android_trust_panel.sh
+      - name: Verify rental browser QR lifecycle and pin requirements
+        run: node experiment/openwrt/BlazePwifi/tests/v060_rental_qr_browser.cjs
+      - name: Standalone Rental BlazeFusion self-contained UI and original secure routes
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_standalone_fusion.sh
+      - name: EasyMode R281 BlazeFusion opt-in staging and frozen-source verification
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_easymode_fusion.sh
       - name: BlazeRental v0.5.1 update compatibility validation
         run: sh experiment/openwrt/BlazePwifi/tests/v051_android_source.sh
       - name: BlazeRental v0.5.2 branding and alarm validation
@@ -116,7 +290,56 @@ jobs:
             BlazePwifi-*.tar.gz
             BlazePwifi-*.sha256
 
+      # Evidence is emitted even when a validation test fails. This record
+      # is not a release gate and is never a substitute for the Actions result.
+      - name: Record exact-SHA handover CI evidence
+        if: always()
+        shell: bash
+        env:
+          BLAZE_VALIDATE_RESULT: ${{ job.status }}
+        run: |
+          mkdir -p handover-ci
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path('experiment/openwrt/BlazePwifi')
+          payload = {
+              "schema": "blazepwifi-handover-evidence-v1",
+              "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+              "commit_sha": os.environ.get("GITHUB_SHA", ""),
+              "ref": os.environ.get("GITHUB_REF", ""),
+              "job": "validate",
+              "job_status": os.environ.get("BLAZE_VALIDATE_RESULT", "unknown"),
+              "source_version": (root / "VERSION").read_text().strip() if (root / "VERSION").exists() else "unavailable",
+              "production_signed": False,
+              "production_released": False,
+              "handover_root": str(root / "PROJECT_HANDOVER.md"),
+              "live_state": str(root / "docs/handover/CURRENT_STATE.md"),
+              "change_ledger": str(root / "docs/handover/CHANGE_LEDGER.md"),
+          }
+          pathlib.Path("handover-ci/CI_HANDOVER.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+          echo "BlazePwifi validate status: $BLAZE_VALIDATE_RESULT at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Authoritative repo handover: experiment/openwrt/BlazePwifi/docs/handover/CURRENT_STATE.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive handover state and evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlazePwifi-ci-handover-evidence
+          path: |
+            handover-ci/CI_HANDOVER.json
+            experiment/openwrt/BlazePwifi/PROJECT_HANDOVER.md
+            experiment/openwrt/BlazePwifi/docs/handover/CURRENT_STATE.md
+            experiment/openwrt/BlazePwifi/docs/handover/CHANGE_LEDGER.md
+            experiment/openwrt/BlazePwifi/docs/handover/HANDOVER_POLICY.md
+          if-no-files-found: warn
+
   esp8266:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -139,6 +362,8 @@ jobs:
           path: experiment/openwrt/BlazePwifi/dist/esp8266/
 
   firmware:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -160,6 +385,8 @@ jobs:
 
 
   esp32:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,6 +410,8 @@ jobs:
 
 
   firmware_optional:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
@@ -205,6 +434,8 @@ jobs:
 
 
   android:
+    needs: ci_decision
+    if: needs.ci_decision.outputs.run_heavy == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 55
     steps:
@@ -335,6 +566,8 @@ jobs:
           python -m pip install --disable-pip-version-check playwright
           python -m playwright install --with-deps chromium
       - run: python experiment/openwrt/BlazePwifi/simulation/browser_v04_audit.py simulation-out/browser
+      - run: python experiment/openwrt/BlazePwifi/simulation/standalone_fusion_browser.py simulation-out/browser
+      - run: python experiment/openwrt/BlazePwifi/simulation/easymode_fusion_browser.py simulation-out/browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -756,3 +989,136 @@ jobs:
             gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "BlazePwifi 0.3.0" --notes-file "$NOTES"
           fi
           gh release upload "$TAG" release-out/* --clobber
+
+
+  # Executable lab-only release, never a production v0.6.0.
+  publish_v060_lab_preview:
+    if: github.ref == 'refs/heads/blazepwifi-v0.6.0-audit-foundation' && contains(github.event.head_commit.message, '[v060-lab-release]')
+    needs: [v04_candidate_gate, firmware_optional]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAB_TAG: v0.6.0-alpha.4
+      NOTES: experiment/openwrt/BlazePwifi/releases/0.6.0-alpha.4/RELEASE_NOTES.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify full candidate and same-SHA Windows completed successfully
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$NOTES"
+          test "$(cat experiment/openwrt/BlazePwifi/VERSION)" = "0.5.3" || { echo "Preview notes/source version mismatch"; exit 1; }
+          test "$GITHUB_REF_NAME" = "blazepwifi-v0.6.0-audit-foundation"
+          if gh release view "$LAB_TAG" >/dev/null 2>&1; then
+            echo "Refusing to overwrite an existing lab release"; exit 1
+          fi
+          gh run download "$GITHUB_RUN_ID" -n BlazePwifi-current-candidate-gate -D gate
+          python3 - <<'PY'
+          import json,os
+          x=json.load(open("gate/CANDIDATE-GATE.json",encoding="utf-8"))
+          assert x.get("status")=="passed" and x.get("commit")==os.environ["GITHUB_SHA"], "Wrong SHA/failed full gate"
+          assert x.get("release")=="0.5.3", "Unexpected artifact source revision"
+          PY
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/blazepisonet-softtimer-release.yml/runs?branch=$GITHUB_REF_NAME&per_page=50" --jq '.workflow_runs[] | [.id,.head_sha,.conclusion] | @tsv')"
+          WINDOWS_RUN="$(printf '%s\n' "$RUNS" | awk -F '\t' -v sha="$GITHUB_SHA" '$2==sha && $3=="success" {print $1; exit}')"
+          [ -n "$WINDOWS_RUN" ] || { echo "Same-SHA Windows installer not green; NO release"; exit 1; }
+          echo "WINDOWS_RUN=$WINDOWS_RUN" >> "$GITHUB_ENV"
+      - name: Download exact CI-built lab artifacts from this run and Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage lab-release
+          for a in BlazePwifi-bundle BlazePwifi-android-current BlazePwifi-esp8266-firmware BlazePwifi-esp32-firmware BlazePwifi-ruijie-firmware BlazePwifi-x86_64-firmware BlazePwifi-orangepi_zero3-firmware BlazePwifi-current-update; do
+            mkdir -p "stage/$a"
+            gh run download "$GITHUB_RUN_ID" -n "$a" -D "stage/$a"
+            find "stage/$a" -type f -size +0c | grep -q . || { echo "Empty/missing artifact $a"; exit 1; }
+            (cd stage && zip -qr "../lab-release/$a-LAB-ONLY.zip" "$a")
+          done
+          win="BlazePisonet-SoftTimer-v0.4.0-win-x64"
+          mkdir -p "stage/$win"
+          gh run download "$WINDOWS_RUN" -n "$win" -D "stage/$win"
+          find "stage/$win" -type f -size +0c | grep -q . || { echo "Windows artifact missing"; exit 1; }
+          (cd stage && zip -qr "../lab-release/$win-LAB-ONLY.zip" "$win")
+          cp "$NOTES" lab-release/RELEASE_NOTES.md
+          (cd lab-release && sha256sum *-LAB-ONLY.zip > SHA256SUMS)
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path("lab-release")
+          assets=[dict(name=p.name,bytes=p.stat().st_size,sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in sorted(root.glob("*-LAB-ONLY.zip"))]
+          assert len(assets)==9 and all(a["bytes"]>0 for a in assets),"Incomplete lab assets"
+          (root/"MANIFEST.json").write_text(json.dumps(dict(
+              tag=os.environ["LAB_TAG"],purpose="DISPOSABLE-LAB-ONLY-NOT-PRODUCTION",
+              commit=os.environ["GITHUB_SHA"],build_run_id=os.environ["GITHUB_RUN_ID"],
+              windows_run_id=os.environ["WINDOWS_RUN"],source_version="0.5.3",
+              production_signed=False,hardware_powercut_verified=False,
+              migration_verified=False,customer_install_authorized=False,
+              assets=assets),indent=2)+"\n",encoding="utf-8")
+          PY
+      - name: Upload and verify draft lab artifacts before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WINDOWS_RUN"
+          test -s lab-release/MANIFEST.json && test -s lab-release/SHA256SUMS
+          # A partial asset upload must remain unpublished as a draft, never
+          # appear as a successful lab release with missing checksum evidence.
+          gh release create "$LAB_TAG" lab-release/* \
+            --target "$GITHUB_SHA" --draft --prerelease \
+            --title "BlazePwifi v0.6.0-alpha.4 — LAB ONLY, NOT PRODUCTION" \
+            --notes-file "$NOTES"
+          # GitHub draft releases intentionally have an untagged public URL;
+          # /releases/tags/TAG can return HTTP 404 while the draft exists.
+          # Resolve the private draft through authenticated releases listing.
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > created-releases.json
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          releases=json.load(open("created-releases.json",encoding="utf-8"))
+          matches=[r for r in releases if r.get("tag_name")==os.environ["LAB_TAG"]]
+          assert len(matches)==1,"Expected exactly one new private lab release"
+          release=matches[0]
+          assert isinstance(release.get("id"),int),"Missing new release ID"
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
+              env.write(f'LAB_DRAFT_RELEASE_ID={release["id"]}\n')
+          manifest=json.load(open("lab-release/MANIFEST.json",encoding="utf-8"))
+          assert release["draft"] is True and release["prerelease"] is True,"Expected draft prerelease"
+          assert release["tag_name"]==os.environ["LAB_TAG"],"Wrong release tag"
+          assert release["target_commitish"]==os.environ["GITHUB_SHA"],"Release source SHA mismatch"
+          assert manifest["tag"]==os.environ["LAB_TAG"] and manifest["commit"]==os.environ["GITHUB_SHA"]
+          assert not manifest["customer_install_authorized"] and not manifest["production_signed"]
+          remote={a["name"]:a for a in release["assets"]}
+          local={p.name:p for p in pathlib.Path("lab-release").iterdir() if p.is_file()}
+          assert len(local)==12 and set(remote)==set(local),"Missing or additional uploaded assets"
+          for name,p in local.items():
+              a=remote[name]
+              assert a["state"]=="uploaded" and a["size"]==p.stat().st_size and a["size"]>0,name
+              actual=hashlib.sha256(p.read_bytes()).hexdigest()
+              digest=a.get("digest")
+              assert isinstance(digest,str) and digest=="sha256:"+actual,"Missing or mismatched upload SHA-256 for "+name
+          print("LAB DRAFT REMOTE VERIFIED: 12 full-size assets, exact source, sha256 where exposed.")
+          PY
+      - name: Publish verified lab-only prerelease and verify visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          # PATCH by numeric draft ID; publish only after asset/digest checks.
+          test -n "${LAB_DRAFT_RELEASE_ID:-}"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$LAB_DRAFT_RELEASE_ID" -F draft=false -F prerelease=true > publish-by-id.json
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$LAB_TAG" > published-final.json
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open("published-final.json",encoding="utf-8"))
+          assert r["id"]==int(os.environ["LAB_DRAFT_RELEASE_ID"])
+          assert r["tag_name"]==os.environ["LAB_TAG"] and r["target_commitish"]==os.environ["GITHUB_SHA"]
+          assert r["draft"] is False and r["prerelease"] is True
+          assert len(r["assets"])==12 and all(a["state"]=="uploaded" for a in r["assets"])
+          print("VERIFIED ACTUAL LAB PRERELEASE",r["html_url"],len(r["assets"]),"assets")
+          PY
+          gh release view "$LAB_TAG" --json tagName,isPrerelease,assets \
+            --jq '{tag:.tagName,prerelease:.isPrerelease,asset_count:(.assets|length)}'

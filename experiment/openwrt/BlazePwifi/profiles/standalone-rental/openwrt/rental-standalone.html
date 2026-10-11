@@ -8,6 +8,60 @@
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% -10%,#12395d 0,transparent 32%),var(--bg);color:var(--text)}
 button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:none!important}.shell{min-height:100vh;display:grid;grid-template-columns:245px 1fr}.sidebar{position:sticky;top:0;height:100vh;background:#081421e8;border-right:1px solid var(--line);padding:18px 12px}.brand{font-size:20px;font-weight:900;padding:7px 9px 18px}.brand b{color:var(--cyan)}.brand small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.nav button{display:block;width:100%;border:0;background:transparent;color:#afc5d5;text-align:left;padding:11px 12px;border-radius:10px;margin:2px 0}.nav button:hover,.nav button.on{background:#122a40;color:#fff}.sidefoot{position:absolute;bottom:14px;left:18px;color:var(--muted);font-size:11px}.main{padding:22px;max-width:1500px;width:100%}.top{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:16px}.top h1{margin:0;font-size:24px}.top p{margin:3px 0 0;color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:13px}.card{grid-column:span 12;background:linear-gradient(180deg,#0e1d2c,#0a1724);border:1px solid var(--line);border-radius:15px;padding:15px;box-shadow:var(--shadow)}.metric{grid-column:span 3}.half{grid-column:span 6}.third{grid-column:span 4}.metric small,.muted{color:var(--muted)}.metric strong{display:block;font-size:28px;margin-top:5px}.badge{display:inline-block;border:1px solid #31506a;border-radius:999px;padding:4px 8px;font-size:11px}.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}.field{width:100%;padding:9px 10px;border-radius:9px;border:1px solid #2a465f;background:#071522;color:#fff}.btn{border:1px solid #31506a;background:#142a3d;color:#fff;border-radius:9px;padding:9px 11px}.btn.primary{background:linear-gradient(135deg,#00bddc,#268cff);border-color:#4de4ff;color:#00141c;font-weight:800}.btn.danger{background:#3c1721;border-color:#703041}.btn.sm{padding:6px 8px;font-size:12px}.section{display:none}.section.on{display:block}.device,.controller{background:#081624;border:1px solid var(--line);border-radius:13px;padding:13px;margin-top:10px}.devicehead{display:flex;justify-content:space-between;gap:10px}.devicehead h3{margin:0 0 3px}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}.timer{font-size:25px;font-weight:900;margin:8px 0}.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.formgrid label span{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}.span2{grid-column:1/-1}.switch{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #172c3e}.apps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;max-height:220px;overflow:auto}.app{display:flex;gap:7px;justify-content:space-between;border:1px solid #1c354b;border-radius:8px;padding:7px}.token{border:1px dashed #3d6380;background:#06121e;border-radius:10px;padding:11px}.log{max-height:470px;overflow:auto}.logline{border-bottom:1px solid #1b3145;padding:8px 0;font-size:12px}.login{max-width:450px;margin:9vh auto;padding:0 12px}.notice{border:1px solid #6b5729;background:#49381355;color:#ffda81;padding:10px;border-radius:9px;margin:10px 0}.qr svg{max-width:280px;width:100%;height:auto;background:#fff;padding:8px;border-radius:9px}.kv{display:grid;grid-template-columns:170px 1fr;gap:7px}.kv div:nth-child(odd){color:var(--muted)}
 @media(max-width:850px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:relative;border-right:0;border-bottom:1px solid var(--line)}.nav{display:flex;overflow:auto}.nav button{width:auto;white-space:nowrap}.sidefoot{display:none}.metric,.half,.third{grid-column:span 12}.main{padding:13px}.formgrid,.apps{grid-template-columns:1fr}}
+
+/* Standalone BlazeFusion: offline appearance-only, no third-party runtime. */
+.blaze-style-label{display:inline-flex;gap:7px;align-items:center;color:#bed3de;font-size:12px;white-space:nowrap}
+.blaze-style-select{width:142px;max-width:100%;padding:7px 10px;border:1px solid #45657b;border-radius:10px;background:#11283b;color:#e6f9ff;font:inherit}
+.blaze-style-select:focus-visible,:focus-visible{outline:3px solid #60edd8;outline-offset:2px}
+body[data-blaze-style="fusion"]{--bg:#08131f;--side:#0d2030;--panel:#142b3d;--panel2:#0f2333;--line:#3c5a6e;--cyan:#4cdbcb;--blue:#809bff;--shadow:0 12px 34px #0005}
+body[data-blaze-style="fusion"] .sidebar{background:linear-gradient(155deg,#142c3d,#0a1725)}
+body[data-blaze-style="fusion"] .nav button.on{box-shadow:inset 3px 0 0 #4cdbcb;background:#204252}
+body[data-blaze-style="fusion"] .card{background:linear-gradient(156deg,#173347,#102435);border-color:#3a596f}
+body[data-blaze-style="fusion"] .btn.primary{background:linear-gradient(120deg,#119b98,#627cf3);color:white}
+body[data-blaze-style="fusion"] .metric{border-top:3px solid #43d7cb}
+body[data-blaze-style="compact"]{--line:#32465a;--shadow:0 6px 17px #0004}
+body[data-blaze-style="compact"] .shell{grid-template-columns:220px 1fr}
+body[data-blaze-style="compact"] .sidebar{padding:11px 8px}
+body[data-blaze-style="compact"] .brand{padding:6px 8px 10px}
+body[data-blaze-style="compact"] .nav button{padding:8px 10px;margin:0;border-radius:7px}
+body[data-blaze-style="compact"] .main{padding:15px}
+body[data-blaze-style="compact"] .grid{gap:9px}
+body[data-blaze-style="compact"] .card{padding:11px;border-radius:10px}
+body[data-blaze-style="compact"] .metric strong{font-size:24px}
+body[data-blaze-style="compact"] .field{padding:7px 9px}
+body[data-blaze-style="comfort"]{--bg:#0b1927;--panel:#1b3445;--panel2:#132838;--line:#48667c;--cyan:#68e8ca;--shadow:0 18px 40px #0005}
+body[data-blaze-style="comfort"] .sidebar{background:linear-gradient(170deg,#193646,#0c2031)}
+body[data-blaze-style="comfort"] .card{padding:20px;border-radius:20px;border-color:#496e82}
+body[data-blaze-style="comfort"] .btn{min-height:44px;border-radius:13px}
+body[data-blaze-style="comfort"] .field{min-height:43px;border-radius:12px}
+body[data-blaze-style="comfort"] .nav button{padding:13px}
+@media(max-width:850px){
+ body[data-blaze-style="compact"] .shell{grid-template-columns:1fr}
+ body[data-blaze-style="compact"] .sidebar{padding:11px}
+ body[data-blaze-style="comfort"] .card{padding:16px}
+}
+@media(max-width:540px){
+ .top{align-items:flex-start;flex-wrap:wrap}
+ .top .row{gap:6px}
+ .top .row .badge.good{display:none}
+ .blaze-style-label{font-size:0}
+ .blaze-style-select{width:125px;font-size:12px}
+ body[data-blaze-style="compact"] .main{padding:11px}
+}
+@media(max-width:390px){.blaze-style-select{width:105px}.top .row .badge:not(.good){display:none}}
+/* Constrain intrinsic min-content width; never clip horizontal overflow. */
+@media(max-width:850px){
+ .shell{grid-template-columns:minmax(0,1fr)}
+ .main,.grid,.card,.top,.row{min-width:0;max-width:100%}
+ .grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+ .grid>.card{min-width:0;overflow-wrap:anywhere}
+ .kv{grid-template-columns:minmax(0,170px) minmax(0,1fr)}
+ .kv>div,.mono{min-width:0;overflow-wrap:anywhere}
+ .row>.field{min-width:0}
+ body[data-blaze-style="compact"] .shell{grid-template-columns:minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){body[data-blaze-style] *{transition:none!important;animation:none!important}}
+
 </style></head><body>
 <div id="login" class="login hidden"><div class="card"><div class="brand">Blaze<b>Pwifi</b><small>Standalone Rental Server · v0.5</small></div>
 <div class="notice">Rental administration is HTTPS-only. A local certificate warning is normal on a fresh router.</div>
@@ -26,7 +80,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 <button onclick="view('system',this)">System / upgrade</button>
 </nav><div class="sidefoot">Full BlazePwifi payload installed<br>Hotspot core inactive</div></aside>
 <main class="main">
-<div class="top"><div><h1 id="title">Dashboard</h1><p>Only rental-related management is exposed in this edition.</p></div><div class="row"><span class="badge good">SERVER ONLINE</span><span id="who" class="badge">—</span><button class="btn sm" onclick="logout()">Sign out</button></div></div>
+<div class="top"><div><h1 id="title">Dashboard</h1><p>Only rental-related management is exposed in this edition.</p></div><div class="row"><label class="blaze-style-label" for="blazeStyleStandalone">Appearance <select id="blazeStyleStandalone" class="blaze-style-select" aria-label="Rental console appearance"><option value="fusion">BlazeFusion</option><option value="compact">Compact</option><option value="comfort">Comfort</option></select></label><span class="badge good">SERVER ONLINE</span><span id="who" class="badge">—</span><button class="btn sm" onclick="logout()">Sign out</button></div></div>
 
 <section id="dashboard" class="section on"><div class="grid">
 <div class="card metric"><small>Enrolled phones</small><strong id="mTotal">—</strong></div>
@@ -100,6 +154,21 @@ async function changePassword(){let p=$('#newpass').value;if(p.length<12)return 
 async function loadEvents(){let j=await api('rental_events',{limit:120});$('#events').innerHTML=j.ok&&(j.events||[]).length?j.events.slice().reverse().map(e=>'<div class="logline"><b>'+esc(e.kind)+'</b> · '+esc(e.device_id)+'<br><span class="muted">'+new Date(Number(e.time)*1000).toLocaleString()+' · '+esc(e.detail)+'</span></div>').join(''):'<span class="muted">No events.</span>'}
 async function loadAudit(){if(role!=='admin'){ $('#audit').innerHTML='<span class="muted">Admin role required.</span>';return}let j=await profile('audit_list',{limit:120});$('#audit').innerHTML=j.ok&&(j.audit||[]).length?j.audit.slice().reverse().map(e=>'<div class="logline"><b>'+esc(e.event)+'</b> · '+esc(e.user)+'<br><span class="muted">'+new Date(Number(e.time)*1000).toLocaleString()+' · '+esc(e.ip)+' · '+esc(e.detail)+'</span></div>').join(''):'<span class="muted">No audit records.</span>'}
 async function loadProfile(){let j=await profile('status');if(!j.ok)return;$('#dEdition').textContent=j.edition+' · '+j.version;$('#dModel').textContent=j.model;$('#dOpenWrt').textContent=j.openwrt;$('#sBoard').textContent=j.board;$('#sModel').textContent=j.model;$('#sVersion').textContent=j.version;$('#sRam').textContent=Math.round(Number(j.mem_available_kb)/1024)+' MB';$('#sUptime').textContent=fmt(j.uptime_seconds);$('#upgradeState').textContent=j.full_upgrade_available?'Full conversion package is installed and ready.':'Full conversion unavailable.'}
+/* BlazeFusion appearance only: do not alter rental POST, CSRF or lease state. */
+(function initBlazeAppearance(){
+ const key='blazepwifi.console.appearance.v1', allowed=['fusion','compact','comfort'];
+ const select=document.getElementById('blazeStyleStandalone');
+ if(!select)return;
+ function setAppearance(mode){
+   const style=allowed.includes(mode)?mode:'fusion';
+   document.body.setAttribute('data-blaze-style',style);select.value=style;
+   try{localStorage.setItem(key,style)}catch(_){}
+ }
+ let preferred='fusion';
+ try{preferred=localStorage.getItem(key)||preferred}catch(_){}
+ setAppearance(preferred);
+ select.addEventListener('change',()=>setAppearance(select.value));
+})();
 document.querySelectorAll('.serverUrl').forEach(x=>x.textContent=serverBase());$('#enrollServer').value=serverBase();
 if(location.protocol!=='https:'){location.replace('https://'+location.hostname+'/rental/')}else restore();
 </script></body></html>

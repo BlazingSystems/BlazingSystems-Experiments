@@ -34,32 +34,32 @@ bp_auth_unlock() {
 }
 
 bp_auth_random_hex() {
-	bytes="$1"
-	case "$bytes" in ''|*[!0-9]*) return 1;; esac
-	[ "$bytes" -ge 1 ] 2>/dev/null || return 1
-	need=$((bytes*2))
+  rng_bytes="$1"
+  case "$rng_bytes" in ''|*[!0-9]*) return 8;; esac
+  [ "$rng_bytes" -ge 1 ] 2>/dev/null &&
+    [ "$rng_bytes" -le 64 ] 2>/dev/null || return 8
+  rng_need=$((rng_bytes*2))
 
-	# Sanitize before measuring. Some constrained BusyBox/hexdump combinations
-	# can emit formatting characters or short output; never accept a short
-	# session/enrollment secret merely because shell character counting differs.
-	out="$(hexdump -n "$bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null 		| tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
-	have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
-	if [ "${have:-0}" -lt "$need" ] 2>/dev/null; then
-		out="$(od -An -v -N "$bytes" -tx1 /dev/urandom 2>/dev/null 			| tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
-		have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
-	fi
-	if [ "${have:-0}" -lt "$need" ] 2>/dev/null; then
-		# Emergency fallback is sufficient for every current caller (<=32 bytes)
-		# and still mixes time/process data through SHA-256. Refuse larger
-		# requests rather than silently returning weak/short material.
-		[ "$need" -le 64 ] || return 1
-		out="$(printf '%s|%s|%s|%s' "$(date +%s 2>/dev/null)" "$" "$bytes" 			"$(od -An -N 16 -tx1 /dev/urandom 2>/dev/null || true)" | bp_sha256)"
-	fi
-
-	out="$(printf '%s' "$out" | tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' | cut -c1-"$need")"
-	have="$(printf '%s' "$out" | wc -c | tr -d '[:space:]')"
-	[ "$have" -eq "$need" ] 2>/dev/null || return 1
-	printf '%s' "$out"
+  rng_out=""
+  if command -v hexdump >/dev/null 2>&1; then
+    rng_out="$(hexdump -n "$rng_bytes" -e '1/1 "%02x"' /dev/urandom 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null ||
+    rng_out=""
+  if [ -z "$rng_out" ] && command -v od >/dev/null 2>&1; then
+    rng_out="$(od -An -v -N "$rng_bytes" -tx1 /dev/urandom 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null ||
+    rng_out=""
+  if [ -z "$rng_out" ] && command -v openssl >/dev/null 2>&1; then
+    rng_out="$(openssl rand -hex "$rng_bytes" 2>/dev/null |
+      tr -cd '0-9a-fA-F' | tr 'A-F' 'a-f' || true)"
+  fi
+  [ "$(printf '%s' "$rng_out" | wc -c | tr -d '[:space:]')" -eq "$rng_need" ] 2>/dev/null &&
+    printf '%s' "$rng_out" | LC_ALL=C grep -Eq '^[a-f0-9]+$' || return 8
+  printf '%s' "$rng_out"
 }
 
 bp_auth_clean_field() {
@@ -68,8 +68,8 @@ bp_auth_clean_field() {
 
 bp_auth_audit() {
 	now="$(bp_auth_now)"; event="$(bp_auth_clean_field "$1")"; user="$(bp_auth_clean_field "${2:-}")"; ip="$(bp_auth_clean_field "${3:-}")"; detail="$(bp_auth_clean_field "${4:-}")"
-	printf '%s\t%s\t%s\t%s\t%s\n' "$now" "$event" "$user" "$ip" "$detail" >> "$BP_AUDIT"
-	chmod 600 "$BP_AUDIT"
+	printf '%s\t%s\t%s\t%s\t%s\n' "$now" "$event" "$user" "$ip" "$detail" >> "$BP_AUDIT" || return 8
+	chmod 600 "$BP_AUDIT" || return 8
 }
 
 bp_auth_sha256i() {
@@ -95,18 +95,44 @@ bp_auth_set_password() {
 	case "$role" in admin|operator|viewer) ;; *) echo "invalid role" >&2; return 2;; esac
 	case "$must_change" in 0|1) ;; *) must_change=0;; esac
 	[ "${#pass}" -ge 12 ] || { echo "password must be at least 12 characters" >&2; return 2; }
-	salt="$(bp_auth_random_hex 8)"
+	salt="$(bp_auth_random_hex 8)" || return 8
+	printf '%s' "$salt" | LC_ALL=C grep -Eq '^[a-f0-9]{16}$' || return 8
 	if command -v openssl >/dev/null 2>&1 && openssl passwd -6 -salt "$salt" "$pass" >/dev/null 2>&1; then
-		scheme=openssl6; rounds=0; hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)"
+		scheme=openssl6; rounds=0
+		hash="$(openssl passwd -6 -salt "$salt" "$pass" 2>/dev/null)" || return 8
 	else
-		scheme=sha256i; rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"; hash="$(bp_auth_sha256i "$pass" "$salt" "$rounds")"
+		scheme=sha256i; rounds="$(bp_auth_cfg auth_kdf_rounds 2048)"
+		hash="$(bp_auth_sha256i "$pass" "$salt" "$rounds")" || return 8
 	fi
+	[ -n "$hash" ] || return 8
+	[ -f "$BP_ADMIN_USERS" ] && [ ! -L "$BP_ADMIN_USERS" ] || return 8
+	# Existing administrator/operator passwords are security-critical.
+	# Never replace with an incomplete/malformed/duplicated copied snapshot.
 	tmp="$BP_STATE/.admin-users.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v u="$user" '$1!=u {print}' "$BP_ADMIN_USERS" > "$tmp"
-	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$user" "$role" "$scheme" "$salt" "$hash" "$rounds" "$must_change" >> "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_USERS"
-	bp_durable_sync
-	bp_auth_audit password_set "$user" "${REMOTE_ADDR:-local}" "$role"
+	umask 077
+	if ! awk -F '\t' -v OFS='\t' -v u="$user" '
+		{
+			if (NF!=7 || $1 !~ /^[A-Za-z0-9_.-]+$/ || length($1)>32 ||
+			    $2 !~ /^(admin|operator|viewer)$/ ||
+			    $3 !~ /^(openssl6|sha256i)$/ || $4=="" || $5=="" ||
+			    $6 !~ /^[0-9]+$/ || $7 !~ /^[01]$/ ||
+			    ++seen[$1]>1) bad=1
+			if ($1!=u) print
+		}
+		END{if(bad) exit 8}
+	' "$BP_ADMIN_USERS" > "$tmp"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	if ! printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$user" "$role" "$scheme" "$salt" "$hash" "$rounds" "$must_change" >> "$tmp" ||
+	   ! chmod 600 "$tmp" ||
+	   ! mv "$tmp" "$BP_ADMIN_USERS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_durable_sync || return 8
+	bp_auth_audit password_set "$user" "${REMOTE_ADDR:-local}" "$role" || return 8
+	return 0
 }
 
 bp_auth_verify_password() {
@@ -191,10 +217,13 @@ bp_auth_role_rank() {
 bp_auth_session_create_unlocked() {
 	user="$1"; role="$2"; ip="$3"; now="$(bp_auth_now)"
 	uline="$(bp_auth_user_line "$user")"; must_change="$(printf '%s' "$uline" | cut -f7)"; [ -n "$must_change" ] || must_change=0
-	token="$(bp_auth_random_hex 32)"; csrf="$(bp_auth_random_hex 24)"
+	token="$(bp_auth_random_hex 32)" || return 8
+	csrf="$(bp_auth_random_hex 24)" || return 8
+	printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{64}$' || return 8
+	printf '%s' "$csrf" | LC_ALL=C grep -Eq '^[a-f0-9]{48}$' || return 8
 	abs="$(bp_auth_cfg auth_absolute_seconds 28800)"; absolute=$((now+abs))
-	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$token" "$user" "$role" "$csrf" "$now" "$now" "$absolute" "$ip" "$must_change" >> "$BP_ADMIN_SESSIONS"
-	chmod 600 "$BP_ADMIN_SESSIONS"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$token" "$user" "$role" "$csrf" "$now" "$now" "$absolute" "$ip" "$must_change" >> "$BP_ADMIN_SESSIONS" || return 8
+	chmod 600 "$BP_ADMIN_SESSIONS" || return 8
 	printf '%s\t%s\t%s\t%s\n' "$token" "$csrf" "$role" "$user"
 }
 
@@ -212,7 +241,11 @@ bp_auth_login() {
 	fi
 	line="$(bp_auth_user_line "$user")"; role="$(printf '%s' "$line" | cut -f2)"
 	bp_auth_clear_failures "$user" "$ip"
-	out="$(bp_auth_session_create_unlocked "$user" "$role" "$ip")"
+	if ! out="$(bp_auth_session_create_unlocked "$user" "$role" "$ip")"; then
+		bp_auth_audit session_create_failed "$user" "$ip" "entropy_or_storage_unavailable"
+		bp_auth_unlock
+		return 8
+	fi
 	bp_auth_audit login_success "$user" "$ip" "$role"
 	bp_auth_unlock
 	printf '%s\n' "$out"
@@ -224,15 +257,19 @@ bp_auth_cookie_token() {
 
 bp_auth_session_lookup() {
 	token="$1"; ip="$2"; now="$(bp_auth_now)"; idle="$(bp_auth_cfg auth_idle_seconds 900)"; bind="$(bp_auth_cfg auth_bind_ip 1)"
-	line="$(awk -F '\t' -v t="$token" '$1==t {print; exit}' "$BP_ADMIN_SESSIONS")"
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	line="$(awk -F '\t' -v t="$token" '$1==t {print; exit}' "$BP_ADMIN_SESSIONS")" || return 8
 	[ -n "$line" ] || return 1
 	last="$(printf '%s' "$line" | cut -f6)"; absolute="$(printf '%s' "$line" | cut -f7)"; sip="$(printf '%s' "$line" | cut -f8)"
 	[ "$absolute" -gt "$now" ] 2>/dev/null || return 1
 	[ $((now-last)) -le "$idle" ] 2>/dev/null || return 1
 	[ "$bind" != 1 ] || [ "$sip" = "$ip" ] || return 1
 	tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v t="$token" -v n="$now" '$1==t {$6=n} {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
+	if ! awk -F '\t' -v OFS='\t' -v t="$token" -v n="$now" '$1==t {$6=n} {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
 	printf '%s\n' "$line"
 }
 
@@ -259,16 +296,26 @@ bp_auth_csrf_ok() {
 
 bp_auth_invalidate_user_sessions() {
 	user="$1"; tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v u="$user" '$2!=u {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	if ! awk -F '\t' -v u="$user" '$2!=u {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	return 0
 }
 
 bp_auth_logout() {
 	token="$1"; user="$2"; ip="$3"
 	tmp="$BP_RUN/.admin-sessions.$(bp_tmp_suffix)"
-	awk -F '\t' -v t="$token" '$1!=t {print}' "$BP_ADMIN_SESSIONS" > "$tmp"
-	chmod 600 "$tmp" && mv "$tmp" "$BP_ADMIN_SESSIONS"
-	bp_auth_audit logout "$user" "$ip" ""
+	[ -f "$BP_ADMIN_SESSIONS" ] && [ ! -L "$BP_ADMIN_SESSIONS" ] || return 8
+	if ! awk -F '\t' -v t="$token" '$1!=t {print}' "$BP_ADMIN_SESSIONS" > "$tmp" ||
+	   ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ADMIN_SESSIONS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_auth_audit logout "$user" "$ip" "" || return 8
+	return 0
 }
 
 case "${1:-}" in
@@ -278,6 +325,15 @@ case "${1:-}" in
 	bp_auth_init
 	bp_auth_lock || { echo "authentication state busy" >&2; exit 1; }
 	must=0; [ "$mode" = "--set-bootstrap" ] && must=1
+	printf '%s' "$2" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.-]{1,32}$' || { bp_auth_unlock; echo "invalid admin username" >&2; exit 2; }
+	case "$3" in admin|operator|viewer) ;; *) bp_auth_unlock; echo "invalid admin role" >&2; exit 2;; esac
+	[ "${#4}" -ge 12 ] || { bp_auth_unlock; echo "password must be at least 12 characters" >&2; exit 2; }
+	# CLI reset/bootstrap also revokes pre-change sessions under auth lock.
+	if ! bp_auth_invalidate_user_sessions "$2"; then
+		bp_auth_unlock
+		echo "session revocation failed; admin password was not changed" >&2
+		exit 8
+	fi
 	if bp_auth_set_password "$2" "$3" "$4" "$must"; then rc=0; else rc=$?; fi
 	bp_auth_unlock
 	exit "$rc"

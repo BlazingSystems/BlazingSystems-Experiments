@@ -278,7 +278,8 @@ def mock_admin(action, params=None):
             "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
                 "server_url": "https://192.168.1.1:8443",
                 "enrollment_token": "fedcba9876543210.0123456789abcdef",
-                "device_name": "Rental phone"
+                "device_name": "Rental phone",
+                "server_cert_sha256": "a"*64
             }
         }
         return {"ok": True, "qr_type": "device_owner",
@@ -370,6 +371,31 @@ with sync_playwright() as p:
     assert page.locator("#page-dashboard").is_visible()
     assert "BlazePwifi" in page.locator("body").inner_text()
 
+    # BlazeFusion (CoreUI×Metis-inspired) is presentation only.
+    # Appearance choices may persist locally but must not grant access or
+    # mutate customer accounts, session credits, or the admin API.
+    page.wait_for_function(
+        "document.body.getAttribute('data-blaze-style') === 'fusion'")
+    page.select_option("#blazeStyleSelect", "compact")
+    assert page.locator("body").get_attribute("data-blaze-style") == "compact"
+    assert page.evaluate("localStorage.getItem('blazepwifi.console.appearance.v1')") == "compact"
+    page.reload(wait_until="networkidle")
+    page.wait_for_selector("#appView:not(.hidden)")
+    assert page.locator("#blazeStyleSelect").input_value() == "compact"
+    page.select_option("#blazeStyleSelect", "comfort")
+    assert page.locator("body").get_attribute("data-blaze-style") == "comfort"
+    page.select_option("#blazeStyleSelect", "fusion")
+    assert page.locator("body").get_attribute("data-blaze-style") == "fusion"
+    assert page.locator(".nav-btn[data-page='rentals']").get_attribute("data-symbol")
+    # New CoreUI×Metis-inspired operator header must remain within narrow phones.
+    for width in (390, 360):
+        page.set_viewport_size({"width": width, "height": 844})
+        page.wait_for_timeout(100)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 2"), (
+            "BlazeFusion topbar/body overflow at narrow mobile viewport " + str(width))
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    # Enrollment and authorization controls remain exposed after a skin change.
+
     page.click('[data-page="rentals"]')
     page.wait_for_selector("#page-rentals.active")
     page.wait_for_selector('[data-device="0123456789abcdef01234567"]')
@@ -378,24 +404,41 @@ with sync_playwright() as p:
     page.click('button:has-text("+ Add device")')
     page.wait_for_selector("#addRentalModal:not(.hidden)")
 
-    page.click('button:has-text("Bind existing BlazeRental")')
+    page.click('button:has-text("Generate binding QR")')
     page.wait_for_selector("#qrResult:not(.hidden)")
     page.wait_for_selector("#qrBox svg")
-    assert "Standard binding" in page.locator("#qrNotice").inner_text()
+    assert "STANDARD BINDING" in page.locator("#qrNotice").inner_text()
+    assert "One-time token hidden" in page.locator("#qrToken").inner_text()
+    assert "0123456789abcdef" not in page.locator("#qrToken").inner_text()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#qrReveal")
     assert "0123456789abcdef" in page.locator("#qrToken").inner_text()
 
-    page.click('button:has-text("Provision factory-reset phone")')
+    # A hosted HTTP test page is not a valid Device Owner enrollment
+    # origin; validate refusal before setting an explicitly pinned HTTPS host.
+    mutation_count = len(admin_mutations)
+    page.click('button:has-text("Generate Device Owner QR")')
+    assert len(admin_mutations) == mutation_count, (
+        "Managed provisioning must not issue an HTTP-origin request")
+    assert "requires an HTTPS server" in page.locator("#toastHost").inner_text()
+    page.fill("#addRentalServer", "https://192.168.1.1:8443")
+    page.click('button:has-text("Generate Device Owner QR")')
     page.wait_for_function(
-        "document.getElementById('qrNotice').textContent.includes('Device Owner provisioning')")
+        "document.getElementById('qrNotice').textContent.includes('MANAGED SETUP')")
     page.wait_for_function(
         "document.getElementById('qrMeta').textContent.includes('APK 0.5.2 (50200)')")
-    page.wait_for_function(
-        "document.getElementById('qrToken').textContent.includes('fedcba9876543210')")
     page.wait_for_selector("#qrBox svg")
-    assert "Device Owner provisioning" in page.locator("#qrNotice").inner_text()
+    assert "MANAGED SETUP" in page.locator("#qrNotice").inner_text()
     assert "APK 0.5.2 (50200)" in page.locator("#qrMeta").inner_text()
+    assert "Server TLS pin: included" in page.locator("#qrMeta").inner_text()
+    assert "One-time token hidden" in page.locator("#qrToken").inner_text()
+    assert "fedcba9876543210" not in page.locator("#qrToken").inner_text()
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("#qrReveal")
     assert "fedcba9876543210" in page.locator("#qrToken").inner_text()
     page.click('#addRentalModal button:has-text("✕")')
+    assert not page.locator("#qrToken").inner_text()
+    assert not page.locator("#qrBox svg").count()
 
     assert admin_mutations
     assert all(x["csrf_body"] == "browser-audit-csrf" for x in admin_mutations)
@@ -454,6 +497,39 @@ with sync_playwright() as p:
     page.once("dialog", lambda dialog: dialog.accept())
     page.click('button:has-text("Disable live WireGuard")')
     page.wait_for_function("document.getElementById('wgActivationState').textContent === 'staged'")
+
+    # UX-0689: a delayed config GET must never replace pre-Save operator input.
+    # Hold ONLY the next remote_config_get response; this is an in-browser
+    # disposable mock, not a real remote connection or device configuration.
+    page.evaluate("""() => {
+        window.__ux0689OriginalApi = window.BlazeCore.api;
+        window.__ux0689Hold = true;
+        window.BlazeCore.api = function(action, ...args) {
+          if(action==='remote_config_get' && window.__ux0689Hold){
+            window.__ux0689Hold = false;
+            return new Promise(resolve => { window.__ux0689Release = resolve; });
+          }
+          return window.__ux0689OriginalApi.apply(this,[action,...args]);
+        };
+        window.BlazeConsole.loadRemote();
+    }""")
+    page.wait_for_function("typeof window.__ux0689Release === 'function'")
+    page.select_option("#remoteMode","zerotier")
+    page.fill("#remoteAllowlist","10.77.0.0/24")
+    page.fill("#ztNetworkId","0123456789abcdef")
+    # The late response still describes the previous WireGuard profile.
+    page.evaluate("""() => window.__ux0689Release({
+        ok:true,config:{mode:'wireguard',source_allowlist:'10.20.0.0/24',zt_network_id:''}
+    })""")
+    page.wait_for_function("document.getElementById('remoteConfigState').textContent.includes('unsaved profile edits were preserved')")
+    assert page.locator("#remoteMode").input_value()=="zerotier", "UX-0689 late fetch clobbered remote mode"
+    assert page.locator("#remoteAllowlist").input_value()=="10.77.0.0/24", "UX-0689 late fetch clobbered allowlist"
+    assert page.locator("#ztNetworkId").input_value()=="0123456789abcdef", "UX-0689 late fetch clobbered ZeroTier network"
+    page.evaluate("""() => {
+        window.BlazeCore.api = window.__ux0689OriginalApi;
+        delete window.__ux0689OriginalApi;
+        delete window.__ux0689Release;
+    }""")
 
     # dev.5 live ZeroTier: stable identity -> authorization-ready node -> transactional apply -> safe disable.
     page.select_option("#remoteMode","zerotier")

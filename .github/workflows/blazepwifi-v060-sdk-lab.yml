@@ -1,0 +1,73 @@
+name: BlazePwifi V2 OpenWrt LAB SDK Cross-Compile
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - blazepwifi-v0.6.0-audit-foundation
+    paths:
+      - 'experiment/openwrt/BlazePwifi/tools/v060_cross_compile_native_lab.sh'
+      - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
+      - 'experiment/openwrt/BlazePwifi/openwrt/lab-native/**'
+      - '.github/workflows/blazepwifi-v060-sdk-lab.yml'
+  pull_request:
+    paths:
+      - 'experiment/openwrt/BlazePwifi/tools/v060_cross_compile_native_lab.sh'
+      - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
+      - 'experiment/openwrt/BlazePwifi/openwrt/lab-native/**'
+      - '.github/workflows/blazepwifi-v060-sdk-lab.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-sdk-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify pinned official OpenWrt 25.12.5 OpenSSL build sources
+        run: |
+          git clone --quiet --filter=blob:none --depth=1 --sparse \
+            --branch v25.12.5 https://github.com/openwrt/openwrt.git release-source
+          test "$(git -C release-source rev-parse HEAD)" = f0a60eee2fe051741c643ea6118718aae1ef17fb
+          git -C release-source sparse-checkout set package/libs/openssl include
+          git -C release-source checkout --quiet --detach f0a60eee2fe051741c643ea6118718aae1ef17fb
+          test -s release-source/package/libs/openssl/Makefile
+          test -s release-source/include/openssl-module.mk
+          echo "V2TARGET source checkout PASS — pinned release OpenSSL source exists"
+
+  native-sdk:
+    needs: source-check
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ruijie, x86_64, orangepi_zero3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: SDK build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            zstd gawk file flex bison build-essential rsync unzip \
+            libncurses-dev zlib1g-dev python3 wget pkg-config
+      - name: Verify current host fixture independently
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
+      - name: Verified official SDK native lab cross-compile (never production)
+        run: sh experiment/openwrt/BlazePwifi/tools/v060_cross_compile_native_lab.sh "${{ matrix.target }}"
+      - name: Upload target-verified laboratory artifacts only
+        uses: actions/upload-artifact@v4
+        with:
+          name: blazepwifi-v2-native-${{ matrix.target }}-LAB-ONLY
+          path: experiment/openwrt/BlazePwifi/dist/v060-native-sdk-lab/${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 3
+      - name: Mandatory no-customer-publishing declaration
+        run: |
+          test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/libexec/blazepwifi-lab/v2-native-fixture
+          echo "LAB ONLY: cross-compiled binary is never installed or published as v0.6.0 production"

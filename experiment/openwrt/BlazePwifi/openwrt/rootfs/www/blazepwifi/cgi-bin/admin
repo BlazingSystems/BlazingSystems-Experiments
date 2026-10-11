@@ -126,7 +126,14 @@ case "$action" in
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     label="$(bp_param label)"; [ -n "$label" ] || label="Rental phone"
-    token="$(bp_rental_enroll_create "$label" 600)"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "$label" 600)" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     server="$(bp_admin_server_url)" || bp_fail "invalid server url"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
     qr_payload="$(bp_admin_binding_payload "$server" "$token" "$label" "$cert_pin")"
@@ -153,7 +160,14 @@ EOF
     checksum="$(bp_admin_sha256_b64url "$apk_sha")" || bp_fail "unable to encode provisioning APK checksum"
     cert_pin="$(bp_admin_local_cert_pin "$server")" || bp_fail "unable to fingerprint local admin certificate"
     [ -n "$cert_pin" ] || bp_fail "Device Owner provisioning requires the local pinned admin certificate"
-    token="$(bp_rental_enroll_create "$label" 600)"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "$label" 600)" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     qr_payload="$(bp_admin_provisioning_payload "$server" "$token" "$label" "$apk_url" "$checksum" "$apk_code" "$cert_pin")"
     bp_auth_audit rental_provisioning_qr "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label:$apk_version" | cut -c1-96)"
     bp_json "$(printf '{"ok":true,"qr_type":"device_owner","enrollment_token":"%s","expires_seconds":600,"server_url":"%s","device_name":"%s","apk_version":"%s","apk_version_code":%s,"apk_url":"%s","apk_checksum":"%s","qr_payload":"%s"}' \
@@ -310,6 +324,7 @@ EOF
       8) bp_fail "invalid collision policy" ;;
       9|15) bp_fail "member state is busy or rollback failed" ;;
       14) bp_fail "member import failed; all member state was rolled back" ;;
+      16) bp_fail "unsigned metadata cannot restore paid member time; use a verified financial migration" ;;
       *) bp_fail "member import could not be applied" ;;
     esac
     created="$(printf '%s' "$result" | cut -f1)"
@@ -441,7 +456,10 @@ EOF
       0) ;;
       2) bp_fail "invalid member" ;;
       3) bp_fail "unknown member" ;;
-      *) bp_fail "member deletion failed" ;;
+      6) bp_fail "member has paid time remaining; bank or transfer it before deleting" ;;
+      7) bp_fail "invalid member balance; operator reconciliation required" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "member deletion storage failed; reconcile the account before retrying" ;;
     esac
     bp_auth_audit member_delete "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$user:$revision"
     bp_json "$(printf '{"ok":true,"username":"%s","revision":%s}' "$(bp_json_escape "$user")" "$revision")"
@@ -476,7 +494,14 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
-    lease="$(bp_rental_lease_add "$did" "$seconds")" || bp_fail "invalid rental device or duration"
+    rc=0
+    lease="$(bp_rental_lease_add "$did" "$seconds")" || rc=$?
+    case "$rc" in
+      0) ;;
+      1|2) bp_fail "invalid rental device or duration" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental time addition storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_lease_add "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
@@ -485,7 +510,16 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"
-    lease="$(bp_rental_lease_expire "$did")" || bp_fail "unknown rental device"
+    confirm_forfeit="$(bp_param confirm_forfeit)"
+    rc=0
+    lease="$(bp_rental_lease_expire "$did" "$confirm_forfeit")" || rc=$?
+    case "$rc" in
+      0) ;;
+      1) bp_fail "unknown rental device" ;;
+      6) bp_fail "paid rental time remains; explicit CONFIRM_FORFEIT authorization required" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental expiry storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_expire "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
@@ -494,7 +528,15 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"
-    bp_rental_device_revoke "$did" || bp_fail "unknown rental device"
+    rc=0
+    bp_rental_device_revoke "$did" || rc=$?
+    case "$rc" in
+      0) ;;
+      1) bp_fail "unknown rental device" ;;
+      6) bp_fail "rental has active paid time; settle or transfer it before revoking" ;;
+      9) bp_fail "paid state uncertain; operator reconciliation required" ;;
+      *) bp_fail "rental revocation storage failed; operator reconciliation required" ;;
+    esac
     bp_auth_audit rental_revoke "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did"
     bp_json '{"ok":true}'
     ;;
@@ -510,12 +552,51 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     bp_rental_init
     did="$(bp_param device_id)"; seconds="$(bp_param seconds)"
+    confirm_forfeit="$(bp_param confirm_forfeit)"
     case "$seconds" in ''|*[!0-9]*) bp_fail "invalid lease duration";; esac
-    [ "$seconds" -le 2592000 ] || bp_fail "lease duration too large"
-    line="$(bp_rental_device_line "$did")"; [ -n "$line" ] || bp_fail "unknown rental device"
-    secret="$(printf '%s' "$line" | cut -f2)"; label="$(printf '%s' "$line" | cut -f4)"; last="$(printf '%s' "$line" | cut -f5)"
-    lease=$((now+seconds)); bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last"
-    bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds"
+    [ "$seconds" -le 2592000 ] 2>/dev/null || bp_fail "lease duration too large"
+    # Avoid an implicit octal conversion of leading-zero decimal form values.
+    seconds="$(printf '%s' "$seconds" | sed 's/^0*//')"
+    [ -n "$seconds" ] || seconds=0
+    # Global account lock serializes this overwrite with signed coin events,
+    # then paid lock covers the mutation and its distinct audit record.
+    bp_lock || bp_fail "accounting busy"
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || {
+      bp_unlock; bp_fail "paid state uncertain; operator reconciliation required"
+    }
+    line="$(bp_rental_device_line "$did")"
+    [ -n "$line" ] || { bp_unlock; bp_fail "unknown rental device"; }
+    secret="$(printf '%s' "$line" | cut -f2)"
+    label="$(printf '%s' "$line" | cut -f4)"
+    last="$(printf '%s' "$line" | cut -f5)"
+    oldlease="$(printf '%s' "$line" | cut -f3)"
+    case "$oldlease" in
+      ''|*[!0-9]*) bp_unlock; bp_fail "invalid persisted rental lease; operator reconciliation required" ;;
+    esac
+    lease=$((now+seconds))
+    forfeit=0
+    if [ "$oldlease" -gt "$lease" ] 2>/dev/null; then
+      [ "$confirm_forfeit" = CONFIRM_FORFEIT ] || {
+        bp_unlock
+        bp_fail "shortening paid rental time requires explicit CONFIRM_FORFEIT authorization"
+      }
+      forfeit=$((oldlease-lease))
+    fi
+    bp_paid_begin || {
+      bp_unlock; bp_fail "paid state uncertain; operator reconciliation required"
+    }
+    if ! bp_rental_device_write "$did" "$secret" "$lease" "$label" "$last" ||
+       ! bp_rental_event_log lease_set "$did" "from:$oldlease:to:$lease:forfeit_seconds:$forfeit"; then
+      bp_paid_abort
+      bp_unlock
+      bp_fail "rental lease storage or audit failed; operator reconciliation required"
+    fi
+    if ! bp_paid_commit; then
+      bp_unlock
+      bp_fail "rental lease sync uncertain; operator reconciliation required"
+    fi
+    bp_unlock
+    bp_auth_audit rental_lease_set "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$did:$seconds:forfeit_seconds:$forfeit"
     bp_json "$(printf '{"ok":true,"device_id":"%s","lease_until":%s}' "$did" "$lease")"
     ;;
 
@@ -1030,11 +1111,22 @@ EOF
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     new_password="$(bp_param new_password)"
     [ -n "$new_password" ] || bp_fail "missing new password"
+    [ "${#new_password}" -ge 12 ] || bp_fail "password must be at least 12 characters"
     bp_auth_lock || bp_fail "authentication busy"
+    # The credential and old-session store are not one durable transaction.
+    # Revoke first under the auth lock: if storage fails, the old password
+    # remains unchanged and no pre-change session is silently trusted.
+    if ! bp_auth_invalidate_user_sessions "$BP_AUTH_USER"; then
+      bp_auth_audit session_revoke_failure "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "password_not_changed" || true
+      bp_auth_unlock
+      bp_fail "could not revoke existing sessions; password was not changed"
+    fi
     if bp_auth_set_password "$BP_AUTH_USER" "$BP_AUTH_ROLE" "$new_password" 0; then
-      bp_auth_invalidate_user_sessions "$BP_AUTH_USER"
-      rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null || true
-      bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"
+      if ! rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null ||
+         ! bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"; then
+        bp_auth_unlock
+        bp_fail "password changed but admin cleanup/audit failed; operator reconciliation required"
+      fi
       bp_auth_unlock
       bp_json '{"ok":true,"reauth_required":true}'
     else

@@ -84,7 +84,14 @@ case "$action" in
     [ -n "$ttl" ] || ttl=600
     case "$ttl" in ''|*[!0-9]*) bp_fail "invalid enrollment lifetime";; esac
     [ "$ttl" -ge 60 ] 2>/dev/null && [ "$ttl" -le 3600 ] 2>/dev/null || bp_fail "enrollment lifetime must be 60-3600 seconds"
-    token="$(bp_rental_enroll_create "${label:-Rental phone}" "$ttl")"
+    bp_lock || bp_fail "enrollment registry busy"
+    token="$(bp_rental_enroll_create "${label:-Rental phone}" "$ttl")" || {
+      bp_unlock
+      bp_fail "enrollment token storage failed; QR not issued"
+    }
+    bp_unlock
+    printf '%s' "$token" | LC_ALL=C grep -Eq '^[a-f0-9]{12}\.[a-f0-9]{36}$' ||
+      bp_fail "invalid generated enrollment token; QR not issued"
     bp_auth_audit rental_enroll_create "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "$(printf '%s' "$label" | cut -c1-64)"
     bp_json "$(printf '{"ok":true,"enrollment_token":"%s","expires_seconds":%s}' "$(bp_json_escape "$token")" "$ttl")"
     ;;
@@ -229,11 +236,22 @@ case "$action" in
     bp_auth_csrf_ok || bp_fail "csrf validation failed"
     new_password="$(bp_param new_password)"
     [ -n "$new_password" ] || bp_fail "missing new password"
+    [ "${#new_password}" -ge 12 ] || bp_fail "password must be at least 12 characters"
     bp_auth_lock || bp_fail "authentication busy"
+    # The credential and old-session store are not one durable transaction.
+    # Revoke first under the auth lock: if storage fails, the old password
+    # remains unchanged and no pre-change session is silently trusted.
+    if ! bp_auth_invalidate_user_sessions "$BP_AUTH_USER"; then
+      bp_auth_audit session_revoke_failure "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "password_not_changed" || true
+      bp_auth_unlock
+      bp_fail "could not revoke existing sessions; password was not changed"
+    fi
     if bp_auth_set_password "$BP_AUTH_USER" "$BP_AUTH_ROLE" "$new_password" 0; then
-      bp_auth_invalidate_user_sessions "$BP_AUTH_USER"
-      rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null || true
-      bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"
+      if ! rm -f /etc/blazepwifi/INITIAL_ADMIN_PASSWORD 2>/dev/null ||
+         ! bp_auth_audit password_changed "$BP_AUTH_USER" "${REMOTE_ADDR:-unknown}" "self"; then
+        bp_auth_unlock
+        bp_fail "password changed but admin cleanup/audit failed; operator reconciliation required"
+      fi
       bp_auth_unlock
       bp_json '{"ok":true,"reauth_required":true}'
     else
