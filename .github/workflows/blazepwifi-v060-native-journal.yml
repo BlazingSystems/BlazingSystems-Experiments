@@ -8,11 +8,15 @@ on:
     paths:
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
       - 'experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh'
+      - 'experiment/windows/BlazePisonet-SoftTimer/tests/V2NativeEnvelopeContract/**'
       - '.github/workflows/blazepwifi-v060-native-journal.yml'
   pull_request:
     paths:
       - 'experiment/openwrt/BlazePwifi/tools/v060_journal_authority_native.c'
       - 'experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh'
+      - 'experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh'
+      - 'experiment/windows/BlazePisonet-SoftTimer/tests/V2NativeEnvelopeContract/**'
       - '.github/workflows/blazepwifi-v060-native-journal.yml'
 
 permissions:
@@ -35,6 +39,11 @@ jobs:
           pkg-config --exists libcrypto
       - name: Compile and fault-test signed synthetic prepaid journal
         run: sh experiment/openwrt/BlazePwifi/tests/v060_native_v2_authority.sh
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.425'
+      - name: PAY-0715 actual SoftTimer .NET → native HMAC/fsync journal cross-language contract
+        run: sh experiment/openwrt/BlazePwifi/tests/v060_softtimer_native_v2_roundtrip.sh
       - name: Safety boundary
         run: |
           test ! -e experiment/openwrt/BlazePwifi/openwrt/rootfs/usr/bin/v2-native-fixture
