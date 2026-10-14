@@ -13,13 +13,13 @@ public static class DisklessSafety {
            ||p.StartsWith("RobloxPlayer",StringComparison.OrdinalIgnoreCase)
            ||p.StartsWith("RobloxStudio",StringComparison.OrdinalIgnoreCase));
     }
-    public static void RejectUnverifiedRoblox(string path) {
-        if(IsRoblox(path))throw new NotSupportedException(
-            "Roblox is not validated for portable multi-PC deployment. " +
-            "Shared Roblox installations or account/session state may affect other clients. " +
-            "Use the official Roblox client with separate per-PC writable Windows user profiles " +
-            "and separate Roblox accounts for simultaneous play. " +
-            "Blaze Gen2 will not package or launch Roblox in experimental v1.1.0.");
+    public static bool RequiresStationIsolation(string path) => IsRoblox(path);
+
+    public static string SafeMachineName() {
+        var configured=Environment.GetEnvironmentVariable("BLAZE_STATION_ID");
+        var raw=string.IsNullOrWhiteSpace(configured)?Environment.MachineName:configured;
+        var name=new string(raw.Where(c=>char.IsLetterOrDigit(c)||c=='-'||c=='_').ToArray());
+        return string.IsNullOrWhiteSpace(name)?"UnknownMachine":name;
     }
     public static bool IsNetworkPath(string path) {
         var full=Path.GetFullPath(path);
@@ -29,16 +29,22 @@ public static class DisklessSafety {
             return root!=null && new DriveInfo(root).DriveType==DriveType.Network;
         } catch(IOException){return true;}
     }
-    public static string SafeMachineName() {
-        var name=new string(Environment.MachineName.Where(c=>char.IsLetterOrDigit(c)||c=='-'||c=='_').ToArray());
-        return string.IsNullOrWhiteSpace(name)?"UnknownMachine":name;
-    }
     public static string ClientDataRoot(PortableConfig config) {
         var local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if(string.IsNullOrWhiteSpace(local)||IsNetworkPath(local))
+        return ClientDataRoot(config,SafeMachineName(),local);
+    }
+    public static string ClientDataRoot(PortableConfig config,string stationId,string localAppData) {
+        if(string.IsNullOrWhiteSpace(localAppData)||IsNetworkPath(localAppData))
             throw new IOException("Client LOCALAPPDATA must be on a local writable disk; a shared user profile is not safe.");
-        // Machine namespace prevents reuse of shared identity when usernames are identical on multiple PCs.
-        return Path.Combine(local,"BlazeGen2","Clients",SafeMachineName(),config.PackageId);
+        var station=new string(stationId.Where(c=>char.IsLetterOrDigit(c)||c=='-'||c=='_').ToArray());
+        if(string.IsNullOrWhiteSpace(station))throw new IOException("Set a unique BLAZE_STATION_ID or Windows computer name for each diskless station.");
+        // LocalAppData is scoped to the signed-in Windows profile; station ID prevents collisions between cloned stations.
+        return Path.Combine(Path.GetFullPath(localAppData),"BlazeGen2","Clients",station,config.PackageId);
+    }
+    public static string ProfileAppData(string clientDataRoot,string kind) {
+        if(!kind.Equals("Roaming",StringComparison.OrdinalIgnoreCase)&&!kind.Equals("Local",StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Profile data kind must be Roaming or Local.",nameof(kind));
+        return Path.Combine(clientDataRoot,"WindowsProfile",kind);
     }
 }
 public sealed class FileManifestEntry {
@@ -57,14 +63,17 @@ public sealed class PackageManifest {
 public static class ClientIsolation {
     /// <summary>Creates or reuses a local, content-addressed, per-user-per-PC copy of package files.</summary>
     public static string Prepare(string packageRoot,string appRoot,PortableConfig cfg,string localData) {
-        if(!cfg.IsolateExecutablePerClient)return appRoot;
+        var roblox=DisklessSafety.RequiresStationIsolation(appRoot)
+            ||Directory.EnumerateFiles(appRoot,"RobloxPlayer*.exe",SearchOption.AllDirectories).Any();
+        if(!cfg.IsolateExecutablePerClient&&!roblox)return appRoot;
         if(DisklessSafety.IsNetworkPath(localData))
             throw new IOException("Client data folder must be physically local, not SMB/UNC.");
         var manifestFile=Path.Combine(packageRoot,"FileManifest.json");
-        if(!File.Exists(manifestFile))throw new InvalidDataException("Client-local execution needs FileManifest.json.");
-        var manifest=PackageManifest.Load(manifestFile);
+        var hasManifest=File.Exists(manifestFile);
+        var manifest=hasManifest?PackageManifest.Load(manifestFile):CreateManifest(appRoot);
         if(manifest.SchemaVersion!=1||manifest.Files.Count<1)throw new InvalidDataException("Invalid manifest.");
-        var fingerprint=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(manifestFile))).ToLowerInvariant();
+        var manifestBytes=hasManifest?File.ReadAllBytes(manifestFile):JsonSerializer.SerializeToUtf8Bytes(manifest);
+        var fingerprint=Convert.ToHexString(SHA256.HashData(manifestBytes)).ToLowerInvariant();
         var cacheBase=Path.Combine(localData,"AppCache");
         Directory.CreateDirectory(cacheBase);
         // FileShare.None: only one launcher in this Windows user/machine sandbox at a time.
@@ -99,6 +108,29 @@ public static class ClientIsolation {
         } finally {
             if(Directory.Exists(staging))Directory.Delete(staging,true);
         }
+    }
+    static PackageManifest CreateManifest(string appRoot) {
+        // Legacy packages have no builder manifest. Snapshot and hash their files before making a station-local copy.
+        var manifest=new PackageManifest();
+        var dirs=new Stack<string>();dirs.Push(appRoot);
+        while(dirs.Count>0) {
+            var dir=dirs.Pop();
+            if(Paths.IsLink(dir))throw new IOException("Application contains a linked directory: "+dir);
+            foreach(var sub in Directory.EnumerateDirectories(dir)) {
+                if(Paths.IsLink(sub))throw new IOException("Application contains a linked directory: "+sub);
+                dirs.Push(sub);
+            }
+            foreach(var file in Directory.EnumerateFiles(dir)) {
+                if(Paths.IsLink(file))throw new IOException("Application contains a linked file: "+file);
+                using var input=File.OpenRead(file);
+                manifest.Files.Add(new FileManifestEntry{
+                    RelativePath=Path.GetRelativePath(appRoot,file).Replace('\\','/'),
+                    Size=input.Length,Sha256=Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant()
+                });
+            }
+        }
+        manifest.Files=manifest.Files.OrderBy(x=>x.RelativePath,StringComparer.OrdinalIgnoreCase).ToList();
+        return manifest;
     }
 }
 

@@ -9,8 +9,13 @@ class Tests {
         f.Position=0x3C;var pos=b.ReadInt32();f.Position=pos;
         Check(b.ReadUInt32()==0x00004550,"PE signature: "+Path.GetFileName(p));
     }
+    static Process Start(string path,string? args=null,string? stationId=null) {
+        var start=new ProcessStartInfo(path,args??""){UseShellExecute=false};
+        if(stationId!=null)start.Environment["BLAZE_STATION_ID"]=stationId;
+        return Process.Start(start)??throw new Exception("Cannot launch "+path);
+    }
     static int Run(string path,string? args=null,int seconds=60) {
-        using var p=Process.Start(new ProcessStartInfo(path,args??""){UseShellExecute=false})??throw new Exception("Cannot launch "+path);
+        using var p=Start(path,args);
         if(!p.WaitForExit(seconds*1000)){p.Kill(entireProcessTree:true);throw new TimeoutException("Timed out: "+path);}
         return p.ExitCode;
     }
@@ -115,14 +120,51 @@ class Tests {
             Directory.CreateDirectory(robloxRoot);
             var mockRoblox=Path.Combine(robloxRoot,"RobloxPlayerBeta.exe");
             File.Copy(args[0],mockRoblox);
+            var mockResources=Path.Combine(robloxRoot,"Resources");Directory.CreateDirectory(mockResources);
+            File.WriteAllText(Path.Combine(mockResources,"test.txt"),"synthetic payload");
             var rb=Analyzer.Analyze(mockRoblox);
-            Check(rb.Classification==CompatibilityLevel.Unsupported,"Roblox candidate explicitly classified unsupported");
-            var blocked=false;var shouldNotExist=Path.Combine(home,"Rejected Roblox Package");
-            try {
-                await PackageBuilder.BuildAsync(new ConversionOptions{SourceExecutable=mockRoblox,Destination=shouldNotExist},args[1]);
-            }catch(NotSupportedException){blocked=true;}
-            Check(blocked&&!Directory.Exists(shouldNotExist),"Roblox multi-PC portable packaging safely blocked");
-            Check(File.Exists(mockRoblox),"Blocked Roblox source is never modified");
+            Check(rb.Classification!=CompatibilityLevel.Unsupported,"Roblox candidate remains available with an isolation warning");
+            var robloxPackage=Path.Combine(home,"Roblox Station Package");
+            var robloxLaunch=await PackageBuilder.BuildAsync(new ConversionOptions{
+                SourceExecutable=mockRoblox,Destination=robloxPackage,Arguments="--synthetic-argument",
+                DataMode=DataMode.PerClientWritable,IsolateExecutablePerClient=true
+            },args[1]);
+            var robloxConfig=PortableConfig.Load(Path.Combine(robloxPackage,"PortableConfig.json"));
+            Check(robloxConfig.IsolateExecutablePerClient,"Roblox package forces client-local application files");
+            Check(robloxConfig.RedirectEnvironmentFolders,"Roblox package forces private app-data environment roots");
+            File.Delete(Path.Combine(robloxPackage,"FileManifest.json"));
+            var robloxData=DisklessSafety.ClientDataRoot(robloxConfig);
+            var robloxExit=Run(robloxLaunch);
+            if(robloxExit!=0) {
+                var diagnostic=Path.Combine(robloxData,"Logs","launcher.log");
+                if(File.Exists(diagnostic))Console.WriteLine("Roblox isolation fixture launcher log:\n"+File.ReadAllText(diagnostic));
+            }
+            Check(robloxExit==0,"Roblox-named legacy package starts from a station-local snapshot without a product block");
+            var profileRoots=File.ReadAllLines(Path.Combine(robloxData,"profile-roots.txt"));
+            Check(profileRoots.Length==2 &&
+                Path.GetFullPath(profileRoots[0])==Path.GetFullPath(DisklessSafety.ProfileAppData(robloxData,"Roaming")) &&
+                Path.GetFullPath(profileRoots[1])==Path.GetFullPath(DisklessSafety.ProfileAppData(robloxData,"Local")),
+                "Roblox client receives station-private APPDATA and LOCALAPPDATA");
+            var stationA=DisklessSafety.ClientDataRoot(robloxConfig,"PISONET-PC-01",Path.Combine(home,"Station A LocalAppData"));
+            var stationB=DisklessSafety.ClientDataRoot(robloxConfig,"PISONET-PC-02",Path.Combine(home,"Station B LocalAppData"));
+            Check(stationA!=stationB &&
+                DisklessSafety.ProfileAppData(stationA,"Local")!=DisklessSafety.ProfileAppData(stationB,"Local"),
+                "Distinct station identities produce separate persistent profile roots");
+            using(var stationOne=Start(robloxLaunch,null,"PISONET-PC-01"))
+            using(var stationTwo=Start(robloxLaunch,null,"PISONET-PC-02")) {
+                if(!stationOne.WaitForExit(60000)){stationOne.Kill(true);throw new TimeoutException("Station one timed out");}
+                if(!stationTwo.WaitForExit(60000)){stationTwo.Kill(true);throw new TimeoutException("Station two timed out");}
+                Check(stationOne.ExitCode==0 && stationTwo.ExitCode==0,"Two Roblox-named station clients launch simultaneously");
+            }
+            var runnerLocalAppData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var stationOneData=DisklessSafety.ClientDataRoot(robloxConfig,"PISONET-PC-01",runnerLocalAppData);
+            var stationTwoData=DisklessSafety.ClientDataRoot(robloxConfig,"PISONET-PC-02",runnerLocalAppData);
+            Check(File.Exists(Path.Combine(stationOneData,"profile-roots.txt")) &&
+                File.Exists(Path.Combine(stationTwoData,"profile-roots.txt")) &&
+                !File.ReadAllText(Path.Combine(stationOneData,"profile-roots.txt")).Equals(
+                    File.ReadAllText(Path.Combine(stationTwoData,"profile-roots.txt")),StringComparison.Ordinal),
+                "Concurrent station clients write separate app-data profiles");
+            Check(File.Exists(mockRoblox),"Packaging retains the original Roblox client source");
             Console.WriteLine("ALL "+successes+" CHECKS PASSED");
         } finally {try{Directory.Delete(home,true);}catch(IOException){}}
     }
