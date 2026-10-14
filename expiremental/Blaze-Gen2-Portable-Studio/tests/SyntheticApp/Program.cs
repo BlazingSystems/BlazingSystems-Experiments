@@ -5,6 +5,17 @@ static class Program {
             if(args.Contains("--child")) {
                 File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("BLAZE_PORTABLE_DATA")!,"child.txt"),"ok");return 0;
             }
+            if(args.Contains("--hold")) {
+                var holdData=Environment.GetEnvironmentVariable("BLAZE_PORTABLE_DATA");
+                if(string.IsNullOrWhiteSpace(holdData))return 11;
+                var running=Path.Combine(holdData,"Concurrent");Directory.CreateDirectory(running);
+                var station=Environment.GetEnvironmentVariable("BLAZE_STATION_ID")??"unknown";
+                var ready=Path.Combine(running,station+"-"+Environment.ProcessId+".ready");
+                File.WriteAllText(ready,Environment.GetEnvironmentVariable("APPDATA")+"\n"+Environment.GetEnvironmentVariable("LOCALAPPDATA"));
+                Thread.Sleep(4000);
+                File.Delete(ready);
+                return 0;
+            }
             var data=Environment.GetEnvironmentVariable("BLAZE_PORTABLE_DATA");
             if(string.IsNullOrWhiteSpace(data))return 11;
             if(!File.Exists(Path.Combine(AppContext.BaseDirectory,"Resources","test.txt")))return 10;
