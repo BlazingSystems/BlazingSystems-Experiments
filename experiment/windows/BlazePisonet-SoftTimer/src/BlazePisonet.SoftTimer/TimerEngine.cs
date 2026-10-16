@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace BlazePisonet.SoftTimer;
 
 public sealed class TimerEngine : IDisposable
@@ -5,8 +7,10 @@ public sealed class TimerEngine : IDisposable
     private readonly object _gate = new();
     private readonly System.Threading.Timer _tick;
     private RuntimeState _state;
-    private DateTimeOffset _lastTick = DateTimeOffset.UtcNow;
-    private DateTimeOffset _lastPersist = DateTimeOffset.MinValue;
+    // Monotonic clock: wall-clock edits must not multiply or erase paid time.
+    private long _lastTickStamp = Stopwatch.GetTimestamp();
+    private long _lastPersistStamp;
+    private double _fractionalSeconds;
     private bool _externalAuthority;
     private bool _paused;
 
@@ -35,7 +39,7 @@ public sealed class TimerEngine : IDisposable
         lock (_gate)
         {
             _externalAuthority = external;
-            _lastTick = DateTimeOffset.UtcNow;
+            ResetTickClock();
         }
     }
 
@@ -59,7 +63,7 @@ public sealed class TimerEngine : IDisposable
             _state.TimerRunning = _state.RemainingSeconds > 0;
             if (countSale) _state.SalesPulseCount++;
             _state.UpdatedUtc = DateTimeOffset.UtcNow;
-            _lastTick = _state.UpdatedUtc;
+            ResetTickClock();
             Storage.SaveState(_state);
             remaining = _state.RemainingSeconds;
         }
@@ -83,12 +87,12 @@ public sealed class TimerEngine : IDisposable
             _state.RemainingSeconds = seconds;
             _state.TimerRunning = seconds > 0;
             _state.UpdatedUtc = DateTimeOffset.UtcNow;
-            _lastTick = _state.UpdatedUtc;
+            ResetTickClock();
             newActive = seconds > 0;
-            if (changed && (DateTimeOffset.UtcNow - _lastPersist).TotalSeconds >= 2)
+            if (changed && (ElapsedSince(Stopwatch.GetTimestamp(), _lastPersistStamp) >= 2))
             {
                 Storage.SaveState(_state);
-                _lastPersist = DateTimeOffset.UtcNow;
+                _lastPersistStamp = Stopwatch.GetTimestamp();
             }
         }
         if (changed) RemainingChanged?.Invoke(seconds);
@@ -104,6 +108,7 @@ public sealed class TimerEngine : IDisposable
             _state.RemainingSeconds = 0;
             _state.TimerRunning = false;
             _state.UpdatedUtc = DateTimeOffset.UtcNow;
+            ResetTickClock();
             Storage.SaveState(_state);
         }
         Audit?.Invoke($"Timer reset: {reason}");
@@ -116,7 +121,7 @@ public sealed class TimerEngine : IDisposable
         lock (_gate)
         {
             _paused = paused;
-            _lastTick = DateTimeOffset.UtcNow;
+            ResetTickClock();
         }
         Audit?.Invoke(paused ? "Timer paused" : "Timer resumed");
     }
@@ -175,7 +180,7 @@ public sealed class TimerEngine : IDisposable
             member.BankedSeconds = 0;
             member.UpdatedUtc = DateTimeOffset.UtcNow;
             _state.UpdatedUtc = DateTimeOffset.UtcNow;
-            _lastTick = _state.UpdatedUtc;
+            ResetTickClock();
             Storage.SaveState(_state);
         }
         RemainingChanged?.Invoke(RemainingSeconds);
@@ -310,6 +315,48 @@ public sealed class TimerEngine : IDisposable
         UpdatedUtc = m.UpdatedUtc
     };
 
+    // Deterministic, unit-testable portion of the billable elapsed-time logic.
+    internal static long DebitWholeSeconds(ref double carry, double elapsed)
+    {
+        if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed <= 0)
+            return 0;
+        carry += elapsed;
+        long whole = (long)Math.Floor(carry);
+        carry -= whole;
+        return whole;
+    }
+
+    internal static int VerifyTimerMath()
+    {
+        double carry = 0;
+        for (int i = 0; i < 14400; i++)
+        {
+            long billed = DebitWholeSeconds(ref carry, 0.25); // 60 min at 250-ms cadence
+            if (billed != (i % 4 == 3 ? 1L : 0L)) return 1;
+        }
+        if (Math.Abs(carry) > 0.000001) return 2;
+        carry = 0;
+        if (DebitWholeSeconds(ref carry, 0.375) != 0) return 3;
+        if (DebitWholeSeconds(ref carry, 0.125) != 0) return 4;
+        if (DebitWholeSeconds(ref carry, 0.625) != 1) return 5;
+        if (Math.Abs(carry - 0.125) > 0.000001) return 6;
+        if (DebitWholeSeconds(ref carry, -100) != 0) return 7;
+        if (DebitWholeSeconds(ref carry, double.NaN) != 0) return 8;
+        return 0;
+    }
+
+    private static double ElapsedSince(long now, long previous)
+    {
+        if (previous == 0) return double.PositiveInfinity;
+        return Math.Max(0, (now - previous) / (double)Stopwatch.Frequency);
+    }
+
+    private void ResetTickClock()
+    {
+        _lastTickStamp = Stopwatch.GetTimestamp();
+        _fractionalSeconds = 0;
+    }
+
     private void Tick()
     {
         bool changed = false;
@@ -317,24 +364,33 @@ public sealed class TimerEngine : IDisposable
         long remaining = 0;
         lock (_gate)
         {
-            var now = DateTimeOffset.UtcNow;
-            var elapsed = Math.Max(0, (now - _lastTick).TotalSeconds);
-            _lastTick = now;
-            if (_externalAuthority || _paused || _state.RemainingSeconds <= 0 || elapsed < 0.2) return;
-
-            var old = _state.RemainingSeconds;
-            _state.RemainingSeconds = Math.Max(0, old - Math.Max(1, (long)Math.Floor(elapsed)));
-            if (_state.RemainingSeconds != old)
+            long stamp = Stopwatch.GetTimestamp();
+            double elapsed = ElapsedSince(stamp, _lastTickStamp);
+            _lastTickStamp = stamp;
+            if (_externalAuthority || _paused || _state.RemainingSeconds <= 0)
             {
-                changed = true;
+                _fractionalSeconds = 0;
+                return;
+            }
+
+            // Timer callback cadence is 250 ms. Debit only whole *elapsed*
+            // seconds; carry fractions forward instead of billing 1s per tick.
+            long secondsToDebit = DebitWholeSeconds(ref _fractionalSeconds, elapsed);
+            if (secondsToDebit <= 0) return;
+
+            long old = _state.RemainingSeconds;
+            _state.RemainingSeconds = Math.Max(0, old - secondsToDebit);
+            changed = _state.RemainingSeconds != old;
+            if (changed)
+            {
                 _state.TimerRunning = _state.RemainingSeconds > 0;
-                _state.UpdatedUtc = now;
+                _state.UpdatedUtc = DateTimeOffset.UtcNow;
                 remaining = _state.RemainingSeconds;
                 becameInactive = old > 0 && remaining == 0;
-                if ((now - _lastPersist).TotalSeconds >= 5 || becameInactive)
+                if (ElapsedSince(stamp, _lastPersistStamp) >= 5 || becameInactive)
                 {
                     Storage.SaveState(_state);
-                    _lastPersist = now;
+                    _lastPersistStamp = stamp;
                 }
             }
         }

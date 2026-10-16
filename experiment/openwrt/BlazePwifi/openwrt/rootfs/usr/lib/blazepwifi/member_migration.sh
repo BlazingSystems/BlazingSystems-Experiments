@@ -223,7 +223,13 @@ bp_member_migration_preview_json() {
   while IFS="$(printf '\t')" read -r user enabled banked updated label64 source64; do
     label="$(bp_member_migration_decode_text "$label64" 96)" || return 1
     source="$(bp_member_migration_decode_text "$source64" 96)" || return 1
-    if [ -n "$(bp_member_line "$user")" ]; then status=collision; else status=create; fi
+    if [ -n "$(bp_member_line "$user")" ]; then
+      status=collision
+    elif [ "$banked" -ne 0 ] 2>/dev/null; then
+      status=unverified_paid_balance
+    else
+      status=create
+    fi
     [ "$first" = 1 ] || printf ','; first=0
     printf '{"username":"%s","label":"%s","requested_enabled":%s,"banked_seconds":%s,"updated":%s,"source":"%s","status":"%s"}' \
       "$(bp_json_escape "$user")" "$(bp_json_escape "$label")" "$enabled" "$banked" "$updated" "$(bp_json_escape "$source")" "$status"
@@ -234,6 +240,9 @@ bp_member_migration_preview_json() {
 bp_member_migration_import_new() {
   user="$1"; label="$2"; banked="$3"; requested_enabled="$4"; actor="$5"; original_source="$6"
   [ -z "$(bp_member_line "$user")" ] || return 3
+  # Unsigned metadata is NOT an authoritative paid-money snapshot.
+  # Refuse rather than silently drop/mint a claimed migrated balance.
+  [ "$banked" -eq 0 ] 2>/dev/null || return 16
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   source="$(bp_member_clean "import:$actor")"
   # Keep non-secret sentinel fields populated so legacy tab parsing retains all columns.
@@ -252,10 +261,12 @@ bp_member_migration_import_update() {
   oldbank="$(printf '%s' "$line" | cut -f8)"
   rev="$(bp_member_next_revision)"; now="$(bp_now)"
   source="$(bp_member_clean "import:$actor")"
-  bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$banked" "$rev" "$now" "$source" || return 1
-  delta=$((banked-oldbank))
-  bp_member_event_record "import:$rev:$user" "$now" "$user" import_update "$delta" "$banked" "$source" \
-    "metadata_only:source=$(bp_member_clean "$original_source")"
+  # Metadata-only means no authority to transfer/restore financial balances.
+  # Preserve the live bank even when the imported file is older/different.
+  case "$oldbank" in ''|*[!0-9]*) return 16;; esac
+  bp_member_write "$user" "$label" "$enabled" "$scheme" "$salt" "$hash" "$rounds" "$oldbank" "$rev" "$now" "$source" || return 1
+  bp_member_event_record "import:$rev:$user" "$now" "$user" import_update 0 "$oldbank" "$source" \
+    "metadata_only:bank_preserved:import_claim=$banked"
 }
 
 bp_member_migration_restore_snapshot() {
@@ -283,6 +294,15 @@ bp_member_migration_apply() {
       if [ -n "$(bp_member_line "$user")" ]; then bp_member_unlock; return 7; fi
     done < "$members_file"
   fi
+  # This is a metadata import, NOT the separately verified paid-state restore.
+  # Preflight the entire requested batch before writing *anything*: a plain
+  # text export cannot mint historical banked time for new accounts.
+  while IFS="$(printf '\t')" read -r user enabled banked updated label64 source64; do
+    if [ -z "$(bp_member_line "$user")" ] && [ "$banked" -ne 0 ] 2>/dev/null; then
+      bp_member_unlock
+      return 16
+    fi
+  done < "$members_file"
 
   snap="$BP_RUN/.member-import-snapshot.$(bp_tmp_suffix)"
   mkdir -p "$snap" || { bp_member_unlock; return 9; }

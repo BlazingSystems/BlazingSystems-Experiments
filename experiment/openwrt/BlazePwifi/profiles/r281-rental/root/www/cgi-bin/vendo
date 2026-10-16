@@ -65,6 +65,9 @@ case "$action" in
     enabled="$(printf '%s' "$controller" | sed -n 's/.*"enabled":\([01]\).*/\1/p')"
     coin_enabled="$(printf '%s' "$controller" | sed -n 's/.*"coin_enabled":\([01]\).*/\1/p')"
     [ "$enabled" = 1 ] && [ "$coin_enabled" = 1 ] || insert=0
+    # Reconciliation is a hard stop on accepting physical cash; never
+    # advertise INSERT COIN after an ambiguous prior credit.
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || insert=0
     body="$(printf '{"ok":true,"insert":%s,"target_nonce":"%s","expires":%s,"controller":%s}' "$insert" "$(bp_json_escape "$target_nonce")" "${expires:-0}" "$controller")"
     bp_json "$body"
     ;;
@@ -81,13 +84,21 @@ case "$action" in
     [ "$target" = "$target_nonce" ] || bp_fail "coin target mismatch"
     [ "$expires" -gt "$now" ] 2>/dev/null || { rm -f "$target_file"; bp_fail "coin window expired"; }
     [ "$wanted" = "$id" ] || bp_fail "another vendo selected"
+    [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] ||
+      bp_fail "paid state uncertain; operator reconciliation required"
 
     if [ "$kind" = rental ]; then
       bp_lock || bp_fail "rental accounting busy"
       result="$(bp_rental_apply_coin "$device" "$id" "$nonce" "$target" "$pulses")"
       rc=$?
       bp_unlock
-      [ "$rc" -eq 0 ] || bp_fail "rental target not found"
+      if [ "$rc" -ne 0 ]; then
+        case "$rc" in
+          2) bp_fail "rental target not found" ;;
+          9) bp_fail "paid state uncertain or receipt collision; operator reconciliation required" ;;
+          *) bp_fail "rental credit storage failed; operator reconciliation required" ;;
+        esac
+      fi
       state="$(printf '%s' "$result" | cut -f1)"
       lease="$(printf '%s' "$result" | cut -f2)"
       [ "$state" = duplicate ] && duplicate=true || duplicate=false
@@ -96,16 +107,17 @@ case "$action" in
       exit 0
     fi
 
-    event="c:$(bp_event_hash "coin|$id|$nonce|$target")"
-    duplicate_device="$(bp_find_event_device "$event")"
-    if [ -n "$duplicate_device" ]; then
-      credit="$(bp_get_credit "$duplicate_device")"
-      body="$(printf '{"ok":true,"duplicate":true,"credited_cents":0,"credit_cents":%s,"target_nonce":"%s"}' "$credit" "$(bp_json_escape "$target")")"
-      bp_json "$body"
-      exit 0
-    fi
-
+    # Include target identity in each new v1 receipt so valid ACK retries
+    # cannot be aged out while this physical controller window remains open.
+    event_base="c:$target.$(bp_event_hash "coin|$id|$nonce|$target")"
+    event="$event_base:$pulses"
     bp_lock || bp_fail "accounting busy"
+    # Duplicate ACKs are financial acknowledgements too. Check quarantine
+    # *inside* the global accounting lock, never in a racy prelock shortcut.
+    if [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+      bp_unlock
+      bp_fail "paid state uncertain; operator reconciliation required"
+    fi
     duplicate_device="$(bp_find_event_device "$event")"
     if [ -n "$duplicate_device" ]; then
       credit="$(bp_get_credit "$duplicate_device")"
@@ -115,6 +127,14 @@ case "$action" in
       exit 0
     fi
 
+    # An old receipt with the same signed physical nonce but a different
+    # pulse count is not a replay. Fail closed instead of minting extra cash
+    # time or falsely ACKing the changed quantity.
+    collision_device="$(bp_find_coin_base "$event_base")"
+    if [ -n "$collision_device" ]; then
+      bp_unlock
+      bp_fail "coin receipt pulse collision; operator reconciliation required"
+    fi
     line="$(bp_account_line "$device")"
     [ -n "$line" ] || { bp_unlock; bp_fail "target account not found"; }
     credit="$(printf '%s' "$line" | cut -f2)"
@@ -129,8 +149,20 @@ case "$action" in
     [ -n "$unit" ] || unit=100
     add=$((unit*pulses))
     newcredit=$((credit+add))
-    newevents="$(bp_events_push "$events" "$event")"
-    bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"
+    if ! newevents="$(bp_events_push "$events" "$event")"; then
+      bp_unlock
+      bp_fail "coin receipt retention unavailable; operator reconciliation required"
+    fi
+    bp_paid_begin || { bp_unlock; bp_fail "paid state uncertain or accounting busy"; }
+    if ! bp_account_write "$device" "$newcredit" "$expiry" "$remaining" "$paused" "$ps" "$account_mac" "$account_ip" "$newevents"; then
+      bp_paid_abort
+      bp_unlock
+      bp_fail "coin credit storage failed; operator reconciliation required"
+    fi
+    if ! bp_paid_commit; then
+      bp_unlock
+      bp_fail "coin credit durability failed; operator reconciliation required"
+    fi
     bp_unlock
     body="$(printf '{"ok":true,"duplicate":false,"credited_cents":%s,"credit_cents":%s,"target_nonce":"%s"}' "$add" "$newcredit" "$(bp_json_escape "$target")")"
     bp_json "$body"

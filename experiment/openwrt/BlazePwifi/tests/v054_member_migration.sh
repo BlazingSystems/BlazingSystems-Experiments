@@ -79,7 +79,7 @@ TOKEN1="$(bp_member_migration_preview_create "$(payload "$IMPORT1")")"
 [ "$(bp_member_migration_preview_meta "$TOKEN1" requested_enabled)" -eq 1 ]
 PREVIEW="$(bp_member_migration_preview_json "$TOKEN1")"
 printf '%s' "$PREVIEW" | grep -q '"username":"alice".*"status":"collision"'
-printf '%s' "$PREVIEW" | grep -q '"username":"carol".*"status":"create"'
+printf '%s' "$PREVIEW" | grep -q '"username":"carol".*"status":"unverified_paid_balance"'
 
 # Preview tokens are bound to the authenticated admin session/IP.
 OLD_IP="$REMOTE_ADDR"
@@ -111,8 +111,28 @@ set -e
 [ "$RC" -eq 7 ]
 [ "$(bp_member_global_revision)" = "$REV_BEFORE" ]
 
-# Skip collisions creates only the new member. New account is disabled/reset-required.
-RESULT="$(bp_member_migration_apply "$TOKEN2" skip admin:test)"
+# An unsigned metadata file MUST NOT mint 900 seconds for a newly created
+# member, even when a real administrator reauthenticates. Reject the whole
+# batch without any account, event or revision mutation.
+cp "$BP_MEMBERS" "$T/before-unverified.members"
+cp "$BP_MEMBER_EVENTS" "$T/before-unverified.events"
+set +e
+bp_member_migration_apply "$TOKEN2" skip admin:test > "$T/refused.log" 2>&1
+RC=$?
+set -e
+[ "$RC" -eq 16 ]
+cmp -s "$T/before-unverified.members" "$BP_MEMBERS"
+cmp -s "$T/before-unverified.events" "$BP_MEMBER_EVENTS"
+[ "$(bp_member_global_revision)" = "$REV_BEFORE" ]
+[ -z "$(bp_member_line carol)" ]
+
+# A safe metadata-only import may create a disabled EMPTY-bank account.
+SAFE_IMPORT="$T/import-safe.blazemembers"
+make_import "$SAFE_IMPORT" \
+  "member\talice\t0\t120\t$(bp_now)\t$(enc "Imported Alice")\t$(enc "legacy-local")" \
+  "member\tcarol\t1\t0\t$(bp_now)\t$(enc "")\t$(enc "softtimer-local")"
+SAFE_TOKEN="$(bp_member_migration_preview_create "$(payload "$SAFE_IMPORT")")"
+RESULT="$(bp_member_migration_apply "$SAFE_TOKEN" skip admin:test)"
 [ "$(printf '%s' "$RESULT" | cut -f1)" -eq 1 ]
 [ "$(printf '%s' "$RESULT" | cut -f2)" -eq 0 ]
 [ "$(printf '%s' "$RESULT" | cut -f3)" -eq 1 ]
@@ -122,10 +142,10 @@ CAROL="$(bp_member_line carol)"
 [ "$(printf '%s' "$CAROL" | cut -f4)" = reset_required ]
 [ "$(printf '%s' "$CAROL" | cut -f5)" = "-" ]
 [ "$(printf '%s' "$CAROL" | cut -f6)" = "-" ]
-[ "$(printf '%s' "$CAROL" | cut -f8)" -eq 900 ]
+[ "$(printf '%s' "$CAROL" | cut -f8)" -eq 0 ]
 ! bp_member_verify_password carol 'anything123'
 set +e
-bp_member_migration_preview_validate "$TOKEN2"
+bp_member_migration_preview_validate "$SAFE_TOKEN"
 RC=$?
 set -e
 [ "$RC" -eq 1 ]
@@ -152,9 +172,12 @@ RESULT="$(bp_member_migration_apply "$TOKEN3" update admin:test)"
 [ "$(printf '%s' "$(bp_member_line carol)" | cut -f6)" = "$CAROL_HASH" ]
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f2)" = "Imported Alice" ]
 [ "$(printf '%s' "$(bp_member_line alice)" | cut -f3)" = 0 ]
-[ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 120 ]
+[ "$(printf '%s' "$(bp_member_line alice)" | cut -f8)" -eq 300 ]
 [ "$(printf '%s' "$(bp_member_line carol)" | cut -f2)" = "Carol Central" ]
-[ "$(printf '%s' "$(bp_member_line carol)" | cut -f8)" -eq 600 ]
+[ "$(printf '%s' "$(bp_member_line carol)" | cut -f8)" -eq 0 ]
+# Metadata-only update must never rewrite authoritative banked time, even
+# when an older import explicitly claims smaller or larger paid credit.
+awk -F '\t' '$4=="import_update" {if($5!=0)bad=1;n++} END {exit (bad||n<2)?1:0}' "$BP_MEMBER_EVENTS"
 bp_member_verify_password carol 'carol-new99'
 
 # Duplicate usernames are rejected during preview.
@@ -172,7 +195,7 @@ set -e
 ROLL="$T/rollback.blazemembers"
 make_import "$ROLL" \
   "member\talice\t1\t999\t$(bp_now)\t$(enc "Should Roll Back")\t$(enc "legacy")" \
-  "member\tdave\t1\t60\t$(bp_now)\t$(enc "Dave")\t$(enc "legacy")"
+  "member\tdave\t1\t0\t$(bp_now)\t$(enc "Dave")\t$(enc "legacy")"
 TOKEN4="$(bp_member_migration_preview_create "$(payload "$ROLL")")"
 cp -p "$BP_MEMBERS" "$T/before.members"
 cp -p "$BP_MEMBER_EVENTS" "$T/before.events"

@@ -91,12 +91,39 @@ echo "$OUT" | grep -q '"credit_cents":0'
 echo "$OUT" | grep -q '"mac":"aa:bb:cc:dd:ee:ff"'
 [ ! -s "$T/state/accounts.tsv" ]
 
+# A client may not forge a MAC fallback when the router has no ARP entry.
+# This must fail before opening a coin window or creating an account.
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01&mac=aa:bb:cc:dd:ee:ff' "$DEVICE" | TEST_MAC= sh "$API")"
+echo "$OUT" | grep -q 'client network identity unavailable'
+[ ! -s "$T/state/accounts.tsv" ]
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
+
+# PAY-0628: a failed coin window rename must not advertise payment readiness.
+cat > "$T/bin/mv" <<'MV'
+#!/bin/sh
+case "${2:-}" in
+  */targets/vendo-01.tsv) exit 74;;
+esac
+exec /bin/mv "$@"
+MV
+chmod +x "$T/bin/mv"
+OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'could not persist coin window'
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
+rm -f "$T/bin/mv"
+
 OUT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
 echo "integration: coin_start => $(printf '%s' "$OUT" | tr '\n' ' ')"
 echo "$OUT" | grep -q '"ok":true'
 TARGET="$(printf '%s' "$OUT" | sed -n 's/.*"target_nonce":"\([0-9a-f]*\)".*/\1/p')"
 [ -n "$TARGET" ]
 [ -s "$T/state/targets/vendo-01.tsv" ]
+# A same-device retry/page refresh must return the SAME live controller nonce,
+# not invalidate already-inserted physical coins.
+REPEAT="$(printf 'action=coin_start&device=%s&vendo=vendo-01' "$DEVICE" | sh "$API")"
+echo "$REPEAT" | grep -q '"ok":true'
+echo "$REPEAT" | grep -Fq "\"target_nonce\":\"$TARGET\""
+[ "$(cut -f3 "$T/state/targets/vendo-01.tsv")" = "$TARGET" ]
 
 # Simulate a router reboot/tmpfs loss before the ESP reports the coin.
 rm -rf "$T/run"
@@ -138,6 +165,22 @@ OUT="$(printf 'action=coin&id=vendo-01&nonce=9988776655443322&pulses=1&target=%s
 echo "$OUT" | grep -q 'coin target mismatch'
 
 echo "integration: coin accounting ok"
+# A failed close must not say ok while the physical acceptor can still vend.
+cat > "$T/bin/rm" <<'RM'
+#!/bin/sh
+case "${2:-}" in
+  */targets/vendo-01.tsv) exit 74;;
+esac
+exec /bin/rm "$@"
+RM
+chmod +x "$T/bin/rm"
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'could not close coin window'
+[ -f "$T/state/targets/vendo-01.tsv" ]
+rm -f "$T/bin/rm"
+OUT="$(printf 'action=coin_stop&device=%s' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q '"ok":true'
+[ ! -e "$T/state/targets/vendo-01.tsv" ]
 OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
 echo "$OUT" | grep -q '"ok":true'
 echo "$OUT" | grep -q '"credit_cents":0'
@@ -196,4 +239,51 @@ echo "integration: authenticated status => ${AERR:-ok}"
 echo "$OUT" | grep -q '"ok":true'
 
 echo "integration: admin session ok"
+
+# PAY-0629. Actual portal API: a failed bank-to-session debit or paid voucher
+# credit must reject the ACK, leave the existing record unchanged and freeze
+# ALL subsequent paid attempts for authenticated operator reconciliation.
+export TEST_IP=10.0.0.3 TEST_MAC=02:11:22:33:44:55 REMOTE_ADDR=10.0.0.3
+before_money="$(sha256sum "$T/state/accounts.tsv" | cut -d' ' -f1)"
+cat > "$T/bin/mv" <<'MV'
+#!/bin/sh
+case "${2:-}" in
+  */accounts.tsv) exit 74;;
+esac
+exec /bin/mv "$@"
+MV
+chmod +x "$T/bin/mv"
+OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'paid account write failed'
+echo "$OUT" | grep -q '"ok":false'
+[ "$(sha256sum "$T/state/accounts.tsv" | cut -d' ' -f1)" = "$before_money" ]
+[ -f "$T/state/paid-state-uncertain" ]
+rm -f "$T/bin/mv"
+OUT="$(printf 'action=connect&device=%s&cents=100' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'paid state uncertain'
+
+# Simulate an operator resolving this SYNTHETIC ONLY exception to execute a
+# separate voucher-storage fault scenario; NEVER clear live uncertainty this way.
+rm -f "$T/state/paid-state-uncertain"
+printf 'TESTEIO\t250\n' >> "$T/state/vouchers.tsv"
+cat > "$T/bin/mv" <<'MV'
+#!/bin/sh
+case "${2:-}" in
+  */accounts.tsv) exit 74;;
+esac
+exec /bin/mv "$@"
+MV
+chmod +x "$T/bin/mv"
+before_voucher="$(sha256sum "$T/state/accounts.tsv" | cut -d' ' -f1)"
+OUT="$(printf 'action=redeem&device=%s&code=TESTEIO' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'paid account write failed'
+echo "$OUT" | grep -q '"ok":false'
+[ "$(sha256sum "$T/state/accounts.tsv" | cut -d' ' -f1)" = "$before_voucher" ]
+[ -f "$T/state/paid-state-uncertain" ]
+rm -f "$T/bin/mv"
+OUT="$(printf 'action=redeem&device=%s&code=TESTEIO' "$DEVICE" | sh "$API")"
+echo "$OUT" | grep -q 'paid state uncertain'
+[ "$(sha256sum "$T/state/accounts.tsv" | cut -d' ' -f1)" = "$before_voucher" ]
+
+echo 'integration: captive paid connect and voucher storage fault quarantine ok'
 echo 'BlazePwifi integration checks passed'

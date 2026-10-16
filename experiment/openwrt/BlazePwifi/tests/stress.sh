@@ -101,18 +101,33 @@ bp_unlock
 ! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
 echo 'stress: legacy migration ok'
 
-# Simulate a crash after the new account reached disk but before old legacy
-# files were cleaned; the same MAC must never be claimable twice.
+# Simulate a crash after the new paid account reached disk but before
+# legacy rows were cleaned. MIG-0656 deliberately REFUSES a second device ID
+# sharing the already-paid MAC; it must not create a zero-credit identity,
+# silently delete source evidence, or mint/duplicate the 700 paid seconds.
 printf '%s\t700\n' "$LEGACY_MAC" > "$BP_LEGACY_CREDITS"
 printf '%s\t%s\t10.0.0.99\n' "$LEGACY_MAC" "$EXP" > "$BP_LEGACY_SESSIONS"
 D3=ffffffffffffffffffffffffffffffff
+accounts_before="$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)"
+credit_before="$(sha256sum "$BP_LEGACY_CREDITS" | cut -d' ' -f1)"
+sessions_before="$(sha256sum "$BP_LEGACY_SESSIONS" | cut -d' ' -f1)"
 bp_lock
+set +e
 bp_bind_device "$D3" "$LEGACY_MAC" 10.0.0.99 1
+claim_rc=$?
+set -e
 bp_unlock
-[ "$(bp_get_credit "$D3")" -eq 0 ]
-echo 'stress: migration replay blocked'
-! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_CREDITS"
-! grep -q "^$LEGACY_MAC	" "$BP_LEGACY_SESSIONS"
+[ "$claim_rc" -eq 8 ] || {
+  echo "stress: duplicate paid MAC unexpectedly accepted (rc=$claim_rc)" >&2
+  exit 1
+}
+[ -z "$(bp_account_line "$D3")" ]
+[ "$(bp_get_credit "$D2")" -eq 700 ]
+[ "$(bp_remaining "$D2")" -gt 3000 ]
+[ "$(sha256sum "$BP_ACCOUNTS" | cut -d' ' -f1)" = "$accounts_before" ]
+[ "$(sha256sum "$BP_LEGACY_CREDITS" | cut -d' ' -f1)" = "$credit_before" ]
+[ "$(sha256sum "$BP_LEGACY_SESSIONS" | cut -d' ' -f1)" = "$sessions_before" ]
+echo 'stress: second-identity paid MAC replay refused; original bank and legacy evidence preserved'
 
 # Concurrent writers must serialize without losing rows or sharing temp paths.
 i=1

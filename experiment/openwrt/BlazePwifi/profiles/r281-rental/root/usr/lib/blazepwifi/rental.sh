@@ -4,11 +4,16 @@ BP_RENTAL_ENROLL="${BP_RENTAL_ENROLL:-$BP_STATE/rental-enroll.tsv}"
 BP_RENTAL_POLICY="${BP_RENTAL_POLICY:-$BP_STATE/rental-policy.tsv}"
 BP_RENTAL_INVENTORY="${BP_RENTAL_INVENTORY:-$BP_STATE/rental-inventory.tsv}"
 BP_RENTAL_EVENTS="${BP_RENTAL_EVENTS:-$BP_STATE/rental-events.tsv}"
+# Ephemeral presence metadata must never overwrite a paid rental lease row.
+BP_RENTAL_SEEN_DIR="${BP_RENTAL_SEEN_DIR:-$BP_RUN/rental-last-seen}"
 
 bp_rental_init() {
   bp_init_dirs
   touch "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
   chmod 600 "$BP_RENTAL_DEVICES" "$BP_RENTAL_ENROLL" "$BP_RENTAL_POLICY" "$BP_RENTAL_INVENTORY" "$BP_RENTAL_EVENTS"
+  [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  mkdir -p "$BP_RENTAL_SEEN_DIR" || return 8
+  chmod 700 "$BP_RENTAL_SEEN_DIR" || return 8
 }
 
 bp_rental_clean() { printf '%s' "$1" | tr '\t\r\n' '   '; }
@@ -22,11 +27,35 @@ bp_rental_hmac() {
 
 bp_rental_enroll_create() {
   label="$(bp_rental_clean "$1")"; ttl="${2:-600}"; now="$(bp_now)"
-  case "$ttl" in ''|*[!0-9]*) ttl=600;; esac
-  [ "$ttl" -ge 60 ] && [ "$ttl" -le 3600 ] || ttl=600
-  id="$(bp_rental_hex 6)"; secret="$(bp_rental_hex 18)"; token="$id.$secret"; expiry=$((now+ttl))
-  printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$BP_RENTAL_ENROLL"
-  chmod 600 "$BP_RENTAL_ENROLL"; bp_durable_sync
+  case "$ttl" in ''|*[!0-9]*) return 8;; esac
+  [ "$ttl" -ge 60 ] 2>/dev/null && [ "$ttl" -le 3600 ] 2>/dev/null || return 8
+  id="$(bp_rental_hex 6)" || return 8
+  secret="$(bp_rental_hex 18)" || return 8
+  printf '%s' "$id" | LC_ALL=C grep -Eq '^[a-f0-9]{12}$' || return 8
+  printf '%s' "$secret" | LC_ALL=C grep -Eq '^[a-f0-9]{36}$' || return 8
+  [ -f "$BP_RENTAL_ENROLL" ] && [ ! -L "$BP_RENTAL_ENROLL" ] || return 8
+  # Reject corrupt or duplicated QR tokens before ever emitting a new one.
+  # Full profile also accepts its seven-column redeemed receipt schema.
+  if ! awk -F '\t' -v i="$id" '
+    { if (NF!=4 || length($1)!=12 || $1 !~ /^[a-f0-9]+$/ ||
+          length($2)!=36 || $2 !~ /^[a-f0-9]+$/ ||
+          $3 !~ /^[0-9]+$/ || ++seen[$1]>1) bad=1 }
+    END {if (bad || seen[i]) exit 8}
+  ' "$BP_RENTAL_ENROLL" > /dev/null; then
+    return 8
+  fi
+  token="$id.$secret"; expiry=$((now+ttl))
+  enroll_tmp="$BP_STATE/.rental-enroll-create.$(bp_tmp_suffix)"
+  umask 077
+  if ! cat "$BP_RENTAL_ENROLL" > "$enroll_tmp" ||
+     ! printf '%s\t%s\t%s\t%s\n' "$id" "$secret" "$expiry" "$label" >> "$enroll_tmp" ||
+     ! chmod 600 "$enroll_tmp" ||
+     ! mv "$enroll_tmp" "$BP_RENTAL_ENROLL"; then
+    rm -f "$enroll_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  # A failed storage update must never produce a scannable but invalid QR.
   printf '%s\n' "$token"
 }
 
@@ -35,21 +64,107 @@ bp_rental_enroll_lookup() {
 }
 
 bp_rental_enroll_consume() {
-  id="$1"; tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
-  awk -F '\t' -v i="$id" '$1!=i {print}' "$BP_RENTAL_ENROLL" > "$tmp" &&
-    chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_ENROLL"
+  enroll_id="$1"
+  printf '%s' "$enroll_id" | LC_ALL=C grep -Eq '^[0-9a-f]{12}$' || return 8
+  [ -f "$BP_RENTAL_ENROLL" ] && [ ! -L "$BP_RENTAL_ENROLL" ] || return 8
+  enroll_tmp="$BP_STATE/.rental-enroll.$(bp_tmp_suffix)"
+  umask 077
+  # Do not confirm a one-time token was spent if it was missing, duplicated
+  # or the enrollment registry was already malformed. Preserve old bytes.
+  if ! awk -F '\t' -v i="$enroll_id" '
+    {
+      if (NF!=4 || length($1)!=12 || $1 !~ /^[a-f0-9]+$/ ||
+          length($2)!=36 || $2 !~ /^[a-f0-9]+$/ ||
+          $3 !~ /^[0-9]+$/ || ++seen[$1]>1) invalid=1
+      if ($1==i) {removed++; next}
+      print
+    }
+    END {if (invalid || removed!=1) exit 8}
+  ' "$BP_RENTAL_ENROLL" > "$enroll_tmp" ||
+     ! chmod 600 "$enroll_tmp" ||
+     ! mv "$enroll_tmp" "$BP_RENTAL_ENROLL"; then
+    rm -f "$enroll_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_device_line() {
   awk -F '\t' -v d="$1" '$1==d {print; exit}' "$BP_RENTAL_DEVICES"
 }
 
+bp_rental_seen_update() {
+  seen_id="$1"; seen_time="$2"
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' || return 8
+  case "$seen_time" in ''|*[!0-9]*) return 8;; esac
+  [ -d "$BP_RENTAL_SEEN_DIR" ] && [ ! -L "$BP_RENTAL_SEEN_DIR" ] || return 8
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  [ ! -L "$seen_file" ] || return 8
+  seen_tmp="$BP_RENTAL_SEEN_DIR/.$seen_id.$(bp_tmp_suffix)"
+  umask 077
+  if ! printf '%s\n' "$seen_time" > "$seen_tmp" ||
+     ! chmod 600 "$seen_tmp" ||
+     ! mv "$seen_tmp" "$seen_file"; then
+    rm -f "$seen_tmp" 2>/dev/null || true
+    return 8
+  fi
+  return 0
+}
+
+bp_rental_seen_get() {
+  seen_id="$1"; seen_fallback="${2:-0}"
+  case "$seen_fallback" in ''|*[!0-9]*) seen_fallback=0;; esac
+  printf '%s\n' "$seen_id" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' ||
+    { printf '%s' "$seen_fallback"; return 0; }
+  seen_file="$BP_RENTAL_SEEN_DIR/$seen_id"
+  if [ -f "$seen_file" ] && [ ! -L "$seen_file" ]; then
+    seen_actual="$(cat "$seen_file" 2>/dev/null || true)"
+    case "$seen_actual" in ''|*[!0-9]*) ;; *)
+      printf '%s' "$seen_actual"; return 0;;
+    esac
+  fi
+  printf '%s' "$seen_fallback"
+}
+
 bp_rental_device_write() {
   id="$1"; secret="$2"; lease="$3"; label="$4"; last="$5"
+  # This is authoritative paid rental time plus private device identity.
+  # Never rename an incomplete/corrupt source snapshot over other leases.
+  [ -f "$BP_RENTAL_DEVICES" ] && [ ! -L "$BP_RENTAL_DEVICES" ] || return 8
+  printf '%s\n' "$id" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+  case "$lease:$last" in ''|*[!0-9:]*) return 8;; esac
+  [ -n "$lease" ] && [ -n "$last" ] && [ -n "$secret" ] || return 8
+  for field in "$secret" "$label"; do
+    case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+  done
   tmp="$BP_STATE/.rental-devices.$(bp_tmp_suffix)"
-  awk -F '\t' -v OFS='\t' -v d="$id" '$1!=d {print}' "$BP_RENTAL_DEVICES" > "$tmp"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"
-  chmod 600 "$tmp" && mv "$tmp" "$BP_RENTAL_DEVICES"; bp_durable_sync
+  umask 077
+  if ! awk -F '\t' -v d="$id" '
+    {
+      if (NF!=5 || $1 !~ /^[A-Za-z0-9_.:-]+$/ ||
+          length($1)>96 || length($2)==0 ||
+          $3 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/ ||
+          ++seen[$1]>1) invalid=1
+      if ($1==d) {matches++; next}
+      print
+    }
+    END {if (invalid || matches>1) exit 8}
+  ' "$BP_RENTAL_DEVICES" > "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$secret" "$lease" "$(bp_rental_clean "$label")" "$last" >> "$tmp"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_RENTAL_DEVICES"; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_list_json() {
@@ -62,6 +177,8 @@ bp_rental_list_json() {
     hash="$(printf '%s' "$p" | cut -f4)"
     preferred="$(printf '%s' "$p" | cut -f6)"
     [ "$preferred" = "-" ] && preferred=""
+    # Presence is volatile; last_seen does not belong in a paid lease rewrite.
+    last="$(bp_rental_seen_get "$id" "$last")"
     inventory="$(bp_rental_inventory_get "$id")"
     [ "$salt" != "-" ] && [ "$hash" != "-" ] && admin_set=true || admin_set=false
     [ "$first" = 1 ] || printf ','; first=0
@@ -79,12 +196,32 @@ bp_rental_policy_line() {
 }
 
 bp_rental_policy_ensure() {
-  did="$1"
-  grep -q "^$did$(printf '\t')" "$BP_RENTAL_POLICY" 2>/dev/null || {
-    printf '%s\t*\t-\t-\t4096\t-\n' "$did" >> "$BP_RENTAL_POLICY"
-    chmod 600 "$BP_RENTAL_POLICY"
-    bp_durable_sync
-  }
+  policy_did="$1"
+  printf '%s' "$policy_did" | LC_ALL=C grep -Eq '^[0-9a-f]{24}$' || return 8
+  [ -f "$BP_RENTAL_POLICY" ] && [ ! -L "$BP_RENTAL_POLICY" ] || return 8
+  policy_tmp="$BP_STATE/.rental-policy.$(bp_tmp_suffix)"
+  umask 077
+  # Check every source row and duplicate ID before copying a replacement.
+  # Existing policies must be preserved; never append a truncated record.
+  if ! awk -F '\t' -v d="$policy_did" '
+    {
+      if (NF!=6 || length($1)!=24 || $1 !~ /^[a-f0-9]+$/ ||
+          ++seen[$1]>1) invalid=1
+      if ($1==d) found++
+      print
+    }
+    END {
+      if (invalid || found>1) exit 8
+      if (!found) print d,"*","-","-","4096","-"
+    }
+  ' OFS="$(printf '\t')" "$BP_RENTAL_POLICY" > "$policy_tmp" ||
+     ! chmod 600 "$policy_tmp" ||
+     ! mv "$policy_tmp" "$BP_RENTAL_POLICY"; then
+    rm -f "$policy_tmp" 2>/dev/null || true
+    return 8
+  fi
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_rental_policy_write() {
@@ -225,10 +362,24 @@ bp_rental_events_json() {
 
 bp_rental_apply_coin() {
   did="$1"; controller="$2"; nonce="$3"; target="$4"; pulses="$5"; now="$(bp_now)"
+  # Called only under the Vendo CGI's global accounting lock. No ACK,
+  # including an old duplicate, while a previous paid write is disputed.
+  [ ! -e "$BP_PAID_UNCERTAIN" ] && [ ! -L "$BP_PAID_UNCERTAIN" ] || return 9
+  case "$pulses" in ''|*[!0-9]*) return 2;; esac
+  [ "$pulses" -ge 1 ] 2>/dev/null && [ "$pulses" -le 20 ] 2>/dev/null || return 2
+  [ -f "$BP_RENTAL_EVENTS" ] && [ ! -L "$BP_RENTAL_EVENTS" ] || return 8
   event="r:$(printf 'rental|%s|%s|%s' "$controller" "$nonce" "$target" | bp_sha256)"
-  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")"
+  old="$(awk -F '\t' -v e="$event" '$1==e {print; exit}' "$BP_RENTAL_EVENTS")" || return 8
   if [ -n "$old" ]; then
-    printf 'duplicate\t%s\n' "$(printf '%s' "$old" | cut -f3)"
+    old_did="$(printf '%s' "$old" | cut -f2)"
+    old_lease="$(printf '%s' "$old" | cut -f3)"
+    old_kind="$(printf '%s' "$old" | cut -f5)"
+    # Legacy four-field receipts lack the original pulse quantity and
+    # cannot prove an exact replay. Do not falsely ACK a changed amount.
+    [ "$old_did" = "$did" ] && [ "$old_kind" = "coin:$pulses" ] ||
+      return 9
+    case "$old_lease" in ''|*[!0-9]*) return 9;; esac
+    printf 'duplicate\t%s\n' "$old_lease"
     return 0
   fi
   line="$(bp_rental_device_line "$did")"
@@ -236,6 +387,8 @@ bp_rental_apply_coin() {
   secret="$(printf '%s' "$line" | cut -f2)"
   lease="$(printf '%s' "$line" | cut -f3)"
   label="$(printf '%s' "$line" | cut -f4)"
+  last="$(printf '%s' "$line" | cut -f5)"
+  case "$lease:$last" in ''|*[!0-9:]*) return 8;; esac
   per="$(bp_cfg rental_seconds_per_pulse)"
   [ -n "$per" ] || per=600
   case "$per" in ''|*[!0-9]*) per=600;; esac
@@ -243,9 +396,19 @@ bp_rental_apply_coin() {
   base="$lease"
   [ "$base" -gt "$now" ] 2>/dev/null || base="$now"
   newlease=$((base + per * pulses))
-  bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$now"
-  printf '%s\t%s\t%s\t%s\n' "$event" "$did" "$newlease" "$now" >> "$BP_RENTAL_EVENTS"
-  chmod 600 "$BP_RENTAL_EVENTS"
-  bp_durable_sync
+  # Both paid lease and receipt are still separate legacy TSV writes. A
+  # persisted uncertain marker prevents unsafe retry on either failure.
+  bp_paid_begin || return 9
+  if ! bp_rental_device_write "$did" "$secret" "$newlease" "$label" "$last"; then
+    bp_paid_abort
+    return 8
+  fi
+  if ! printf '%s\t%s\t%s\t%s\tcoin:%s\n' "$event" "$did" "$newlease" "$now" "$pulses" >> "$BP_RENTAL_EVENTS" ||
+     ! chmod 600 "$BP_RENTAL_EVENTS" ||
+     ! bp_durable_sync; then
+    bp_paid_abort
+    return 8
+  fi
+  bp_paid_commit || return 8
   printf 'credited\t%s\n' "$newlease"
 }

@@ -51,6 +51,87 @@ bp_durable_sync() {
 	sync
 }
 
+# P0 containment: pin a durable, operator-reconcilable halt marker BEFORE
+# changing paid state. This is NOT a crash-atomic transaction journal.
+# Keep the marker if balance/receipt commit is ambiguous; never auto-clear it
+# after reboot or upon an unrelated successful operation.
+BP_PAID_UNCERTAIN="$BP_STATE/paid-state-uncertain"
+# PAY-0730: a future operator-controlled v1->v2 cutover intent halts ALL
+# legacy paid writes and replay ACKs. No live process installs this marker,
+# and it must never be treated as an independent antirollback witness.
+# A dangling symlink or directory also blocks, rather than being ignored.
+BP_PAID_V2_CUTOVER="$BP_STATE/paid-v2-cutover-intent"
+bp_paid_v2_cutover_pending() {
+	[ -e "$BP_PAID_V2_CUTOVER" ] || [ -L "$BP_PAID_V2_CUTOVER" ]
+}
+bp_paid_begin() {
+	mkdir -p "$BP_STATE" "$BP_RUN" || return 8
+	exec 6>"$BP_RUN/paid-financial.lock" || return 8
+	if ! flock -n 6; then exec 6>&-; return 8; fi
+	if bp_paid_v2_cutover_pending ||
+	   [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+		flock -u 6 2>/dev/null || true; exec 6>&-; return 9
+	fi
+	bp_paid_temp="$BP_STATE/.paid-pending-$"
+	umask 077
+	if ! printf 'PENDING\t%s\n' "$(date +%s)" >"$bp_paid_temp" ||
+	   ! chmod 600 "$bp_paid_temp" ||
+	   ! mv "$bp_paid_temp" "$BP_PAID_UNCERTAIN" ||
+	   ! sync; then
+		rm -f "$bp_paid_temp" 2>/dev/null || true
+		flock -u 6 2>/dev/null || true; exec 6>&-; return 8
+	fi
+	return 0
+}
+bp_paid_abort() {
+	# Deliberately keep the marker. Reconciliation MUST be an authenticated
+	# operator procedure with evidence, not a timer/auto-reset or API retry.
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+	return 0
+}
+bp_paid_commit() {
+	# A late cutover marker means an in-flight v1 write is ambiguous: never
+	# ACK it or clear paid-state-uncertain. Migration must reconcile first.
+	if bp_paid_v2_cutover_pending; then
+		bp_paid_abort
+		return 9
+	fi
+	# Paid balance and receipt must reach the filesystem before clearing halt.
+	# A device-power-cut/fsync contract is still outstanding for release.
+	if ! sync || ! rm -f "$BP_PAID_UNCERTAIN" || ! sync; then
+		bp_paid_abort
+		return 8
+	fi
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+	return 0
+}
+
+# PAY-0711: serialize the Vendo signed-receipt replay fast path with all
+# financial writers. A previously committed receipt is not permission to
+# acknowledge while another payment is in flight or requires reconciliation.
+# Hold fd 6 through the replay response; release BEFORE any fresh mutation,
+# since bp_paid_begin owns the same non-reentrant descriptor.
+bp_paid_replay_read_lock() {
+	mkdir -p "$BP_RUN" || return 8
+	exec 6>"$BP_RUN/paid-financial.lock" || return 8
+	if ! flock -n 6; then
+		exec 6>&-
+		return 8
+	fi
+	if bp_paid_v2_cutover_pending ||
+	   [ -e "$BP_PAID_UNCERTAIN" ] || [ -L "$BP_PAID_UNCERTAIN" ]; then
+		bp_paid_replay_read_unlock
+		return 9
+	fi
+	return 0
+}
+bp_paid_replay_read_unlock() {
+	flock -u 6 2>/dev/null || true
+	exec 6>&-
+}
+
 bp_mac_norm() {
 	printf '%s' "$1" | tr 'A-F' 'a-f' | grep -Eq '^[0-9a-f]{2}(:[0-9a-f]{2}){5}$' || return 1
 	printf '%s' "$1" | tr 'A-F' 'a-f'
@@ -103,25 +184,90 @@ bp_account_field() {
 
 bp_account_write() {
 	d="$1"; credit="$2"; expiry="$3"; remaining="$4"; paused="$5"; pause_started="$6"; mac="$7"; ipaddr="$8"; events="$9"
+	# This is a materialized paid-credit store. Never replace it from a
+	# symlink, a partially decoded source, or a duplicated account ID. Keep
+	# the old bytes for manual reconciliation if any source row is corrupt.
+	[ -f "$BP_ACCOUNTS" ] && [ ! -L "$BP_ACCOUNTS" ] || return 8
+	printf '%s\n' "$d" | LC_ALL=C grep -Eq '^[A-Za-z0-9_.:-]{2,96}$' || return 8
+	case "$credit:$expiry:$remaining:$paused:$pause_started" in
+	  *[!0-9:]*|'') return 8 ;;
+	esac
+	case "$paused" in 0|1) ;; *) return 8;; esac
+	# Future v2 migration MUST use authenticated structured records. Current
+	# v1 caller strings cannot contain a TSV row separator or line break.
+	for field in "$mac" "$ipaddr" "$events"; do
+	  case "$field" in *"$(printf '\t')"*|*"
+"*) return 8;; esac
+	done
 	tmp="$BP_STATE/.accounts.$(bp_tmp_suffix)"
-	awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
-		BEGIN{f=0}
-		$1==d {print d,c,e,r,p,ps,m,ip,ev;f=1;next}
-		{print}
-		END{if(!f) print d,c,e,r,p,ps,m,ip,ev}
-	' "$BP_ACCOUNTS" > "$tmp" && mv "$tmp" "$BP_ACCOUNTS"
-	chmod 600 "$BP_ACCOUNTS"
-	bp_durable_sync
+	umask 077
+	# Exit nonzero even if a duplicated target is found after writing part
+	# of the temporary snapshot. No rename is allowed on any such error.
+	if ! awk -F '\t' -v OFS='\t' -v d="$d" -v c="$credit" -v e="$expiry" -v r="$remaining" -v p="$paused" -v ps="$pause_started" -v m="$mac" -v ip="$ipaddr" -v ev="$events" '
+		BEGIN {found=0; malformed=0}
+		{
+		  if (NF!=9 || $1 !~ /^[A-Za-z0-9_.:-]+$/ || length($1)>96 ||
+		      $2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/ ||
+		      $4 !~ /^[0-9]+$/ || $5 !~ /^(0|1)$/ ||
+		      $6 !~ /^[0-9]+$/ || ++seen[$1]>1) malformed=1
+		  if ($1==d) {print d,c,e,r,p,ps,m,ip,ev;found++;next}
+		  print
+		}
+		END {
+		  if (malformed || found>1) exit 8
+		  if (!found) print d,c,e,r,p,ps,m,ip,ev
+		}
+	' "$BP_ACCOUNTS" > "$tmp"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	if ! chmod 600 "$tmp" || ! mv "$tmp" "$BP_ACCOUNTS"; then
+		rm -f "$tmp" 2>/dev/null || true
+		return 8
+	fi
+	bp_durable_sync || return 8
+	return 0
+}
+
+# Legacy MAC financial source is NOT a v2 migration. Do not silently
+# coerce malformed/duplicate credit records into a zero balance.
+bp_legacy_value() {
+  legacy_file="$1"; legacy_mac="$2"
+  [ -f "$legacy_file" ] && [ ! -L "$legacy_file" ] || return 8
+  awk -F '\t' -v m="$legacy_mac" '
+    $1==m {
+      if (NF<2 || $2 !~ /^[0-9]+$/ || ++matches>1) invalid=1
+      value=$2
+    }
+    END {if (invalid) exit 8; print matches?value:0}
+  ' "$legacy_file"
 }
 
 bp_remove_legacy_mac() {
-	mac="$1"
-	if [ -f "$BP_LEGACY_CREDITS" ]; then
-		tmp="$BP_STATE/.legacy-credits.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_CREDITS" > "$tmp" && mv "$tmp" "$BP_LEGACY_CREDITS"
-	fi
-	if [ -f "$BP_LEGACY_SESSIONS" ]; then
-		tmp="$BP_STATE/.legacy-sessions.$(bp_tmp_suffix)"; awk -F '\t' -v m="$mac" '$1!=m' "$BP_LEGACY_SESSIONS" > "$tmp" && mv "$tmp" "$BP_LEGACY_SESSIONS"
-	fi
+  legacy_mac="$1"
+  for legacy_file in "$BP_LEGACY_CREDITS" "$BP_LEGACY_SESSIONS"; do
+    [ -e "$legacy_file" ] || { [ ! -L "$legacy_file" ] || return 8; continue; }
+    [ -f "$legacy_file" ] && [ ! -L "$legacy_file" ] || return 8
+    legacy_tmp="$BP_STATE/.legacy-remove.$(bp_tmp_suffix)"
+    umask 077
+    if ! awk -F '\t' -v m="$legacy_mac" '
+      {
+        if ($1==m) {
+          if (NF<2 || $2 !~ /^[0-9]+$/ || ++matches>1) bad=1
+          next
+        }
+        print
+      }
+      END {if (bad) exit 8}
+    ' "$legacy_file" > "$legacy_tmp" ||
+       ! chmod 600 "$legacy_tmp" ||
+       ! mv "$legacy_tmp" "$legacy_file"; then
+      rm -f "$legacy_tmp" 2>/dev/null || true
+      return 8
+    fi
+  done
+  bp_durable_sync || return 8
+  return 0
 }
 
 bp_authorize_mac() { [ -n "$1" ] && nft add element inet blazepwifi auth_macs "{ $1 }" 2>/dev/null || true; }
@@ -143,18 +289,25 @@ bp_bind_device() {
 		credit=0; expiry=0
 		claimed=""
 		[ -n "$mac" ] && claimed="$(awk -F '\t' -v m="$mac" '$7==m {print $1; exit}' "$BP_ACCOUNTS")"
-		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_CREDITS")"; fi
-		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(awk -F '\t' -v m="$mac" '$1==m {v=$2} END {print v+0}' "$BP_LEGACY_SESSIONS")"; fi
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_CREDITS" ]; then credit="$(bp_legacy_value "$BP_LEGACY_CREDITS" "$mac")" || return 8; fi
+		if [ -z "$claimed" ] && [ -n "$mac" ] && [ -f "$BP_LEGACY_SESSIONS" ]; then expiry="$(bp_legacy_value "$BP_LEGACY_SESSIONS" "$mac")" || return 8; fi
 		if [ -n "$claimed" ] && [ -n "$mac" ]; then
-			bp_remove_legacy_mac "$mac"
-			bp_durable_sync
+			# MAC already owns another paid identity; preserve original records.
+			return 8
 		fi
 		if [ "$create" != 1 ] && [ "$credit" -eq 0 ] 2>/dev/null && { [ -z "$expiry" ] || [ "$expiry" -le "$(bp_now)" ] 2>/dev/null; }; then
 			return 0
 		fi
-		bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""
-		[ -n "$mac" ] && [ -z "$claimed" ] && bp_remove_legacy_mac "$mac"
-		bp_durable_sync
+		# Pre-pin operator quarantine across old MAC source and new account.
+		# On any failed stage preserve source evidence; do not ACK a cash carry.
+		bp_paid_begin || return 8
+		if ! bp_account_write "$d" "$credit" "$expiry" 0 0 0 "$mac" "$ipaddr" ""; then
+			bp_paid_abort; return 8
+		fi
+		if [ -n "$mac" ] && ! bp_remove_legacy_mac "$mac"; then
+			bp_paid_abort; return 8
+		fi
+		bp_paid_commit || return 8
 		[ "$expiry" -gt "$(bp_now)" ] 2>/dev/null && bp_authorize_mac "$mac"
 		return 0
 	fi
@@ -163,7 +316,7 @@ bp_bind_device() {
 	if bp_pause_limit_expired "$d"; then
 		credit="$(printf '%s' "$line" | cut -f2)"
 		events="$(printf '%s' "$line" | cut -f9)"
-		bp_account_write "$d" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events"
+		bp_account_write "$d" "$credit" 0 0 0 0 "$mac" "$ipaddr" "$events" || return 8
 		bp_deauthorize_mac "$oldmac"
 		return 0
 	fi
@@ -175,7 +328,7 @@ bp_bind_device() {
 		paused="$(printf '%s' "$line" | cut -f5)"
 		ps="$(printf '%s' "$line" | cut -f6)"
 		events="$(printf '%s' "$line" | cut -f9)"
-		bp_account_write "$d" "$credit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$events"
+		bp_account_write "$d" "$credit" "$expiry" "$remaining" "$paused" "$ps" "$mac" "$ipaddr" "$events" || return 8
 		bp_deauthorize_mac "$oldmac"
 		if [ "$paused" != 1 ] && [ "$expiry" -gt "$(bp_now)" ] 2>/dev/null; then bp_authorize_mac "$mac"; fi
 	fi
@@ -200,10 +353,45 @@ bp_events_has() {
 	printf ',%s,' "$events" | grep -Fq ",$event,"
 }
 
+# v0.6 development bridge: the older c:<hash> format has no target
+# identity, so it MUST be quiesced during migration. New c:<target>.<sha256>
+# receipts can be retained for the entire active payment window, preventing
+# a delayed valid ACK from being counted twice after history rollover.
+bp_coin_event_is_live() {
+	case "$1" in c:*.*) ;; *) return 1;; esac
+	coin_body="${1#c:}"
+	coin_window="${coin_body%%.*}"
+	coin_digest="${coin_body#*.}"
+	# PAY-0732 new atomically stored original pulse count. Legacy unsuffixed
+	# receipts remain recognizable but are NOT safe to replay as paid ACKs.
+	case "$coin_digest" in
+	  *'!'*) coin_pulses="${coin_digest#*!}"; coin_digest="${coin_digest%%!*}"
+	    case "$coin_pulses" in ''|*[!0-9]*) return 1;; esac
+	    [ "$coin_pulses" -ge 1 ] 2>/dev/null &&
+	      [ "$coin_pulses" -le 20 ] 2>/dev/null || return 1 ;;
+	esac
+	printf '%s' "$coin_window" | grep -Eq '^[A-Fa-f0-9]{8,32}$' || return 1
+	printf '%s' "$coin_digest" | grep -Eq '^[a-f0-9]{64}$' || return 1
+	for coin_target_file in "$BP_TARGET_DIR"/*.tsv; do
+		[ -f "$coin_target_file" ] && [ ! -L "$coin_target_file" ] || continue
+		IFS="$(printf '\t')" read -r coin_did coin_mac coin_target coin_expires coin_controller coin_kind < "$coin_target_file"
+		if [ "$coin_target" = "$coin_window" ] &&
+		   [ "${coin_kind:-hotspot}" = hotspot ] &&
+		   [ "$coin_expires" -gt "$(bp_now)" ] 2>/dev/null; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 bp_events_push() {
 	events="$1"; event="$2"; max="$(bp_cfg event_history)"; [ -n "$max" ] || max=64
+	case "$max" in ''|*[!0-9]*) max=64;; esac
+	[ "$max" -gt 0 ] 2>/dev/null || max=64
 	out="$event"; coin_count=0
-	case "$event" in c:*) coin_count=1;; esac
+	case "$event" in
+		c:*) if ! bp_coin_event_is_live "$event"; then coin_count=1; fi ;;
+	esac
 	oldIFS="$IFS"; IFS=','
 	for e in $events; do
 		[ -n "$e" ] || continue
@@ -211,13 +399,22 @@ bp_events_push() {
 		case "$e" in
 			v:*) out="$out,$e" ;;
 			c:*)
-				[ "$coin_count" -ge "$max" ] && continue
-				out="$out,$e"; coin_count=$((coin_count+1))
+				# Historical/expired coins are display-bounded. Active
+				# target coins may NOT be forgotten while ACKs can retry.
+				if bp_coin_event_is_live "$e"; then
+					out="$out,$e"
+				else
+					[ "$coin_count" -ge "$max" ] && continue
+					out="$out,$e"; coin_count=$((coin_count+1))
+				fi
 				;;
 			*) out="$out,$e" ;;
 		esac
 	done
 	IFS="$oldIFS"
+	# High active-window volume must fail closed, not prune replay IDs.
+	bytes="$(printf '%s' "$out" | wc -c)" || return 8
+	[ "$bytes" -le 131072 ] 2>/dev/null || return 8
 	printf '%s' "$out"
 }
 
@@ -225,8 +422,43 @@ bp_find_event_device() {
 	event="$1"
 	awk -F '\t' -v e="$event" '{
 		n=split($9,a,",");
-		for(i=1;i<=n;i++) if(a[i]==e){print $1; exit}
+		for(i=1;i<=n;i++) if(a[i]==e || index(a[i],e "!")==1){print $1; exit}
 	}' "$BP_ACCOUNTS"
+}
+
+# PAY-0732: receipt is part of the SAME account row as paid balance.
+# Return immutable 1..20 original pulses for the same stable nonce identity.
+# A pre-PAY-0732 unsuffixed old coin receipt is unverifiable: return 8 and
+# NEVER acknowledge it or silently treat it as a fresh purchase.
+# PAY-0733: the nonce receipt's OWNER is the paid account selected by
+# the CURRENT signed controller window. A historical receipt belonging to
+# another device cannot prove this window's purchase or reveal its balance.
+# Validate the entire authoritative account snapshot under the caller's
+# global paid replay lock; no first-match, malformed-balance or duplicate-row
+# shortcut may ever justify a success ACK.
+bp_coin_receipt_original_pulses() {
+	base="$1"; intended_device="$2"
+	[ -n "$base" ] && [ -n "$intended_device" ] || return 8
+	[ -f "$BP_ACCOUNTS" ] && [ ! -L "$BP_ACCOUNTS" ] || return 8
+	awk -F '\t' -v base="$base" -v owner="$intended_device" '
+	  {
+	    if (NF!=9 || $1 !~ /^[A-Za-z0-9_.:-]+$/ ||
+	        length($1)<2 || length($1)>96 || ++seen[$1]>1 ||
+	        $2 !~ /^(0|[1-9][0-9]*)$/ || length($2)>10 ||
+	        $2+0>2147483647 ||
+	        $3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/ ||
+	        $5 !~ /^(0|1)$/ || $6 !~ /^[0-9]+$/) bad=1
+	    n=split($9, a, ",")
+	    for (i=1;i<=n;i++) {
+	      if (a[i]==base) {bad=1; found++}
+	      else if (index(a[i],base "!")==1) {
+	        found++; orig=substr(a[i],length(base)+2)
+	        if (orig !~ /^([1-9]|1[0-9]|20)$/ || $1!=owner) bad=1
+	      }
+	    }
+	  }
+	  END { if (bad || found!=1) exit 8; print orig }
+	' "$BP_ACCOUNTS"
 }
 
 bp_rate_seconds() {

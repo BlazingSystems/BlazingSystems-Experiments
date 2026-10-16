@@ -6,6 +6,12 @@ function mins(sec){sec=Math.max(0,+sec||0);const h=Math.floor(sec/3600),m=Math.f
 function esc(v){return C().esc(v)}
 function card(x){
   const user=esc(x.username||'');
+  const paidSeconds=Number(x.banked_seconds);
+  const zeroBanked=Number.isSafeInteger(paidSeconds)&&paidSeconds===0;
+  // Guidance only: server-side member_delete is still money authority.
+  const deleteDisabled=zeroBanked?'':' disabled aria-disabled="true" title="Banked paid time must be zero before deletion"';
+  const bankedNote=zeroBanked?'Deletion allowed only after a fresh zero-balance check.':
+    'Deletion blocked: transfer or settle remaining banked time first.';
   return '<div class="card member-card" data-member="'+user+'"><div class="card-body">'+
     '<div class="device-top"><div><div class="device-name">'+user+'</div><div class="device-meta">'+esc(x.label||'No label')+'</div></div>'+
     '<div class="toolbar"><span class="badge '+((+x.enabled)?'good':'bad')+'">'+((+x.enabled)?'ENABLED':'DISABLED')+'</span><span class="badge">rev '+esc(x.revision||0)+'</span></div></div>'+
@@ -17,7 +23,8 @@ function card(x){
     '<label><span class="field-label">Balance action</span><select class="field balanceMode"><option value="add">Add</option><option value="subtract">Subtract</option><option value="set">Set exact</option></select></label></div>'+
     '<button class="btn sm" style="margin-top:10px" onclick="BlazeMembers.balance(\''+user+'\')">Apply banked time</button>'+
     '<div class="form-grid" style="margin-top:14px"><label class="span2"><span class="field-label">New member password</span><input class="field password" type="password" autocomplete="new-password" placeholder="Admin reset only"></label></div>'+
-    '<div class="toolbar" style="margin-top:10px"><button class="btn sm" onclick="BlazeMembers.password(\''+user+'\')">Reset password</button><button class="btn danger sm" onclick="BlazeMembers.remove(\''+user+'\')">Delete member</button></div>'+
+    '<div class="toolbar" style="margin-top:10px"><button class="btn sm" onclick="BlazeMembers.password(\''+user+'\')">Reset password</button><button class="btn danger sm"'+deleteDisabled+' onclick="BlazeMembers.remove(\''+user+'\')">Delete member</button></div>'+
+    '<div class="small muted" role="status" style="margin-top:8px">'+bankedNote+'</div>'+
     '<div class="small muted" style="margin-top:10px">Updated '+(x.updated?new Date((+x.updated)*1000).toLocaleString():'—')+' · '+esc(x.source||'unknown')+'</div>'+
     '</div></div>';
 }
@@ -72,15 +79,17 @@ async function previewImport(){
     const enabled=(+v.requested_enabled)?'requested enabled':'disabled';
     return status+'  '+(v.username||'')+'  '+(v.label||'')+'  '+Math.floor((+v.banked_seconds||0)/60)+'m  '+enabled;
   });
-  if(summary)summary.textContent='Preview: '+(x.count||0)+' records · '+(x.creates||0)+' new · '+(x.collisions||0)+' collisions · '+(x.requested_enabled||0)+' requested enabled. New members will still be created disabled until password reset.';
+  const unverifiedPaid=items.filter(v=>v.status==='unverified_paid_balance').length;
+  if(summary)summary.textContent='Preview: '+(x.count||0)+' records · '+(x.creates||0)+' new · '+(x.collisions||0)+' collisions · '+unverifiedPaid+' unsafe imported paid balances. Metadata-only updates preserve every existing member’s live banked time. New paid balances require a separate verified migration.';
   const out=q('#memberImportPreview');if(out)out.textContent=lines.length?lines.join('\n'):'File contains no member records.';
-  const btn=q('#memberImportApply');if(btn)btn.disabled=!importPreviewToken;
+  const btn=q('#memberImportApply');if(btn)btn.disabled=!importPreviewToken||unverifiedPaid>0;
+  if(unverifiedPaid)C().toast('Import blocked: unsigned metadata cannot mint paid time for new members.',true);
 }
 async function applyImport(){
   if(!importPreviewToken){C().toast('Preview the import file first.',true);return}
   const pass=q('#memberImportPassword'),password=(pass&&pass.value)||'',policy=(q('#memberImportPolicy')&&q('#memberImportPolicy').value)||'abort';
   if(!password){C().toast('Admin password is required to apply an import.',true);return}
-  if(policy==='update'&&!confirm('Metadata-only update existing members? Existing password verifier material will be preserved, but label, enabled state and banked balance may change.'))return;
+  if(policy==='update'&&!confirm('Metadata-only update existing members? Existing password verifiers and CURRENT BANKED PAID TIME are preserved. New members with paid-time claims require a verified financial migration.'))return;
   if(policy!=='update'&&!confirm('Apply the reviewed member import with collision policy "'+policy+'"? New members will be created disabled and require password reset.'))return;
   const token=importPreviewToken;
   importPreviewToken='';
@@ -93,7 +102,7 @@ async function applyImport(){
     return;
   }
   const summary=q('#memberImportSummary');
-  if(summary)summary.textContent='Import applied: '+(x.created||0)+' created · '+(x.updated||0)+' updated · '+(x.skipped||0)+' skipped · central revision '+(x.revision||0)+'. New imported accounts require password reset before enabling.';
+  if(summary)summary.textContent='Import applied: '+(x.created||0)+' created · '+(x.updated||0)+' updated · '+(x.skipped||0)+' skipped · central revision '+(x.revision||0)+'. Existing member banked paid time was NOT overwritten. New accounts require password reset.';
   clearImportPreview('Import applied successfully. Preview is single-use and has been cleared.');
   if(q('#memberImportFile'))q('#memberImportFile').value='';
   await load();await loadEvents('');
@@ -131,9 +140,23 @@ async function password(user){
   C().toast(x.ok?'Member password reset':(x.error||'Password reset failed'),!x.ok);if(x.ok)loadEvents(user);
 }
 async function remove(user){
-  if(!confirm('Delete Pisonet member '+user+'? Banked time and the account will be removed.'))return;
+  // Never trust stale DOM amounts: another cashier/controller may have
+  // updated banked time after this card was rendered.
+  const fresh=await C().api('member_list');
+  if(!fresh.ok){C().toast(fresh.error||'Could not recheck member balance; deletion refused',true);return}
+  const account=(fresh.members||[]).find(m=>String(m.username||'')===user);
+  if(!account){C().toast('Member no longer exists. Refreshing list.',true);await load();return}
+  const seconds=Number(account.banked_seconds);
+  if(!Number.isSafeInteger(seconds)||seconds!==0){
+    C().toast('Delete blocked: transfer or settle banked paid time before deleting this member.',true);
+    await load();
+    return;
+  }
+  if(!confirm('Delete member '+user+'? Banked time is currently zero. This action cannot be undone.'))return;
   const x=await C().api('member_delete',{username:user});
-  C().toast(x.ok?'Member deleted':(x.error||'Delete failed'),!x.ok);if(x.ok){await load();await loadEvents('')}
+  C().toast(x.ok?'Member deleted':(x.error||'Delete failed'),!x.ok);
+  await load();
+  if(x.ok)await loadEvents('');
 }
 async function transfer(){
   const from=q('#memberTransferFrom').value.trim(),to=q('#memberTransferTo').value.trim(),minutes=Math.max(1,parseInt(q('#memberTransferMinutes').value||'0',10)||0);

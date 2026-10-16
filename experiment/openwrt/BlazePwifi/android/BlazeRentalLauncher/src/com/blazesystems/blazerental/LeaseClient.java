@@ -360,7 +360,17 @@ public final class LeaseClient {
     private static void applyPinnedTls(Context context, HttpURLConnection connection)
             throws Exception {
         final String expectedPin = RentalLeaseStore.serverCertSha256(context);
-        if (expectedPin.length() == 0) return;
+        // Factory-reset Device Owner enrollment promises server authentication.
+        // Never silently fall back to an unpinned connection on a fully
+        // managed phone, even if a corrupted/legacy enrollment omitted the pin.
+        // Ordinary manually installed APKs retain their explicitly weaker mode.
+        if (expectedPin.length() == 0) {
+            if (ManagedPolicyController.isDeviceOwner(context)) {
+                throw new CertificateException(
+                        "Managed BlazeRental requires a pinned HTTPS server certificate");
+            }
+            return;
+        }
         if (!(connection instanceof HttpsURLConnection)) {
             throw new CertificateException("Pinned BlazePwifi server requires HTTPS");
         }

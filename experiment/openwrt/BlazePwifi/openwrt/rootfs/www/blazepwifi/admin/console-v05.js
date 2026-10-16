@@ -1,7 +1,16 @@
 (function(){
 'use strict';
 const q=s=>document.querySelector(s), C=()=>window.BlazeCore;
-let terminalToken='',remoteLoadGeneration=0;
+let terminalToken='',remoteLoadGeneration=0,remoteFormEditGeneration=0;
+// Remote profile refreshes are asynchronous. Never let an older GET overwrite
+// operator edits made while it was in flight (before the Save button is pressed).
+const remoteFormSelectors='#remoteMode,#remoteNodeName,#remoteSiteLabel,#remoteAllowlist,#remoteHeartbeat,#remoteOffline,#remoteMonitoring,#remoteManagement,#remoteTerminal,#wgEndpoint,#wgPort,#wgAddress,#wgKeepalive,#wgPeerKey,#wgAllowedIps,#wgDns,#wgMtu,#ztNetworkId';
+function recordRemoteFormEdit(event){
+  const el=event.target;
+  if(el&&el.matches&&el.matches(remoteFormSelectors))remoteFormEditGeneration++;
+}
+document.addEventListener('input',recordRemoteFormEdit,true);
+document.addEventListener('change',recordRemoteFormEdit,true);
 function fmtTemp(v){const n=+v||0;return n?((n>1000?n/1000:n).toFixed(1)+' °C'):'Not reported'}
 async function loadSystem(){
   const x=await C().api('system_info');
@@ -72,6 +81,7 @@ function renderRemoteStatus(r){
 }
 async function loadRemote(){
   const generation=++remoteLoadGeneration;
+  const editAtStart=remoteFormEditGeneration;
   const x=await C().api('remote_status');
   if(generation!==remoteLoadGeneration)return;
   if(!x.ok){C().toast(x.error||'Remote status unavailable',true);return}
@@ -86,6 +96,12 @@ async function loadRemote(){
     return;
   }
   setRemoteEditable(true);
+  if(editAtStart!==remoteFormEditGeneration){
+    // A previously scheduled status/config refresh completed after an edit.
+    // Leave the unsaved fields alone; a save reads exactly what was entered.
+    if(state)state.textContent='Remote status refreshed; unsaved profile edits were preserved.';
+    return;
+  }
   const v=cfg.config||{};
   const set=(id,val)=>{const n=q(id);if(n)n.value=val==null?'':val};
   set('#remoteMode',v.mode||'disabled');set('#remoteNodeName',v.node_name||'BlazePwifi');
