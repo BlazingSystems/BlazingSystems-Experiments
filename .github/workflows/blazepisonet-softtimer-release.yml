@@ -21,8 +21,8 @@ concurrency:
 
 env:
   PROJECT_DIR: experiment/windows/BlazePisonet-SoftTimer
-  VERSION: 0.4.0
-  TAG: softtimer-v0.4.0
+  VERSION: 0.5.0-preview.1
+  TAG: softtimer-v0.5.0-preview.1
 
 jobs:
   handover:
@@ -31,10 +31,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert literal source head for handover
+        run: test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha || github.sha }}'
       - name: Verify shared BlazePwifi and SoftTimer handover freshness
         run: sh experiment/openwrt/BlazePwifi/tests/handover_gate.sh
       - name: Verify stale and partial handovers are rejected
         run: sh experiment/openwrt/BlazePwifi/tests/handover_gate_regression.sh
+
+  test-linux-lio:
+    needs: handover
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert literal source head for Linux contract
+        run: test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha || github.sha }}'
+      - name: PISONET-0019 disabled LIO preparation and uncertain recovery contract
+        run: python3 -m unittest discover -s experiment/windows/BlazePisonet-SoftTimer/linux-server -p 'test_*.py' -v
 
   build-windows:
     needs: handover
@@ -43,6 +58,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert literal source head for Windows build
+        shell: pwsh
+        run: |
+          $actual=(git rev-parse HEAD).Trim()
+          $expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          if ($actual -ne $expected) { throw "Source checkout $actual differs from PR head $expected" }
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -72,6 +95,12 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:PROJECT_DIR/tests/V2PendingSequenceLab/windows-selftest.ps1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: PISONET-0001 FOG management API and deployment guard contract
+        shell: pwsh
+        run: |
+          dotnet run --project "$env:PROJECT_DIR/tests/FogManagementContract/FogManagementContract.csproj" -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Restore win-x64
@@ -118,6 +147,24 @@ jobs:
           # return before it exits and leave LASTEXITCODE unset.
           $p=Start-Process -FilePath (Resolve-Path $binary).Path -ArgumentList @('--verify-timer-math') -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Timer cadence self-check failed with exit code $($p.ExitCode)" }
+
+      - name: Reject corrupt existing SoftTimer config without replacing it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $binary=Join-Path $env:PROJECT_DIR 'src/BlazePisonet.SoftTimer/bin/Release/net8.0-windows/win-x64/BlazePisonet.SoftTimer.exe'
+          if (-not (Test-Path $binary)) { throw 'Compiled SoftTimer EXE missing for config corruption guard' }
+          $p=Start-Process -FilePath (Resolve-Path $binary).Path -ArgumentList @('--verify-config-corruption-guard') -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Config corruption guard failed with exit code $($p.ExitCode)" }
+
+      - name: Reject corrupt existing paid timer state without replacing it
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $binary=Join-Path $env:PROJECT_DIR 'src/BlazePisonet.SoftTimer/bin/Release/net8.0-windows/win-x64/BlazePisonet.SoftTimer.exe'
+          if (-not (Test-Path $binary)) { throw 'Compiled SoftTimer EXE missing for paid state corruption guard' }
+          $p=Start-Process -FilePath (Resolve-Path $binary).Path -ArgumentList @('--verify-state-corruption-guard') -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Paid state corruption guard failed with exit code $($p.ExitCode)" }
 
       - name: Publish self-contained Windows x64 EXEs
         shell: pwsh
@@ -214,7 +261,7 @@ jobs:
           Copy-Item out/bundle/BlazePisonet.SoftTimer.exe portable/ -Force
           Copy-Item out/bundle/BlazePisonet.SoftTimer.Watchdog.exe portable/ -Force
           Copy-Item "$env:PROJECT_DIR/README.md" portable/README.md -Force
-          Copy-Item "$env:PROJECT_DIR/RELEASE_NOTES_v0.4.0.md" portable/RELEASE_NOTES.md -Force
+          Copy-Item "$env:PROJECT_DIR/RELEASE_NOTES_v0.5.0-preview.1.md" portable/RELEASE_NOTES.md -Force
           New-Item -ItemType Directory -Force portable/docs | Out-Null
           Copy-Item "$env:PROJECT_DIR/docs/*" portable/docs/ -Recurse -Force
 
@@ -236,17 +283,16 @@ jobs:
       - name: Upload validated release candidates
         uses: actions/upload-artifact@v4
         with:
-          name: BlazePisonet-SoftTimer-v0.4.0-win-x64
+          name: BlazePisonet-SoftTimer-v0.5.0-preview.1-win-x64
           path: |
-            release/BlazePisonet-SoftTimer-Setup-v0.4.0.exe
-            BlazePisonet-SoftTimer-v0.4.0-portable-win-x64.zip
+            release/BlazePisonet-SoftTimer-Setup-v0.5.0-preview.1.exe
+            BlazePisonet-SoftTimer-v0.5.0-preview.1-portable-win-x64.zip
             SHA256SUMS
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        # Never mutate the frozen v0.4.0 release from later development code.
-        # A version/tag bump and explicit new candidate are mandatory first.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.VERSION != '0.4.0'
+        # Preview candidate only; hardware and explicit release approval are outstanding.
+        if: false
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -260,5 +306,5 @@ jobs:
           if (gh release view $env:TAG *> $null) {
             throw "Immutable release tag $env:TAG already exists. Refusing asset replacement; bump version and TAG with a new candidate."
           }
-          gh release create $env:TAG $setup $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.4.0.md" --target $releaseTarget
+          gh release create $env:TAG $setup $zip SHA256SUMS --title "BlazePisonet SoftTimer v$env:VERSION" --notes-file "$env:PROJECT_DIR/RELEASE_NOTES_v0.5.0-preview.1.md" --target $releaseTarget
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/BlazePisonet.SoftTimer/FogManagement.cs" Link="FogManagement.cs" />
+    <Compile Include="../../src/BlazePisonet.SoftTimer/TargetdInspection.cs" Link="TargetdInspection.cs" />
+    <Compile Include="../../src/BlazePisonet.SoftTimer/FogInventoryBinding.cs" Link="FogInventoryBinding.cs" />
+    <Compile Include="../../src/BlazePisonet.SoftTimer/DisklessBootProfile.cs" Link="DisklessBootProfile.cs" />
+    <Compile Include="../../src/BlazePisonet.SoftTimer/DisklessProfileRegistry.cs" Link="DisklessProfileRegistry.cs" />
+  </ItemGroup>
+</Project>
